@@ -1,0 +1,82 @@
+name: CI / Deploy
+
+# Wrangler direct upload is used rather than Cloudflare's Git integration, because the Git
+# integration deploys on push regardless of whether checks pass. Going through Actions means a
+# failing test actually blocks the deploy — which matters here, since the site ships a
+# generated data file whose correctness is not visible by eye.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  deployments: write
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Static checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # No pip installs: these checks deliberately use only the standard library so they
+      # cannot break because of an upstream package.
+      - name: Secrets, catalogue integrity, asset references
+        run: python tests/check_static.py
+
+  test:
+    name: Browser smoke tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci || npm install
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  deploy:
+    name: Deploy to Cloudflare Pages
+    runs-on: ubuntu-latest
+    needs: [check, test]
+    # Skip for PRs raised from forks, which cannot read repository secrets.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v4
+
+      # Assemble exactly what should be public. The precompute pipeline, tests and CI config
+      # stay out of the deployed artifact.
+      - name: Assemble dist/
+        run: |
+          mkdir -p dist
+          cp index.html map.html viewpoints.json social-card.svg _headers dist/
+          echo "Deploying:"; ls -lh dist/
+
+      - name: Publish
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: >-
+            pages deploy dist
+            --project-name=otago-eclipse-3d
+            --branch=${{ github.head_ref || github.ref_name }}

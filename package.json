@@ -1,0 +1,16 @@
+{
+  "name": "otago-eclipse-3d",
+  "version": "1.0.0",
+  "private": true,
+  "description": "3D sightline simulator for the 22 July 2028 total solar eclipse over Otago, New Zealand",
+  "//": "Dev-only. The deployed site is static HTML and has no build step; these packages exist purely to run tests in CI.",
+  "scripts": {
+    "check": "python tests/check_static.py",
+    "test": "playwright test",
+    "test:install": "playwright install --with-deps chromium",
+    "serve": "npx --yes http-server . -p 8788 -c-1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}

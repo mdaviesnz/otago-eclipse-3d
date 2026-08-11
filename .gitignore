@@ -10,6 +10,12 @@ __pycache__/
 *.log
 run*.log
 
+# Node (dev-only test tooling; the deployed site has no build step)
+node_modules/
+playwright-report/
+test-results/
+dist/
+
 # Editor / OS
 .DS_Store
 Thumbs.db
