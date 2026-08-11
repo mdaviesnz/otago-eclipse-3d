@@ -104,6 +104,22 @@ genuinely roadless one. Correctness beats speed here; results are cached so re-r
 
 ---
 
+### Resolve the refraction inconsistency
+**Found 2026-08-12 while writing [ASTRONOMY.md](ASTRONOMY.md).** The app's live sun altitude is
+geometric (`Refraction.Airless`), but the catalogue's `sunAlt` comes from
+`EclipseEvent.altitude`, which measurement shows is **refracted** — 8.3900° against Airless
+8.2852° and Normal 8.3919° at Dunedin. So catalogue clearances are systematically ~0.1° more
+optimistic than the live check for the same point, which explains most of the residual
+cross-validation difference (8.47° vs 8.4°).
+
+Separately, terrestrial refraction is omitted from the horizon geometry (we use a plain
+`d²/2R`), which biases up to ~2.6′ the other way at 45 km. The two omissions partially cancel,
+netting roughly 4′ conservative.
+
+Fixing means picking one convention for both paths and rebuilding the catalogue. Deferred until
+an astronomy reviewer has commented, since the right refraction coefficient for a July Otago
+basin — inversion-prone, late afternoon — is not obviously the textbook k = 0.13.
+
 ## Known gaps and risks
 
 - **The GitHub Actions workflow has never run.** Its jobs pass locally, so the risk is confined

@@ -57,8 +57,9 @@ is not downgraded merely because the sun had set.
 | `map.html` | Overview map of every catalogued viewing spot |
 | `viewpoints.json` | The precomputed catalogue |
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for hosting and CI, and [IDEAS.md](IDEAS.md) for parked ideas
-and the reasoning behind decisions already made.
+See [ASTRONOMY.md](ASTRONOMY.md) for the astronomical methods in review-ready detail,
+[DEPLOYMENT.md](DEPLOYMENT.md) for hosting and CI, and [IDEAS.md](IDEAS.md) for parked ideas and
+the reasoning behind decisions already made.
 
 The two pages link to each other. On the map, clicking a spot opens a popup with its clearance,
 sun altitude, totality duration and access, plus **Open in 3D →**, which loads
@@ -162,6 +163,11 @@ astronomy-engine reproduces the published Dunedin circumstances independently:
 | Totality begins | 16:15:45 | 16:15:44 | −1 s |
 | **Maximum** | **16:17:11** | **16:17:11** | **0 s** |
 | Totality ends | 16:18:36 | 16:18:39 | +3 s |
+
+For the full method — coordinate frames, ΔT, refraction handling, terrain geometry, validation,
+and every approximation with its estimated magnitude — see **[ASTRONOMY.md](ASTRONOMY.md)**. It
+is written for technical review and lists open questions, including a known ~0.1° refraction
+inconsistency between the live check and the precomputed catalogue.
 
 ## Precomputed viewpoint catalogue
 
