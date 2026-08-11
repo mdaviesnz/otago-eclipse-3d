@@ -5,7 +5,15 @@ Zealand. Because the sun sits only **~8° above the horizon** at totality, local
 topography can physically block the view. This tool lets you stand anywhere in the path and
 check whether terrain will be in the way.
 
-Static site, no build step: `index.html`, `map.html`, `viewpoints.json`, `social-card.svg`.
+Static site: `index.html`, `map.html`, `app.css`, `viewpoints.json`, `social-card.svg`. The
+only build step is the Tailwind stylesheet, and `app.css` is committed so a fresh clone runs
+with no tooling at all.
+
+```bash
+npm run build:css     # only needed after changing classes in the HTML
+```
+
+CI rebuilds it and fails if the committed copy has drifted from the markup.
 
 ## Eclipse facts (Dunedin)
 
@@ -269,7 +277,7 @@ All client-side, all free, none with an SLA:
 | [Re:Earth Terrain](https://terrain.reearth.land) | 3D terrain (quantized-mesh, ~30 m Mapterhorn DEM) | Best-effort, no key. Attribution required and displayed. |
 | Esri World Imagery | Satellite basemap | Keyless endpoint; can throttle under load. Attributed. |
 | Photon (komoot) | Address search | OSM-based, built for autocomplete. Fair-use. |
-| unpkg / jsDelivr | Leaflet, Lucide, astronomy-engine, Tailwind | Standard CDNs. |
+| unpkg / jsDelivr | Leaflet, Lucide, astronomy-engine, CesiumJS | Standard CDNs. Tailwind is prebuilt and self-hosted. |
 
 **Why Photon and not Nominatim:** Nominatim's usage policy states that auto-complete search "is
 not yet supported by Nominatim and you must not implement such a service", and warns that
@@ -302,14 +310,11 @@ close-range terrain, prefer ion and treat marginal verdicts as "check on site".
 - Altitudes are geometric (unrefracted). Refraction lifts a low sun by roughly 0.1° at these
   altitudes, so verdicts are marginally conservative.
 - Eclipse lighting approximates perceived brightness; it is not a radiometric model.
-- Tailwind loads via the Play CDN, which compiles CSS at runtime and logs a "not for
-  production" warning. A proper build (Tailwind CLI, needs Node or the standalone binary)
-  would cut page weight and remove it.
-- Everything loads from CDNs, so an internet connection is required.
+- Everything else loads from CDNs, so an internet connection is required.
 
 ## Tech stack
 
-HTML5 · Tailwind CSS (Play CDN) · Lucide icons · Leaflet (overview map) · CesiumJS v1.118
+HTML5 · Tailwind CSS (prebuilt, purged) · Lucide icons · Leaflet (overview map) · CesiumJS v1.118
 (3D rendering) · astronomy-engine (ephemeris and eclipse circumstances) · Re:Earth Terrain +
 Esri imagery · OpenStreetMap via Overpass and Photon.
 

@@ -45,6 +45,21 @@ jobs:
           node-version: "20"
           cache: npm
       - run: npm ci || npm install
+
+      # app.css is committed so a fresh clone works without a build. Rebuild it here and fail
+      # if the result differs — that means someone changed classes in the HTML and forgot to
+      # regenerate, which would ship a stylesheet missing those utilities.
+      - name: Stylesheet is up to date with the markup
+        run: |
+          cp app.css /tmp/app.css.committed
+          npm run build:css
+          if ! diff -q /tmp/app.css.committed app.css; then
+            echo "::error::app.css is stale — run 'npm run build:css' and commit the result"
+            diff <(tr ',' '\n' < /tmp/app.css.committed) <(tr ',' '\n' < app.css) | head -40
+            exit 1
+          fi
+          echo "app.css matches the markup"
+
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test
       - uses: actions/upload-artifact@v4
@@ -68,7 +83,7 @@ jobs:
       - name: Assemble dist/
         run: |
           mkdir -p dist
-          cp index.html map.html viewpoints.json social-card.svg _headers dist/
+          cp index.html map.html app.css viewpoints.json social-card.svg _headers dist/
           echo "Deploying:"; ls -lh dist/
 
       - name: Publish

@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Otago Eclipse 3D — will you see the 2028 total solar eclipse?</title>
+  <title>Otago Eclipse 2028 — will you see the total solar eclipse?</title>
   <meta name="description" content="Check whether mountains will block your view of the 22 July 2028 total solar eclipse in Otago, New Zealand. The sun is only ~8° above the horizon at totality, so terrain matters. 3D terrain, per-location timings and a catalogue of the best viewing spots." />
   <meta name="theme-color" content="#0f172a" />
   <link rel="canonical" href="./index.html" />
 
   <meta property="og:type" content="website" />
-  <meta property="og:title" content="Otago Eclipse 3D — will you see the 2028 total solar eclipse?" />
+  <meta property="og:title" content="Otago Eclipse 2028 — will you see the total solar eclipse?" />
   <meta property="og:description" content="The sun sits only ~8° above the horizon at totality on 22 July 2028. Check whether terrain blocks your view, and find the best places to stand." />
   <meta property="og:image" content="./social-card.svg" />
   <meta name="twitter:card" content="summary_large_image" />
@@ -21,8 +21,9 @@
   <script src="https://cesium.com/downloads/cesiumjs/releases/1.118/Build/Cesium/Cesium.js"></script>
   <link href="https://cesium.com/downloads/cesiumjs/releases/1.118/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
 
-  <!-- Tailwind CSS (Play CDN) -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Tailwind, prebuilt and purged (npm run build:css). Not the Play CDN: that ships a
+       ~120 KB compiler and generates CSS at runtime on every page load. -->
+  <link rel="stylesheet" href="app.css" />
 
   <!-- Lucide icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
@@ -106,8 +107,9 @@
   <div id="topBar" class="hidden fixed top-0 inset-x-0 z-30 px-3 py-2 sm:px-4">
     <div class="panel rounded-xl px-4 py-2 flex flex-wrap items-center gap-x-6 gap-y-1 shadow-lg">
       <div class="flex items-center gap-2 mr-auto">
-        <i data-lucide="eclipse" class="w-5 h-5 text-amber-400"></i>
-        <span class="font-semibold text-sm sm:text-base">Otago Eclipse 2028</span>
+        <i data-lucide="eclipse" class="w-5 h-5 text-amber-400 shrink-0"></i>
+        <span class="font-semibold text-sm sm:text-base leading-tight">Otago Eclipse</span>
+        <span class="text-[11px] sm:text-xs font-medium text-amber-300 whitespace-nowrap">22 July 2028</span>
       </div>
       <div class="flex items-center gap-2 text-sm">
         <i data-lucide="clock" class="w-4 h-4 text-slate-400"></i>
@@ -415,6 +417,8 @@
   let activeLoc = LOCATIONS[3];         // default Dunedin
   let activeGroundCartesian = null;     // observer position (ground + eye height)
   let sightlinePrimitive = null;        // current drawn ray
+  let sightlineRun = false;             // has the user asked for a check at least once?
+  let sightlineToken = 0;               // guards against overlapping re-runs
   let locationMarker = null;            // visible marker at the checked location
   let pinMode = false;                  // when true, clicking the map sets the location
   const startJulian = Cesium.JulianDate.fromIso8601(CLOCK_START_UTC);
@@ -795,8 +799,29 @@
     if (sightlinePrimitive) { viewer.entities.remove(sightlinePrimitive); sightlinePrimitive = null; }
     updateLocalTimes();
     if (catalogue) renderTopSpots();   // distances are relative to where we now are
+    updateShareUrl(loc);
     onTick(viewer.clock); // refresh sun readout for the new observer
+
+    // A sightline result belongs to one spot. Once the user has asked the question, keep the
+    // answer current as they move rather than leaving a stale verdict on screen for a place
+    // they are no longer standing.
+    if (sightlineRun) runSightlineCheck();
+
     return groundHeight;
+  }
+
+  // Keep the address bar pointing at wherever we actually are, so copying the URL shares this
+  // exact spot. replaceState rather than pushState: browsing a list of viewpoints should not
+  // bury the Back button under one entry per click.
+  function updateShareUrl(loc) {
+    if (!Number.isFinite(loc.lat) || !Number.isFinite(loc.lon)) return;
+    try {
+      const q = new URLSearchParams(location.search);   // keeps ?terrain=ion etc.
+      q.set("lat", loc.lat.toFixed(5));
+      q.set("lon", loc.lon.toFixed(5));
+      if (loc.name) q.set("name", String(loc.name).slice(0, 60)); else q.delete("name");
+      history.replaceState(null, "", `${location.pathname}?${q}`);
+    } catch (e) { /* non-fatal: a stale URL is better than a broken page */ }
   }
 
   // Time on the way in to maximum when the sun is `target` obscured. Bisection: obscuration
@@ -1186,6 +1211,13 @@
   // ====================================================================================
   async function runSightlineCheck() {
     const box = document.getElementById("resultBox");
+    // Clicking through several spots starts several checks. Each takes seconds of terrain
+    // sampling, so an earlier one can finish last and paint a result for the wrong place —
+    // stamp each run and let only the newest write to the panel.
+    const token = ++sightlineToken;
+    const stale = () => token !== sightlineToken;
+    sightlineRun = true;
+
     const c = localCircumstances(activeGroundCartesian);
 
     // Check the three moments that matter for this observer: first contact, maximum, last
@@ -1236,9 +1268,11 @@
     try {
       sampled = await Cesium.sampleTerrainMostDetailed(viewer.terrainProvider, cartographics);
     } catch (e) {
+      if (stale()) return;
       box.innerHTML = `<p class="text-red-400">Terrain sampling failed: ${e.message}</p>`;
       return;
     }
+    if (stale()) return;               // the user has moved on; a newer check owns the panel
 
     // Reduce each bearing to its horizon angle (max elevation angle along that ray).
     const observerHeight = Cesium.Cartographic.fromCartesian(activeGroundCartesian).height;
@@ -1275,14 +1309,21 @@
     // as an obstruction would wrongly downgrade an otherwise perfect site.
     const up = moments.filter((m) => !m.below);
     const blocked = up.filter((m) => m.blocked).length;
+    // Full literal class strings, not `bg-${colour}-900/40`. Tailwind's scanner reads the
+    // source for class names, so anything assembled at runtime is invisible to it and gets
+    // stripped from the built stylesheet — the card would lose its colour coding.
     const headline =
       up.length === 0
-        ? { cls: "slate", icon: "moon", text: "Sun below horizon" }
+        ? { box: "bg-slate-900/40 border-slate-600/40", tone: "text-slate-300",
+            icon: "moon", text: "Sun below horizon" }
         : blocked === 0
-        ? { cls: "emerald", icon: "check-circle", text: "Clear while sun is up" }
+        ? { box: "bg-emerald-900/40 border-emerald-600/40", tone: "text-emerald-300",
+            icon: "check-circle", text: "Clear while sun is up" }
         : blocked === up.length
-        ? { cls: "red", icon: "eye-off", text: "Not visible" }
-        : { cls: "amber", icon: "alert-triangle", text: "Partly visible" };
+        ? { box: "bg-red-900/40 border-red-600/40", tone: "text-red-300",
+            icon: "eye-off", text: "Not visible" }
+        : { box: "bg-amber-900/40 border-amber-600/40", tone: "text-amber-300",
+            icon: "alert-triangle", text: "Partly visible" };
     const plain = focus.below
       ? "At the peak of the eclipse the sun has already set here."
       : focus.blocked
@@ -1309,8 +1350,8 @@
       .join("");
 
     box.innerHTML = `
-      <div class="rounded-lg bg-${headline.cls}-900/40 border border-${headline.cls}-600/40 p-3 mb-2">
-        <p class="font-semibold text-${headline.cls}-300 flex items-center gap-1.5">
+      <div class="rounded-lg border p-3 mb-2 ${headline.box}">
+        <p class="font-semibold flex items-center gap-1.5 ${headline.tone}">
           <i data-lucide="${headline.icon}" class="w-4 h-4"></i> ${headline.text}
         </p>
       </div>

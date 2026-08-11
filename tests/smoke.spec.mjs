@@ -51,6 +51,10 @@ test("overview map plots spots and filters them", async ({ page }) => {
   const foot = await countFor("foot");
   expect(any).not.toEqual(foot);          // exclusive tiers must actually change the set
 
+  // Reset the filter first: the previous assertion left it on "foot", so the top-ranked POI
+  // (a sealed-road spot) is no longer on the layer and would not be found.
+  await countFor("any");
+
   // Every marker links back into the 3D view with coordinates.
   const href = await page.evaluate(() => {
     const t = catalogue.pois[0];
@@ -61,7 +65,7 @@ test("overview map plots spots and filters them", async ({ page }) => {
     });
     return out;
   });
-  expect(href).toContain("index.html?lat=");
+  expect(href, "top POI marker should be on the layer and link into the 3D view").toContain("index.html?lat=");
 
   expect(errs, "no JS errors on the map page").toEqual([]);
 });

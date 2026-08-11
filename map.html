@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Best eclipse viewing spots — overview map · Otago 2028</title>
+  <title>Otago Eclipse 2028 — best viewing spots map</title>
   <meta name="description" content="Map of the best places to watch the 22 July 2028 total solar eclipse in Otago, New Zealand — ranked by how far the sun clears the skyline, filtered by whether you can drive, 4WD or walk there." />
   <meta name="theme-color" content="#0f172a" />
   <meta property="og:type" content="website" />
@@ -15,7 +15,7 @@
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="app.css" />
   <script src="https://unpkg.com/lucide@latest"></script>
 
   <style>
@@ -43,10 +43,10 @@
   <div class="fixed top-3 left-3 z-[1000] w-64">
     <div class="panel rounded-xl p-3 shadow-2xl">
       <div class="flex items-center gap-2 mb-1">
-        <i data-lucide="eclipse" class="w-5 h-5 text-amber-400"></i>
+        <i data-lucide="eclipse" class="w-5 h-5 text-amber-400 shrink-0"></i>
         <h1 class="text-sm font-bold">Eclipse viewing spots</h1>
       </div>
-      <p class="text-[11px] text-slate-400 mb-3">22 July 2028 · totality over Otago</p>
+      <p class="text-[11px] mb-3"><span class="text-amber-300 font-medium">22 July 2028</span><span class="text-slate-400"> · totality over Otago</span></p>
 
       <div class="flex gap-1 mb-1.5">
         <button id="srcPoi" class="flex-1 text-[11px] font-medium rounded-lg px-2 py-1 transition bg-amber-500 text-slate-900">Lookouts</button>

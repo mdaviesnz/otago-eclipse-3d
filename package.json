@@ -3,14 +3,17 @@
   "version": "1.0.0",
   "private": true,
   "description": "3D sightline simulator for the 22 July 2028 total solar eclipse over Otago, New Zealand",
-  "//": "Dev-only. The deployed site is static HTML and has no build step; these packages exist purely to run tests in CI.",
+  "//": "Dev tooling only: Playwright for CI tests, Tailwind to build app.css. app.css is committed so a fresh clone works with no build; CI rebuilds it and fails if it has drifted from the HTML.",
   "scripts": {
     "check": "python tests/check_static.py",
     "test": "playwright test",
     "test:install": "playwright install --with-deps chromium",
-    "serve": "npx --yes http-server . -p 8788 -c-1"
+    "serve": "npx --yes http-server . -p 8788 -c-1",
+    "build:css": "tailwindcss -c tailwind.config.js -i src/tailwind.css -o app.css --minify",
+    "check:css": "tailwindcss -c tailwind.config.js -i src/tailwind.css -o /tmp/app.check.css --minify"
   },
   "devDependencies": {
-    "@playwright/test": "^1.49.0"
+    "@playwright/test": "^1.49.0",
+    "tailwindcss": "^3.4.19"
   }
 }

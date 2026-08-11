@@ -1,8 +1,8 @@
 # Deployment plan — Cloudflare Pages
 
-Target: publish `index.html`, `map.html`, `viewpoints.json`, `social-card.svg` and `_headers`
-to Cloudflare Pages, with automated checks gating every deploy and a preview URL per pull
-request.
+Target: publish `index.html`, `map.html`, `app.css`, `viewpoints.json`, `social-card.svg` and
+`_headers` to Cloudflare Pages, with automated checks gating every deploy and a preview URL per
+pull request.
 
 ---
 
@@ -166,8 +166,9 @@ provisioned automatically.
 - **Re:Earth Terrain** is explicitly best-effort with no SLA. It is the hard dependency for the
   3D view; there is no automatic fallback if it goes down.
 - **Esri imagery** uses a keyless endpoint that can throttle.
-- **Tailwind Play CDN** compiles CSS in the browser on every load. It works, but a real build
-  would cut page weight — see *Limitations* in the README.
+- **Tailwind is prebuilt** into `app.css` (~15 KB) and committed. CI rebuilds it and fails if
+  it has drifted from the markup, so a class added to the HTML cannot silently ship without its
+  styles. Rebuild locally with `npm run build:css`.
 
 None of these have an SLA, which is acceptable for an educational site but worth knowing before
 it is linked from anywhere with real traffic.

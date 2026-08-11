@@ -21,7 +21,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SITE_FILES = ["index.html", "map.html", "viewpoints.json", "social-card.svg", "_headers"]
+SITE_FILES = ["index.html", "map.html", "app.css", "viewpoints.json", "social-card.svg",
+              "_headers"]
 
 failures: list[str] = []
 notes: list[str] = []
