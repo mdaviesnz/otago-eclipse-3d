@@ -802,12 +802,24 @@
     updateShareUrl(loc);
     onTick(viewer.clock); // refresh sun readout for the new observer
 
-    // A sightline result belongs to one spot. Once the user has asked the question, keep the
-    // answer current as they move rather than leaving a stale verdict on screen for a place
-    // they are no longer standing.
-    if (sightlineRun) runSightlineCheck();
+    // A sightline result belongs to one spot, so retire the old one the moment we move —
+    // otherwise the previous verdict sits on screen describing somewhere the user has left.
+    // The recalculation itself is deferred until the camera arrives (see refreshSightline).
+    if (sightlineRun) {
+      document.getElementById("horizonCard").classList.add("hidden");
+      document.getElementById("resultBox").innerHTML =
+        `<p class="text-slate-400 flex items-center gap-2"><i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Moving to ${loc.name}&hellip;</p>`;
+      lucide.createIcons();
+    }
 
     return groundHeight;
+  }
+
+  // Recalculate only once the camera has settled. The maths does not depend on the camera —
+  // terrain is sampled from the provider, not the rendered scene — but showing a new verdict
+  // while the old view is still flying reads as though the answer arrived before the move.
+  function refreshSightlineIfRun() {
+    if (sightlineRun) runSightlineCheck();
   }
 
   // Keep the address bar pointing at wherever we actually are, so copying the URL shares this
@@ -958,8 +970,20 @@
     }
 
     const view = await frameForLocation(loc, groundHeight);
-    if (fly) viewer.camera.flyTo({ ...view, duration: 2.0 });
-    else viewer.camera.setView(view);
+    if (fly) {
+      // Recalculate on arrival — and also if the flight is cancelled, which happens when the
+      // user grabs the camera mid-flight. The observer has still moved, so they still need
+      // an answer for the new spot.
+      viewer.camera.flyTo({
+        ...view,
+        duration: 2.0,
+        complete: refreshSightlineIfRun,
+        cancel: refreshSightlineIfRun,
+      });
+    } else {
+      viewer.camera.setView(view);
+      refreshSightlineIfRun();
+    }
   }
 
   // Per-location contact times — these genuinely differ across Otago (Queenstown reaches
@@ -1035,7 +1059,9 @@
       const carto = Cesium.Cartographic.fromCartesian(cartesian);
       const lat = Cesium.Math.toDegrees(carto.latitude);
       const lon = Cesium.Math.toDegrees(carto.longitude);
-      setObserver({ name: `${lat.toFixed(4)}, ${lon.toFixed(4)}`, lat, lon });
+      // Pinning does not move the camera, so there is nothing to wait for.
+      setObserver({ name: `${lat.toFixed(4)}, ${lon.toFixed(4)}`, lat, lon })
+        .then(refreshSightlineIfRun);
       setCustomStatus(`Pinned ${lat.toFixed(4)}, ${lon.toFixed(4)}`, "ok");
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
   }
@@ -1275,13 +1301,21 @@
     if (stale()) return;               // the user has moved on; a newer check owns the panel
 
     // Reduce each bearing to its horizon angle (max elevation angle along that ray).
+    //
+    // A sample whose tile failed to load comes back with no height. Defaulting that to 0 would
+    // silently drop the terrain to sea level and could turn a blocked view into a "clear" one —
+    // the same failure shape as a throttled Overpass cell looking roadless. The terrain service
+    // is best-effort and does throttle, so skip missing samples and count them, then tell the
+    // user if enough went missing to make the verdict unreliable.
     const observerHeight = Cesium.Cartographic.fromCartesian(activeGroundCartesian).height;
     const profile = [];
-    let k = 0;
+    let k = 0, missing = 0, total = 0;
     for (const ray of rays) {
       let rayMax = -90, rayDist = 0, rayHeight = 0;
       for (const d of ray.dists) {
-        const h = sampled[k++].height || 0;
+        const h = sampled[k++].height;
+        total++;
+        if (!Number.isFinite(h)) { missing++; continue; }
         const drop = (d * d) / (2 * EARTH_RADIUS);           // earth curvature drop
         const angle = Cesium.Math.toDegrees(Math.atan2(h - observerHeight - drop, d));
         if (angle > rayMax) { rayMax = angle; rayDist = d; rayHeight = h; }
@@ -1299,11 +1333,15 @@
 
     drawSightline(focus.dir, !focus.blocked && !focus.below);
     renderHorizonChart(profile, moments, azLo, azHi);
-    renderSightlineResults(moments, focus);
+    renderSightlineResults(moments, focus, missing / Math.max(1, total));
   }
 
-  function renderSightlineResults(moments, focus) {
+  function renderSightlineResults(moments, focus, missingFraction = 0) {
     const box = document.getElementById("resultBox");
+    // Never present a confident verdict built on terrain that failed to download.
+    const gapNote = missingFraction > 0.01
+      ? `<p class="text-[11px] text-amber-300 mt-2 flex items-start gap-1.5"><i data-lucide="alert-triangle" class="w-3.5 h-3.5 mt-px shrink-0"></i><span>${Math.round(missingFraction * 100)}% of the terrain samples did not load, so this verdict may be unreliable. Run the check again.</span></p>`
+      : "";
     // Judge terrain only on moments where the sun is actually up. Across Otago the eclipse
     // ends at or below the horizon — the sun sets mid-eclipse — so counting "sun already set"
     // as an obstruction would wrongly downgrade an otherwise perfect site.
@@ -1369,6 +1407,7 @@
       ${focus.az.toFixed(0)}&deg; rises to <b>${focus.horizon.toFixed(1)}&deg;</b>
       (${focus.ridgeHeight.toFixed(0)} m, ~${(focus.ridgeDist / 1000).toFixed(1)} km away).</p>
       ${setNote}
+      ${gapNote}
       <p class="text-[10px] text-slate-500 mt-1.5">Source: ${terrainSource === "ion" ? "Cesium World Terrain" : "Re:Earth Terrain (~30 m)"}</p>`;
     lucide.createIcons();
   }
