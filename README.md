@@ -57,6 +57,9 @@ is not downgraded merely because the sun had set.
 | `map.html` | Overview map of every catalogued viewing spot |
 | `viewpoints.json` | The precomputed catalogue |
 
+See [DEPLOYMENT.md](DEPLOYMENT.md) for hosting and CI, and [IDEAS.md](IDEAS.md) for parked ideas
+and the reasoning behind decisions already made.
+
 The two pages link to each other. On the map, clicking a spot opens a popup with its clearance,
 sun altitude, totality duration and access, plus **Open in 3D →**, which loads
 `index.html?lat=…&lon=…&name=…`. Those URL parameters also make any location shareable.
