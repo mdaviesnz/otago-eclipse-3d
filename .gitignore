@@ -1,0 +1,20 @@
+# Precompute cache — ~400 MB of terrain tiles and Overpass responses.
+# Regenerated automatically; must never be committed or deployed.
+precompute/cache/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Logs and scratch
+*.log
+run*.log
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local tooling config (not needed by the site)
+.claude/

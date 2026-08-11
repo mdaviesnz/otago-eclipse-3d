@@ -1,0 +1,1856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Otago Eclipse 3D — will you see the 2028 total solar eclipse?</title>
+  <meta name="description" content="Check whether mountains will block your view of the 22 July 2028 total solar eclipse in Otago, New Zealand. The sun is only ~8° above the horizon at totality, so terrain matters. 3D terrain, per-location timings and a catalogue of the best viewing spots." />
+  <meta name="theme-color" content="#0f172a" />
+  <link rel="canonical" href="./index.html" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Otago Eclipse 3D — will you see the 2028 total solar eclipse?" />
+  <meta property="og:description" content="The sun sits only ~8° above the horizon at totality on 22 July 2028. Check whether terrain blocks your view, and find the best places to stand." />
+  <meta property="og:image" content="./social-card.svg" />
+  <meta name="twitter:card" content="summary_large_image" />
+
+  <!-- Inline SVG favicon: an eclipsed sun. Avoids an extra request and a binary asset. -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%230f172a'/%3E%3Ccircle cx='16' cy='16' r='9' fill='none' stroke='%23fbbf24' stroke-width='3'/%3E%3Ccircle cx='13' cy='14' r='8' fill='%230f172a'/%3E%3C/svg%3E" />
+
+  <!-- CesiumJS v1.118 -->
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.118/Build/Cesium/Cesium.js"></script>
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.118/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
+
+  <!-- Tailwind CSS (Play CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Lucide icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Astronomy Engine — accurate sun/moon ephemeris + per-location eclipse circumstances -->
+  <script src="https://cdn.jsdelivr.net/npm/astronomy-engine@2/astronomy.browser.min.js"></script>
+
+  <style>
+    html, body, #cesiumContainer { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    /* Hide Cesium credit clutter but keep attribution accessible */
+    .cesium-widget-credits { display: none !important; }
+    .panel { backdrop-filter: blur(10px); background: rgba(15, 23, 42, 0.82); border: 1px solid rgba(148, 163, 184, 0.25); }
+    .scrub { -webkit-appearance: none; appearance: none; height: 6px; border-radius: 9999px;
+             background: linear-gradient(90deg, #f59e0b 0%, #f59e0b var(--fill,0%), rgba(148,163,184,0.35) var(--fill,0%)); }
+    .scrub::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px;
+             border-radius: 9999px; background: #fbbf24; border: 2px solid #fff; cursor: pointer; box-shadow: 0 0 8px rgba(251,191,36,0.8); }
+    .scrub::-moz-range-thumb { width: 18px; height: 18px; border-radius: 9999px; background: #fbbf24; border: 2px solid #fff; cursor: pointer; }
+    @keyframes pulse-totality { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
+    .totality-on { animation: pulse-totality 1.4s ease-in-out infinite; }
+
+    /* Audience modes: casual visitors vs. eclipse chasers. */
+    body[data-mode="simple"] .expert-only { display: none !important; }
+    body[data-mode="expert"] .simple-only { display: none !important; }
+
+    @keyframes fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    .narrate { animation: fade-up 0.5s ease-out; }
+
+    /* ---------------------------------------------------------------------------------
+       Mobile: the side panels are fixed-width overlays that, on a phone, cover the globe
+       and each other. Below 768px they become drawers opened one at a time from the top
+       bar, leaving the 3D view visible by default — which is the thing people came for.
+       --------------------------------------------------------------------------------- */
+    #mobileTabs { display: none; }
+
+    @media (max-width: 767px) {
+      #mobileTabs { display: flex; }
+
+      #presetPanel, #rightStack {
+        position: fixed;
+        left: 0.5rem;
+        right: 0.5rem;
+        width: auto;
+        top: 3.75rem;
+        bottom: 7.5rem;
+        max-height: none;
+        overflow-y: auto;
+        z-index: 40;
+        display: none;
+      }
+      body[data-panel="places"] #presetPanel { display: block; }
+      body[data-panel="info"] #rightStack { display: flex; }
+
+      /* Give the scrubber a bigger hit area for thumbs. */
+      .scrub { height: 10px; }
+      .scrub::-webkit-slider-thumb { width: 24px; height: 24px; }
+      .scrub::-moz-range-thumb { width: 24px; height: 24px; }
+
+      #narration { top: 4.5rem; }
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100">
+
+  <div id="cesiumContainer"></div>
+
+  <!-- ============================= SPLASH / LOADING ============================= -->
+  <div id="splash" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950 p-4">
+    <div class="text-center max-w-sm">
+      <i data-lucide="eclipse" class="w-12 h-12 text-amber-400 mx-auto mb-4"></i>
+      <h1 class="text-2xl font-bold tracking-tight mb-1">Otago Eclipse 3D</h1>
+      <p class="text-sm text-slate-400 mb-6">Total Solar Eclipse &middot; 22 July 2028 &middot; 4:17 PM NZST</p>
+      <p id="splashStatus" class="text-xs text-slate-500 flex items-center justify-center gap-2">
+        <i data-lucide="loader" class="w-3.5 h-3.5 animate-spin"></i> Loading terrain&hellip;
+      </p>
+      <p id="splashError" class="hidden mt-4 text-sm text-red-400"></p>
+    </div>
+  </div>
+
+  <!-- ============================= TOP STATUS BAR ============================= -->
+  <div id="topBar" class="hidden fixed top-0 inset-x-0 z-30 px-3 py-2 sm:px-4">
+    <div class="panel rounded-xl px-4 py-2 flex flex-wrap items-center gap-x-6 gap-y-1 shadow-lg">
+      <div class="flex items-center gap-2 mr-auto">
+        <i data-lucide="eclipse" class="w-5 h-5 text-amber-400"></i>
+        <span class="font-semibold text-sm sm:text-base">Otago Eclipse 2028</span>
+      </div>
+      <div class="flex items-center gap-2 text-sm">
+        <i data-lucide="clock" class="w-4 h-4 text-slate-400"></i>
+        <span class="text-slate-400">NZST</span>
+        <span id="clockReadout" class="font-mono font-semibold text-amber-300">--:--:--</span>
+      </div>
+      <div class="expert-only flex items-center gap-2 text-sm">
+        <i data-lucide="sun" class="w-4 h-4 text-slate-400"></i>
+        <span class="text-slate-400">Alt</span>
+        <span id="sunAlt" class="font-mono font-semibold">--&deg;</span>
+        <span class="text-slate-400 ml-2">Az</span>
+        <span id="sunAz" class="font-mono font-semibold">--&deg;</span>
+      </div>
+      <div class="simple-only hidden md:flex items-center gap-2 text-sm">
+        <i data-lucide="sun" class="w-4 h-4 text-slate-400"></i>
+        <span id="sunPlain" class="text-slate-300">Sun low in the north-west</span>
+      </div>
+
+      <!-- Mobile drawer tabs -->
+      <div id="mobileTabs" class="items-center gap-1">
+        <button id="tabPlaces" class="inline-flex items-center gap-1 text-[11px] font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2 py-1 transition">
+          <i data-lucide="map-pin" class="w-3.5 h-3.5 text-amber-400"></i> Places
+        </button>
+        <button id="tabInfo" class="inline-flex items-center gap-1 text-[11px] font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2 py-1 transition">
+          <i data-lucide="info" class="w-3.5 h-3.5 text-amber-400"></i> Details
+        </button>
+      </div>
+      <button id="modeToggle" title="Switch between simple and detailed views"
+        class="inline-flex items-center gap-1.5 text-[11px] font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 py-1 transition">
+        <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5 text-amber-400"></i>
+        <span id="modeLabel">Simple</span>
+      </button>
+      <div id="totalityBadge" class="flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full bg-slate-700 text-slate-400">
+        <span class="w-2 h-2 rounded-full bg-slate-500"></span>
+        <span id="totalityText">PARTIAL</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================= NARRATION (cinematic playback) ============================= -->
+  <div id="narration" class="hidden fixed left-1/2 -translate-x-1/2 top-24 z-40 max-w-md w-[min(90vw,28rem)] text-center pointer-events-none">
+    <div class="panel rounded-xl px-5 py-3 shadow-2xl">
+      <p id="narrationText" class="text-sm text-slate-100 leading-snug"></p>
+      <p id="narrationSub" class="text-[11px] text-slate-400 mt-1"></p>
+    </div>
+  </div>
+
+  <!-- ============================= LEFT PRESET PANEL ============================= -->
+  <div id="presetPanel" class="hidden fixed left-3 top-20 z-30 w-52">
+    <div class="panel rounded-xl p-3 shadow-lg">
+      <p class="text-[11px] uppercase tracking-wide text-slate-400 mb-2 flex items-center gap-1.5">
+        <i data-lucide="navigation" class="w-3.5 h-3.5"></i> Fly to
+      </p>
+      <div id="presetButtons" class="flex flex-col gap-1.5"></div>
+
+      <div id="topSpotsSection" class="hidden mt-3 pt-3 border-t border-slate-700/60">
+        <p class="text-[11px] uppercase tracking-wide text-slate-400 mb-2 flex items-center justify-between gap-1.5">
+          <span class="flex items-center gap-1.5"><i data-lucide="award" class="w-3.5 h-3.5"></i> Best viewing spots</span>
+          <a href="map.html" title="See all spots on an overview map"
+             class="inline-flex items-center gap-1 text-amber-400 hover:text-amber-300 normal-case tracking-normal">
+            <i data-lucide="map" class="w-3.5 h-3.5"></i> Map
+          </a>
+        </p>
+        <div class="flex gap-1 mb-1.5">
+          <button id="srcPoi"
+            class="src-btn flex-1 text-[11px] font-medium rounded-lg px-2 py-1 transition bg-amber-500 text-slate-900">
+            Lookouts
+          </button>
+          <button id="srcGrid"
+            class="src-btn flex-1 text-[11px] font-medium rounded-lg px-2 py-1 transition bg-slate-800/70 hover:bg-slate-700 text-slate-300">
+            Anywhere
+          </button>
+        </div>
+        <select id="accessFilter"
+          class="w-full text-xs bg-slate-800/80 border border-slate-600 rounded-lg px-2 py-1.5 mb-1.5 focus:outline-none focus:ring-2 focus:ring-amber-400 cursor-pointer">
+          <option value="any" selected>Any access</option>
+          <option value="sealed">Sealed road only</option>
+          <option value="track">4WD track only</option>
+          <option value="foot">Walking track only</option>
+          <option value="drive">Drivable (road or track)</option>
+        </select>
+        <select id="distFilter"
+          class="w-full text-xs bg-slate-800/80 border border-slate-600 rounded-lg px-2 py-1.5 mb-1.5 focus:outline-none focus:ring-2 focus:ring-amber-400 cursor-pointer">
+          <option value="0" selected>Anywhere in the path</option>
+          <option value="10">Within 10 km of here</option>
+          <option value="25">Within 25 km of here</option>
+          <option value="50">Within 50 km of here</option>
+          <option value="100">Within 100 km of here</option>
+        </select>
+        <div id="topSpots" class="flex flex-col gap-1 max-h-44 overflow-y-auto"></div>
+        <p id="topSpotsNote" class="text-[10px] text-slate-500 mt-1.5 leading-snug"></p>
+      </div>
+
+      <div class="mt-3 pt-3 border-t border-slate-700/60">
+        <p class="text-[11px] uppercase tracking-wide text-slate-400 mb-2 flex items-center gap-1.5">
+          <i data-lucide="map-pin" class="w-3.5 h-3.5"></i> Custom location
+        </p>
+        <div class="relative">
+          <input id="customInput" type="text" autocomplete="off" placeholder="Address or lat, lon"
+            class="w-full text-xs bg-slate-800/80 border border-slate-600 rounded-lg px-2 py-1.5 mb-1.5 focus:outline-none focus:ring-2 focus:ring-amber-400" />
+          <div id="suggestions" class="hidden absolute left-0 right-0 top-full -mt-0.5 z-40 panel rounded-lg overflow-hidden max-h-56 overflow-y-auto shadow-xl"></div>
+        </div>
+        <div class="flex gap-1.5">
+          <button id="customGo"
+            class="flex-1 inline-flex items-center justify-center gap-1.5 text-xs font-medium bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg px-2 py-1.5 transition">
+            <i data-lucide="search" class="w-3.5 h-3.5"></i> Go
+          </button>
+          <button id="customGeo" title="Use my current location"
+            class="shrink-0 inline-flex items-center justify-center bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 py-1.5 transition">
+            <i data-lucide="locate-fixed" class="w-3.5 h-3.5 text-amber-400"></i>
+          </button>
+        </div>
+        <button id="pinToggle" title="Toggle, then click the map to set the location"
+          class="mt-1.5 w-full inline-flex items-center justify-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2 py-1.5 transition">
+          <i data-lucide="map-pinned" class="w-3.5 h-3.5 text-amber-400"></i> Pin on map
+        </button>
+        <p id="customStatus" class="hidden mt-1.5 text-[11px]"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================= RIGHT-SIDE STACK ============================= -->
+  <div id="rightStack" class="hidden fixed right-3 top-20 z-30 w-72 flex flex-col gap-3 max-h-[82vh]">
+
+    <!-- Eclipse magnitude / progress card -->
+    <div class="panel rounded-xl p-4 shadow-lg">
+      <div class="flex items-center justify-between mb-3">
+        <p class="text-sm font-semibold flex items-center gap-1.5">
+          <i data-lucide="eclipse" class="w-4 h-4 text-amber-400"></i> Eclipse progress
+        </p>
+        <span id="eclipseMag" class="expert-only text-[11px] font-mono text-slate-400">mag 0.00</span>
+      </div>
+      <div class="flex items-center gap-4">
+        <svg id="eclipseSvg" viewBox="0 0 120 120" class="w-24 h-24 shrink-0" aria-label="Eclipse diagram">
+          <circle cx="60" cy="60" r="59" fill="#0b1220" />
+          <circle id="eclCorona" cx="60" cy="60" r="32" fill="none" stroke="#fde68a" stroke-width="0" opacity="0" />
+          <circle id="eclSun" cx="60" cy="60" r="30" fill="#fbbf24" />
+          <circle id="eclMoon" cx="60" cy="60" r="30" fill="#111827" stroke="#475569" stroke-width="1" />
+        </svg>
+        <div class="flex-1 min-w-0">
+          <p class="text-[11px] uppercase tracking-wide text-slate-400">Obscuration</p>
+          <p id="eclipseObsc" class="text-2xl font-bold text-amber-300 leading-tight">0%</p>
+          <p id="eclipsePhaseLabel" class="text-xs text-slate-500 mt-0.5">No eclipse</p>
+        </div>
+      </div>
+      <div class="mt-3 h-1.5 rounded-full bg-slate-700 overflow-hidden">
+        <div id="eclipseBar" class="h-full bg-amber-400 transition-all duration-150" style="width:0%"></div>
+      </div>
+      <p id="eclipseLocalTimes" class="mt-2 text-[11px] text-slate-400 leading-snug"></p>
+    </div>
+
+    <!-- Horizon profile chart -->
+    <div id="horizonCard" class="hidden panel rounded-xl p-4 shadow-lg">
+      <p class="text-sm font-semibold flex items-center gap-1.5 mb-1">
+        <i data-lucide="mountain" class="w-4 h-4 text-amber-400"></i> Horizon profile
+      </p>
+      <p class="text-[11px] text-slate-400 mb-2">Terrain silhouette vs the sun's track</p>
+      <svg id="horizonSvg" viewBox="0 0 280 150" class="w-full" aria-label="Horizon profile chart"></svg>
+      <div class="flex items-center gap-3 mt-1 text-[10px] text-slate-400">
+        <span class="flex items-center gap-1"><span class="inline-block w-3 h-2 rounded-sm bg-slate-500"></span> terrain</span>
+        <span class="flex items-center gap-1"><span class="inline-block w-3 h-0.5 bg-amber-400"></span> sun track</span>
+        <span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full bg-red-400"></span> totality</span>
+      </div>
+    </div>
+
+    <!-- Sightline / educational panel -->
+    <div id="infoPanel" class="panel rounded-xl p-4 shadow-lg overflow-y-auto">
+      <div class="flex items-center justify-between mb-2">
+        <p class="text-sm font-semibold flex items-center gap-1.5">
+          <i data-lucide="info" class="w-4 h-4 text-amber-400"></i> Sightline
+        </p>
+        <span id="activeLocation" class="text-[11px] text-slate-400">Dunedin</span>
+      </div>
+      <div id="resultBox" class="text-sm text-slate-300 leading-relaxed">
+        <p class="text-slate-400">
+          At totality the sun is only ~8&deg; high in the NW. Fly to a town, set the time, then
+          <span class="text-amber-300">Run Sightline Check</span> to see whether terrain blocks the view.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================= BOTTOM CONTROL BAR ============================= -->
+  <div id="bottomBar" class="hidden fixed bottom-0 inset-x-0 z-30 px-3 py-3 sm:px-4">
+    <div class="panel rounded-xl px-4 py-3 shadow-lg">
+      <div class="flex items-center gap-3 mb-2">
+        <button id="playPause" title="Play / Pause"
+          class="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-lg bg-slate-700 hover:bg-slate-600 transition">
+          <i data-lucide="play" class="w-4 h-4"></i>
+        </button>
+        <span class="text-xs text-slate-400 font-mono shrink-0">15:00</span>
+        <input id="timeScrub" type="range" min="0" max="1000" value="0" class="scrub flex-1 cursor-pointer" />
+        <span class="text-xs text-slate-400 font-mono shrink-0">17:30</span>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="hidden sm:inline text-[10px] uppercase tracking-wide text-slate-500">Jump</span>
+        <button id="jumpStart" title="First contact — the eclipse begins"
+          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-1.5 transition">
+          <i data-lucide="sunrise" class="w-3.5 h-3.5 text-amber-400"></i> Start<span id="jumpStartT" class="text-slate-400 font-mono"></span>
+        </button>
+        <button id="jumpTotality" title="Maximum eclipse"
+          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-1.5 transition">
+          <i data-lucide="target" class="w-3.5 h-3.5 text-amber-400"></i> Totality<span id="jumpMaxT" class="text-slate-400 font-mono"></span>
+        </button>
+        <button id="jumpEnd" title="Last contact — the eclipse ends"
+          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-1.5 transition">
+          <i data-lucide="sunset" class="w-3.5 h-3.5 text-amber-400"></i> End<span id="jumpEndT" class="text-slate-400 font-mono"></span>
+        </button>
+        <button id="watchIt"
+          class="inline-flex items-center gap-1.5 text-sm font-semibold bg-sky-500 hover:bg-sky-400 text-slate-900 rounded-lg px-3 md:px-4 py-1.5 transition md:ml-auto">
+          <i data-lucide="clapperboard" class="w-4 h-4"></i> <span class="hidden sm:inline">Watch it happen</span><span class="sm:hidden">Watch</span>
+        </button>
+        <button id="runSightline"
+          class="inline-flex items-center gap-1.5 text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg px-4 py-1.5 transition">
+          <i data-lucide="scan-eye" class="w-4 h-4"></i> <span class="expert-only">Run Sightline Check</span><span class="simple-only">Can I see it?</span>
+        </button>
+      </div>
+      <p id="dataCredit" class="mt-2 text-[10px] text-slate-500 leading-tight"></p>
+    </div>
+  </div>
+
+  <script>
+  // ====================================================================================
+  //  CONFIG & CONSTANTS
+  // ====================================================================================
+  // Deliberately empty. The default terrain source needs no token, and anything hardcoded
+  // here is readable by anyone who views source on a public deployment. To use Cesium World
+  // Terrain instead, pass your own token at runtime:
+  //     ?terrain=ion&ionToken=YOUR_TOKEN
+  // It is remembered in localStorage for that browser only, and never leaves the client.
+  const CESIUM_ION_TOKEN = "";
+
+  // Open (token-free) data sources.
+  // Re:Earth Terrain serves quantized-mesh with vertex normals; no API key required.
+  const REEARTH_TERRAIN_URL = "https://terrain.reearth.land/cesium-mesh/ellipsoid";
+  const ESRI_IMAGERY_URL =
+    "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer";
+
+  const CREDITS = {
+    ion:  "Terrain &amp; imagery: Cesium World Terrain / Bing Maps via Cesium ion.",
+    open: "Terrain: Re:Earth Terrain &middot; Mapterhorn (CC BY 4.0). Imagery: Esri World Imagery.",
+  };
+
+  // Eclipse clock window (UTC). NZST = UTC + 12h.
+  const CLOCK_START_UTC   = "2028-07-22T03:00:00Z"; // 15:00 NZST
+  const CLOCK_STOP_UTC    = "2028-07-22T05:30:00Z"; // 17:30 NZST
+  const TOTALITY_MAX_UTC  = "2028-07-22T04:17:11Z"; // 16:17:11 NZST (max eclipse)
+  const TOTALITY_BEG_UTC  = "2028-07-22T04:15:45Z"; // 16:15:45 NZST
+  const TOTALITY_END_UTC  = "2028-07-22T04:18:36Z"; // 16:18:36 NZST
+  const PARTIAL_BEG_UTC   = "2028-07-22T03:08:58Z"; // 15:08:58 NZST
+  const PARTIAL_END_UTC   = "2028-07-22T05:17:00Z"; // 17:17:00 NZST
+
+  const LOCATIONS = [
+    { name: "Queenstown", lon: 168.6626, lat: -45.0312, icon: "mountain" },
+    { name: "Arrowtown",  lon: 168.8306, lat: -44.9385, icon: "trees" },
+    { name: "Cromwell",   lon: 169.2030, lat: -45.0382, icon: "grape" },
+    { name: "Dunedin",    lon: 170.5028, lat: -45.8788, icon: "waves" },
+  ];
+
+  const EARTH_RADIUS = 6371000;        // mean radius, m (for curvature drop)
+  const SIGHTLINE_RANGE = 45000;       // m, how far out to probe terrain
+  const EYE_HEIGHT = 1.7;              // observer eye height, m
+  const HORIZON_SPAN = 20;             // deg either side of the sun to sweep for the profile
+  const HORIZON_STEP = 4;              // deg between profile bearings
+
+  // Terrain closer than this is ignored as ground clutter. The limit is set by DEM vertical
+  // error, not geometry: an angular error of atan(sigma/d) from a typical sigma of ~5 m is
+  // +/-32 deg at 8 m, +/-5 deg at 50 m, but only +/-3 deg at 100 m. Sampling nearer than this
+  // measures DEM noise, not the skyline — and it is ground you could simply step around.
+  const MIN_PROBE = 100;               // m
+
+  // Adaptive radial spacing: dense in the near-mid field — where a sharp ridge subtends a
+  // large angle and uniform stepping can stride straight over it — and geometrically coarser
+  // far out, where it cannot. Both more accurate and cheaper than a fixed grid.
+  function radialDistances(growth, maxRange = SIGHTLINE_RANGE) {
+    const out = [];
+    for (let d = MIN_PROBE; d <= maxRange; d += Math.max(MIN_PROBE * 0.25, d * growth)) out.push(d);
+    return out;
+  }
+
+  const COMPASS = ["north", "north-north-east", "north-east", "east-north-east", "east",
+    "east-south-east", "south-east", "south-south-east", "south", "south-south-west",
+    "south-west", "west-south-west", "west", "west-north-west", "north-west", "north-north-west"];
+  const compassName = (az) => COMPASS[Math.round(((az % 360) + 360) % 360 / 22.5) % 16];
+  const COMPASS_SHORT = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+    "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+  const compassShort = (az) => COMPASS_SHORT[Math.round(((az % 360) + 360) % 360 / 22.5) % 16];
+
+  // Height described the way you'd actually judge it in the field: an outstretched fist
+  // spans roughly 10 degrees of sky.
+  function heightPhrase(alt) {
+    if (alt <= 0) return "below the horizon";
+    const fists = alt / 10;
+    if (fists < 0.35) return "barely above the horizon";
+    if (fists < 0.75) return "about half a fist above the horizon";
+    if (fists < 1.4) return "about one fist above the horizon";
+    return `about ${Math.round(fists)} fists above the horizon`;
+  }
+
+  // ====================================================================================
+  //  STATE
+  // ====================================================================================
+  let viewer = null;
+  let terrainSource = "open";           // "open" (default) | "ion" (via ?terrain=ion)
+  let activeLoc = LOCATIONS[3];         // default Dunedin
+  let activeGroundCartesian = null;     // observer position (ground + eye height)
+  let sightlinePrimitive = null;        // current drawn ray
+  let locationMarker = null;            // visible marker at the checked location
+  let pinMode = false;                  // when true, clicking the map sets the location
+  const startJulian = Cesium.JulianDate.fromIso8601(CLOCK_START_UTC);
+  const stopJulian  = Cesium.JulianDate.fromIso8601(CLOCK_STOP_UTC);
+  const totalBegJ   = Cesium.JulianDate.fromIso8601(TOTALITY_BEG_UTC);
+  const totalEndJ   = Cesium.JulianDate.fromIso8601(TOTALITY_END_UTC);
+  const partBegJ    = Cesium.JulianDate.fromIso8601(PARTIAL_BEG_UTC);
+  const partEndJ    = Cesium.JulianDate.fromIso8601(PARTIAL_END_UTC);
+  const maxJ        = Cesium.JulianDate.fromIso8601(TOTALITY_MAX_UTC);
+  const windowSecs  = Cesium.JulianDate.secondsDifference(stopJulian, startJulian);
+
+  // scratch
+  const _sunIcrf = new Cesium.Cartesian3();
+  const _mat3 = new Cesium.Matrix3();
+  const _sunFixed = new Cesium.Cartesian3();
+
+  // ====================================================================================
+  //  ASTRONOMY: sun position (Earth-fixed) and local altitude/azimuth
+  // ====================================================================================
+  const A = window.Astronomy;
+  const AU_KM = 149597870.7;
+  const SUN_KM = 695700;
+  const MOON_KM = 1737.4;
+  const lerp = (a, b, f) => a + (b - a) * Cesium.Math.clamp(f, 0, 1);
+
+  // Cesium JulianDate -> JS Date (astronomy-engine works in UTC Dates).
+  const toDate = (t) => Cesium.JulianDate.toDate(t);
+
+  // Cartesian -> astronomy-engine Observer (lat/lon/height).
+  function observerFor(cartesian) {
+    const c = Cesium.Cartographic.fromCartesian(cartesian);
+    return new A.Observer(
+      Cesium.Math.toDegrees(c.latitude),
+      Cesium.Math.toDegrees(c.longitude),
+      c.height
+    );
+  }
+
+  // Topocentric alt/az of a body, plus its apparent radius and sky direction vector.
+  // Geometric (unrefracted) altitude: the conservative choice for a visibility tool, and
+  // consistent with the contact-time altitudes reported by SearchLocalSolarEclipse.
+  function bodyAltAz(body, date, observer, radiusKm) {
+    const eq = A.Equator(body, date, observer, true, true);
+    const hz = A.Horizon(date, observer, eq.ra, eq.dec, null);
+    const ra = eq.ra * 15 * Math.PI / 180, dec = eq.dec * Math.PI / 180;
+    return {
+      altitude: hz.altitude,
+      azimuth: hz.azimuth,
+      angRadius: Math.asin(radiusKm / (eq.dist * AU_KM)),
+      unit: [Math.cos(dec) * Math.cos(ra), Math.cos(dec) * Math.sin(ra), Math.sin(dec)],
+    };
+  }
+
+  // Sun altitude/azimuth for an observer, plus the ECEF direction to the sun (for the ray).
+  function sunAltAz(time, originCartesian) {
+    const s = bodyAltAz(A.Body.Sun, toDate(time), observerFor(originCartesian), SUN_KM);
+    return {
+      altitude: s.altitude,
+      azimuth: s.azimuth,
+      dir: enuDirection(originCartesian, s.azimuth, s.altitude),
+    };
+  }
+
+  // Unit ECEF vector pointing at the given local azimuth/altitude (degrees).
+  function enuDirection(originCartesian, azimuthDeg, altitudeDeg) {
+    const az = Cesium.Math.toRadians(azimuthDeg), alt = Cesium.Math.toRadians(altitudeDeg);
+    const enu = new Cesium.Cartesian3(
+      Math.sin(az) * Math.cos(alt),   // east
+      Math.cos(az) * Math.cos(alt),   // north
+      Math.sin(alt)                   // up
+    );
+    const m = Cesium.Transforms.eastNorthUpToFixedFrame(originCartesian);
+    const v = Cesium.Matrix4.multiplyByPointAsVector(m, enu, new Cesium.Cartesian3());
+    return Cesium.Cartesian3.normalize(v, v);
+  }
+
+  // Real eclipse geometry for this observer at this instant, from sun + moon ephemeris.
+  //   magnitude   fraction of the sun's DIAMETER covered
+  //   obscuration fraction of the sun's AREA covered
+  function eclipseAt(time, originCartesian) {
+    const date = toDate(time);
+    const obs = observerFor(originCartesian);
+    const s = bodyAltAz(A.Body.Sun, date, obs, SUN_KM);
+    const m = bodyAltAz(A.Body.Moon, date, obs, MOON_KM);
+    const dot = s.unit[0] * m.unit[0] + s.unit[1] * m.unit[1] + s.unit[2] * m.unit[2];
+    const sep = Math.acos(Cesium.Math.clamp(dot, -1, 1));
+    const mag = Math.max(0, (s.angRadius + m.angRadius - sep) / (2 * s.angRadius));
+    const obscuration = Math.min(1, circleOverlapArea(s.angRadius, m.angRadius, sep) / (Math.PI * s.angRadius * s.angRadius));
+    return {
+      mag,
+      obscuration,
+      k: m.angRadius / s.angRadius,        // moon/sun apparent size ratio
+      sepR: sep / s.angRadius,             // separation in sun-radii
+      sunAlt: s.altitude,
+      sunAz: s.azimuth,
+      moonAlt: m.altitude,
+      moonAz: m.azimuth,
+    };
+  }
+
+  // Per-location eclipse contact times (cached per coordinate).
+  const circumstancesCache = new Map();
+  function localCircumstances(originCartesian) {
+    const c = Cesium.Cartographic.fromCartesian(originCartesian);
+    const lat = Cesium.Math.toDegrees(c.latitude), lon = Cesium.Math.toDegrees(c.longitude);
+    const key = lat.toFixed(3) + "," + lon.toFixed(3);
+    if (circumstancesCache.has(key)) return circumstancesCache.get(key);
+    let info = null;
+    try {
+      const start = new A.AstroTime(new Date(Date.UTC(2028, 6, 21, 0, 0, 0)));
+      const e = A.SearchLocalSolarEclipse(start, new A.Observer(lat, lon, c.height));
+      const j = (ev) => (ev ? Cesium.JulianDate.fromDate(ev.time.date) : null);
+      info = {
+        kind: e.kind,
+        peakObscuration: e.obscuration,
+        partialBegin: j(e.partial_begin),
+        totalBegin: j(e.total_begin),
+        peak: j(e.peak),
+        totalEnd: j(e.total_end),
+        partialEnd: j(e.partial_end),
+      };
+    } catch (err) {
+      info = null; // no eclipse visible from here
+    }
+    circumstancesCache.set(key, info);
+    return info;
+  }
+
+  // Overlap area of two circles (radii r1, r2; centre separation d).
+  function circleOverlapArea(r1, r2, d) {
+    if (d >= r1 + r2) return 0;
+    if (d <= Math.abs(r1 - r2)) { const r = Math.min(r1, r2); return Math.PI * r * r; }
+    const r1s = r1 * r1, r2s = r2 * r2;
+    const a1 = Math.acos((d * d + r1s - r2s) / (2 * d * r1));
+    const a2 = Math.acos((d * d + r2s - r1s) / (2 * d * r2));
+    const tri = 0.5 * Math.sqrt((-d + r1 + r2) * (d + r1 - r2) * (d - r1 + r2) * (d + r1 + r2));
+    return r1s * a1 + r2s * a2 - tri;
+  }
+
+  function updateEclipseCard(time, e) {
+    document.getElementById("eclipseMag").textContent = "mag " + e.mag.toFixed(2);
+    document.getElementById("eclipseObsc").textContent = Math.round(e.obscuration * 100) + "%";
+    document.getElementById("eclipseBar").style.width = Math.min(100, e.obscuration * 100).toFixed(0) + "%";
+
+    const lbl = document.getElementById("eclipsePhaseLabel");
+    if (e.obscuration >= 0.999) { lbl.textContent = "Totality"; lbl.className = "text-xs font-bold text-amber-300 mt-0.5"; }
+    else if (e.mag > 0) { lbl.textContent = "Partial phase"; lbl.className = "text-xs font-semibold text-amber-400/90 mt-0.5"; }
+    else { lbl.textContent = "No eclipse"; lbl.className = "text-xs text-slate-500 mt-0.5"; }
+
+    // Diagram: sun fixed at 30px, moon scaled by the true apparent-size ratio, offset along
+    // the real position angle of the moon relative to the sun in this observer's sky.
+    const Rp = 30;
+    const moonR = Rp * e.k;
+    const sepPx = Math.min(96, Rp * e.sepR);
+    let dAz = e.moonAz - e.sunAz;
+    if (dAz > 180) dAz -= 360; else if (dAz < -180) dAz += 360;
+    const pa = Math.atan2(e.moonAlt - e.sunAlt, dAz * Math.cos(Cesium.Math.toRadians(e.sunAlt)));
+    const cx = 60 + sepPx * Math.cos(pa);
+    const cy = 60 - sepPx * Math.sin(pa);
+
+    const moon = document.getElementById("eclMoon");
+    moon.setAttribute("r", moonR.toFixed(1));
+    moon.setAttribute("cx", cx.toFixed(1));
+    moon.setAttribute("cy", cy.toFixed(1));
+
+    const corona = document.getElementById("eclCorona");
+    if (e.obscuration >= 0.999) {
+      corona.setAttribute("r", (moonR + 3).toFixed(1));
+      corona.setAttribute("cx", cx.toFixed(1));
+      corona.setAttribute("cy", cy.toFixed(1));
+      corona.setAttribute("stroke-width", "5");
+      corona.setAttribute("opacity", "0.9");
+    } else {
+      corona.setAttribute("stroke-width", "0");
+      corona.setAttribute("opacity", "0");
+    }
+  }
+
+  // ====================================================================================
+  //  ECLIPSE LIGHTING — CesiumJS models sun DIRECTION but has no concept of occultation,
+  //  so we dim the scene ourselves from the live obscuration.
+  // ====================================================================================
+  let sunLight = null;
+  let lastDim = -1;
+
+  function updateEclipseLighting(e) {
+    if (!viewer) return;
+    // Visible sunlight falls as (1 - obscuration), but perceived darkness collapses only in
+    // the last few percent — which is exactly why totality feels so sudden. A high exponent
+    // reproduces that: barely noticeable at 80%, plunging past 97%.
+    const dim = Math.pow(Cesium.Math.clamp(e.obscuration, 0, 1), 6);
+    if (Math.abs(dim - lastDim) < 0.002) return;   // skip redundant GPU state changes
+    lastDim = dim;
+
+    // Intensity of a DIRECTIONAL light — shading contrast is preserved, so terrain relief
+    // and the raking 8° shadows stay readable as the scene darkens.
+    //
+    // These floors are deliberately conservative. Real totality is orders of magnitude darker
+    // than daylight, but a literal rendering is just a black screen — and the whole point is
+    // to SEE the terrain silhouette that blocks the sun. Light intensity and imagery
+    // brightness multiply, so both floors have to stay well clear of zero.
+    if (!sunLight) { sunLight = new Cesium.SunLight(); viewer.scene.light = sunLight; }
+    sunLight.intensity = lerp(2.0, 0.8, dim);
+
+    const layer = viewer.imageryLayers.length ? viewer.imageryLayers.get(0) : null;
+    if (layer) {
+      // Baseline above 1.0 on purpose: the default view looks along the sun's bearing, so the
+      // slopes facing the camera are back-lit and Cesium renders them close to black. Lifting
+      // the imagery keeps the landscape readable without flattening the raking shadows.
+      layer.brightness = lerp(1.45, 0.5, dim);
+      layer.saturation = lerp(1.1, 0.55, dim);   // colour drains toward totality
+    }
+
+    const sky = viewer.scene.skyAtmosphere;
+    if (sky) {
+      sky.brightnessShift = lerp(0, -0.5, dim);
+      sky.saturationShift = lerp(0, -0.35, dim);
+    }
+    const globe = viewer.scene.globe;
+    globe.atmosphereBrightnessShift = lerp(0, -0.45, dim);
+    globe.atmosphereSaturationShift = lerp(0, -0.3, dim);
+  }
+
+  // ====================================================================================
+  //  TIME FORMATTING (NZST wall clock)
+  // ====================================================================================
+  function formatNZST(julian) {
+    const nz = Cesium.JulianDate.addHours(julian, 12, new Cesium.JulianDate());
+    const g = Cesium.JulianDate.toGregorianDate(nz);
+    const p = (n) => String(n).padStart(2, "0");
+    return `${p(g.hour)}:${p(g.minute)}:${p(Math.floor(g.second))}`;
+  }
+
+  // ====================================================================================
+  //  VIEWER INITIALISATION
+  // ====================================================================================
+  async function initViewer(mode, token) {
+    terrainSource = mode;
+    const options = {
+      baseLayerPicker: false,
+      geocoder: false,
+      homeButton: false,
+      sceneModePicker: false,
+      navigationHelpButton: false,
+      animation: false,
+      timeline: false,
+      fullscreenButton: false,
+      selectionIndicator: false,
+      infoBox: false,
+    };
+
+    if (mode === "ion") {
+      // Opt-in only, via ?terrain=ion — finer over New Zealand, but needs a token.
+      Cesium.Ion.defaultAccessToken = token;
+      options.terrain = Cesium.Terrain.fromWorldTerrain({ requestVertexNormals: true });
+    } else {
+      // Default: token-free Re:Earth Terrain (quantized-mesh) + Esri World Imagery.
+      options.terrainProvider = await Cesium.CesiumTerrainProvider.fromUrl(REEARTH_TERRAIN_URL, {
+        requestVertexNormals: true,
+      });
+      options.baseLayer = Cesium.ImageryLayer.fromProviderAsync(
+        Cesium.ArcGisMapServerImageryProvider.fromUrl(ESRI_IMAGERY_URL, {
+          enablePickFeatures: false,
+        })
+      );
+    }
+
+    viewer = new Cesium.Viewer("cesiumContainer", options);
+    viewer.scene.globe.enableLighting = true;
+    viewer.scene.globe.depthTestAgainstTerrain = true;
+    viewer.scene.highDynamicRange = false;
+
+    // Clock locked to the eclipse window.
+    viewer.clock.startTime = startJulian.clone();
+    viewer.clock.stopTime = stopJulian.clone();
+    viewer.clock.currentTime = Cesium.JulianDate.fromIso8601(TOTALITY_MAX_UTC);
+    viewer.clock.clockRange = Cesium.ClockRange.CLAMPED;
+    viewer.clock.multiplier = 30;
+    viewer.clock.shouldAnimate = false;
+
+    // Preload Earth orientation data so sun position is astronomically exact.
+    try {
+      await Cesium.Transforms.preloadIcrfFixed(
+        new Cesium.TimeInterval({ start: startJulian, stop: stopJulian })
+      );
+    } catch (e) { /* fallback path in sunPositionFixed handles this */ }
+
+    viewer.clock.onTick.addEventListener(onTick);
+    setupMapClick();
+
+    // ?lat=&lon=&name= lets the overview map (and any shared link) drop you straight onto a
+    // specific spot. Falls back to Dunedin.
+    const q = new URLSearchParams(location.search);
+    const qLat = parseFloat(q.get("lat")), qLon = parseFloat(q.get("lon"));
+    if (Number.isFinite(qLat) && Number.isFinite(qLon) &&
+        qLat >= -90 && qLat <= 90 && qLon >= -180 && qLon <= 180) {
+      const name = (q.get("name") || "").slice(0, 60) ||
+        `${qLat.toFixed(4)}, ${qLon.toFixed(4)}`;
+      await selectLocation({ name, lat: qLat, lon: qLon }, false);
+    } else {
+      await selectLocation(LOCATIONS[3], false);
+    }
+    onTick(viewer.clock);
+  }
+
+  // ====================================================================================
+  //  PER-FRAME UPDATE
+  // ====================================================================================
+  function onTick(clock) {
+    const t = clock.currentTime;
+    document.getElementById("clockReadout").textContent = formatNZST(t);
+
+    if (activeGroundCartesian) {
+      // One ephemeris evaluation per tick, shared by the readout, card, badge and lighting.
+      const e = eclipseAt(t, activeGroundCartesian);
+      document.getElementById("sunAlt").innerHTML = e.sunAlt.toFixed(1) + "&deg;";
+      document.getElementById("sunAz").innerHTML = e.sunAz.toFixed(0) + "&deg;";
+      document.getElementById("sunPlain").textContent =
+        e.sunAlt > 0
+          ? `Sun ${heightPhrase(e.sunAlt)}, to the ${compassName(e.sunAz)}`
+          : "Sun has set";
+      updateEclipseCard(t, e);
+      updateTotalityBadge(e);
+      updateEclipseLighting(e);
+      updateNarration(t, e);
+    }
+
+    // Scrubber sync (avoid feedback while user drags)
+    const scrub = document.getElementById("timeScrub");
+    if (!scrub.dataset.dragging) {
+      const frac = Cesium.JulianDate.secondsDifference(t, startJulian) / windowSecs;
+      scrub.value = Math.round(Cesium.Math.clamp(frac, 0, 1) * 1000);
+      scrub.style.setProperty("--fill", (frac * 100).toFixed(1) + "%");
+    }
+  }
+
+  function updateTotalityBadge(e) {
+    const badge = document.getElementById("totalityBadge");
+    const text = document.getElementById("totalityText");
+    const dot = badge.querySelector("span.rounded-full");
+    // Phase comes from the live geometry, so badge and card can never disagree.
+    const phase = e.obscuration >= 0.999 ? "TOTALITY" : e.mag > 0 ? "PARTIAL" : "BEFORE";
+    if (phase === "TOTALITY") {
+      badge.className = "totality-on flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full bg-amber-500 text-slate-900";
+      dot.className = "w-2 h-2 rounded-full bg-slate-900";
+      text.textContent = "TOTALITY";
+    } else if (phase === "PARTIAL") {
+      badge.className = "flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full bg-amber-900/60 text-amber-300";
+      dot.className = "w-2 h-2 rounded-full bg-amber-400";
+      text.textContent = "PARTIAL";
+    } else {
+      badge.className = "flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full bg-slate-700 text-slate-400";
+      dot.className = "w-2 h-2 rounded-full bg-slate-500";
+      text.textContent = "NO ECLIPSE";
+    }
+  }
+
+  // ====================================================================================
+  //  LOCATION SELECTION & CAMERA
+  // ====================================================================================
+  // Move the observer/checked location WITHOUT moving the camera. Returns ground height.
+  async function setObserver(loc) {
+    activeLoc = loc;
+    document.getElementById("activeLocation").textContent = loc.name;
+
+    // Sample ground height so the observer sits on the terrain.
+    let groundHeight = 0;
+    try {
+      const samples = await Cesium.sampleTerrainMostDetailed(viewer.terrainProvider, [
+        Cesium.Cartographic.fromDegrees(loc.lon, loc.lat),
+      ]);
+      groundHeight = samples[0].height || 0;
+    } catch (e) { groundHeight = 0; }
+    activeGroundCartesian = Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat, groundHeight + EYE_HEIGHT);
+
+    updateLocationMarker(loc, groundHeight);
+    // A moved location invalidates any drawn sightline.
+    if (sightlinePrimitive) { viewer.entities.remove(sightlinePrimitive); sightlinePrimitive = null; }
+    updateLocalTimes();
+    if (catalogue) renderTopSpots();   // distances are relative to where we now are
+    onTick(viewer.clock); // refresh sun readout for the new observer
+    return groundHeight;
+  }
+
+  // Time on the way in to maximum when the sun is `target` obscured. Bisection: obscuration
+  // rises monotonically from first contact to maximum, so this converges quickly.
+  function timeAtObscuration(target, cartesian) {
+    const c = localCircumstances(cartesian);
+    if (!c || !c.peak) return null;
+    let lo = c.partialBegin || Cesium.JulianDate.addSeconds(c.peak, -3600, new Cesium.JulianDate());
+    let hi = c.peak.clone();
+    if (eclipseAt(hi, cartesian).obscuration < target) return null;   // never gets that deep
+    for (let i = 0; i < 22; i++) {
+      const mid = Cesium.JulianDate.addSeconds(
+        lo, Cesium.JulianDate.secondsDifference(hi, lo) / 2, new Cesium.JulianDate());
+      if (eclipseAt(mid, cartesian).obscuration < target) lo = mid; else hi = mid;
+    }
+    return hi;
+  }
+
+  // Camera placed BEHIND the observer, looking along the sun's bearing at maximum, so the
+  // location marker sits in the foreground and the low sun is in frame at the same time.
+  // Standing directly over the point hid the marker and left nothing to orient by.
+  // High and well back, so the frame shows a landscape rather than a foreshortened strip of
+  // near ground. The pitch has to stay shallow to keep the low sun in shot, and a shallow
+  // pitch from a low camera sees almost nothing but the hillside in front of it.
+  const VIEW_UP = 450;      // m above the higher of the two ground heights
+
+  // Half the vertical field of view, in degrees. Cesium's frustum.fov is the HORIZONTAL angle
+  // on a landscape window, so on a wide screen the usable vertical span is far smaller than it
+  // looks — 34 deg at 1.89 aspect. Framing that ignores this puts the sun off the top edge.
+  function halfVerticalFovDeg() {
+    const cv = viewer.scene.canvas;
+    const aspect = (cv.clientWidth || 1) / (cv.clientHeight || 1);
+    const f = viewer.camera.frustum.fov || Cesium.Math.toRadians(60);
+    const fovV = aspect > 1 ? 2 * Math.atan(Math.tan(f / 2) / aspect) : f;
+    return Cesium.Math.toDegrees(fovV) / 2;
+  }
+
+  // The visible band is the canvas minus the status bar and the timeline. Those are very
+  // different proportions on a phone (bottom bar ~29% of the screen) versus a desktop (~12%),
+  // so a fixed percentage budget hides the marker on one or wastes space on the other.
+  // Measure the chrome and return both the usable half-angle and how far the usable centre
+  // sits above the canvas centre.
+  function framingBand() {
+    const cv = viewer.scene.canvas;
+    const H = cv.clientHeight || 1;
+    const halfV = halfVerticalFovDeg();
+    const degPerPx = (2 * halfV) / H;
+    const rect = (id) => {
+      const el = document.getElementById(id);
+      if (!el || el.classList.contains("hidden")) return null;
+      const b = el.getBoundingClientRect();
+      return b.height > 0 ? b : null;
+    };
+    const tb = rect("topBar"), bb = rect("bottomBar");
+    const top = tb ? Math.max(0, tb.bottom) : 0;
+    const bottom = bb ? Math.max(0, H - bb.top) : 0;
+    const usableHalfDeg = Math.max(4, ((H - top - bottom) / 2) * degPerPx);
+    const offsetDeg = ((bottom - top) / 2) * degPerPx;
+    return { usableHalfDeg, offsetDeg };
+  }
+
+  async function frameForLocation(loc, groundHeight) {
+    const c = localCircumstances(activeGroundCartesian);
+    // Heading faces where the sun will be at totality, as that is the moment being framed.
+    // Pitch is set from the sun's altitude *now* (arrival, ~50% obscured) — that is its
+    // highest point in this window, so framing it guarantees the sun stays in shot as it
+    // sinks toward totality rather than climbing out of the top of the frame.
+    const sunAz = sunAltAz(c && c.peak ? c.peak : viewer.clock.currentTime,
+                           activeGroundCartesian).azimuth;
+    const sunAltNow = sunAltAz(viewer.clock.currentTime, activeGroundCartesian).altitude;
+
+    // Fit the sun (up) and the marker (down) into the same frame, then pitch midway between
+    // them so both sit the same distance from the centre.
+    //
+    // Only the middle of the canvas is really usable — the status bar covers the top and the
+    // timeline covers the bottom, and a marker placed by canvas centre alone ends up hidden
+    // behind the controls. Budgeting ~62% of the half-FOV keeps both clear of the chrome.
+    const { usableHalfDeg, offsetDeg } = framingBand();
+    const sunA = Math.max(sunAltNow, 0);
+    let depression = Cesium.Math.clamp(2 * usableHalfDeg * 0.85 - sunA, 4, 30);
+    let back = Cesium.Math.clamp(VIEW_UP / Math.tan(Cesium.Math.toRadians(depression)), 500, 9000);
+    depression = Cesium.Math.toDegrees(Math.atan(VIEW_UP / back));
+    // Put the midpoint of sun-and-marker at the centre of the *visible* band, not the canvas.
+    const pitchDeg = (sunA - depression) / 2 - offsetDeg;
+
+    const backRad = Cesium.Math.toRadians((sunAz + 180) % 360);
+    const base = Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat, groundHeight);
+    const frame = Cesium.Transforms.eastNorthUpToFixedFrame(base);
+    const flat = Cesium.Matrix4.multiplyByPoint(frame,
+      new Cesium.Cartesian3(back * Math.sin(backRad), back * Math.cos(backRad), 0),
+      new Cesium.Cartesian3());
+    const carto = Cesium.Cartographic.fromCartesian(flat);
+
+    // Clear the terrain behind us too, or the camera ends up inside a hillside in a valley.
+    let backGround = groundHeight;
+    try {
+      const s = await Cesium.sampleTerrainMostDetailed(viewer.terrainProvider,
+        [Cesium.Cartographic.clone(carto)]);
+      backGround = s[0].height || groundHeight;
+    } catch (e) { /* keep the observer's height */ }
+
+    return {
+      destination: Cesium.Cartesian3.fromRadians(carto.longitude, carto.latitude,
+        Math.max(groundHeight, backGround) + VIEW_UP),
+      orientation: {
+        heading: Cesium.Math.toRadians(sunAz),
+        pitch: Cesium.Math.toRadians(pitchDeg),
+        roll: 0,
+      },
+    };
+  }
+
+  // Re-apply the arrival framing for wherever we already are. Needed because the first framing
+  // happens while the UI is still hidden (so the chrome measures zero), and again whenever the
+  // window resizes or a phone rotates and the usable band changes shape.
+  async function reframeCurrent() {
+    if (!viewer || !activeLoc || !activeGroundCartesian) return;
+    const gh = Cesium.Cartographic.fromCartesian(activeGroundCartesian).height - EYE_HEIGHT;
+    viewer.camera.setView(await frameForLocation(activeLoc, gh));
+  }
+
+  async function selectLocation(loc, fly = true) {
+    const groundHeight = await setObserver(loc);
+
+    // Arrive part-way through the partial phase rather than at totality: at ~50% obscured
+    // there is still enough light to read the terrain, and the user can jump forward to
+    // totality without touching the camera. Leave the clock alone mid-playback.
+    if (!cinematic) {
+      const t50 = timeAtObscuration(0.5, activeGroundCartesian);
+      if (t50) {
+        viewer.clock.currentTime = t50;
+        onTick(viewer.clock);
+      }
+    }
+
+    const view = await frameForLocation(loc, groundHeight);
+    if (fly) viewer.camera.flyTo({ ...view, duration: 2.0 });
+    else viewer.camera.setView(view);
+  }
+
+  // Per-location contact times — these genuinely differ across Otago (Queenstown reaches
+  // totality about a minute before Dunedin, with a different duration).
+  function updateLocalTimes() {
+    const el = document.getElementById("eclipseLocalTimes");
+    const c = localCircumstances(activeGroundCartesian);
+
+    // Label the jump buttons with this location's own contact times.
+    const hm = (j) => (j ? formatNZST(j).slice(0, 5) : "--:--");
+    document.getElementById("jumpStartT").textContent = c ? " " + hm(c.partialBegin) : "";
+    document.getElementById("jumpMaxT").textContent = c ? " " + hm(c.peak) : "";
+    document.getElementById("jumpEndT").textContent = c ? " " + hm(c.partialEnd) : "";
+
+    if (!c || !c.totalBegin) {
+      el.innerHTML = c
+        ? `<span class="text-slate-500">Partial only from here (${c.kind}).</span>`
+        : `<span class="text-slate-500">No solar eclipse visible from this location.</span>`;
+      return;
+    }
+    const dur = Cesium.JulianDate.secondsDifference(c.totalEnd, c.totalBegin);
+    const mm = Math.floor(dur / 60), ss = Math.round(dur % 60);
+    el.innerHTML =
+      `Totality here: <span class="text-amber-300 font-semibold">${formatNZST(c.totalBegin)}</span>` +
+      ` &ndash; <span class="text-amber-300 font-semibold">${formatNZST(c.totalEnd)}</span>` +
+      ` <span class="text-slate-500">(${mm}m${String(ss).padStart(2, "0")}s)</span>`;
+  }
+
+  function updateLocationMarker(loc, groundHeight) {
+    const pos = Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat, groundHeight);
+    if (!locationMarker) {
+      locationMarker = viewer.entities.add({
+        position: pos,
+        point: {
+          pixelSize: 11,
+          color: Cesium.Color.fromCssColorString("#fbbf24"),
+          outlineColor: Cesium.Color.WHITE,
+          outlineWidth: 2,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        label: {
+          text: loc.name,
+          font: "12px sans-serif",
+          fillColor: Cesium.Color.WHITE,
+          showBackground: true,
+          backgroundColor: Cesium.Color.fromCssColorString("#0f172a").withAlpha(0.85),
+          pixelOffset: new Cesium.Cartesian2(0, -16),
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          scale: 0.92,
+        },
+      });
+    } else {
+      locationMarker.position = pos;
+      locationMarker.label.text = loc.name;
+    }
+  }
+
+  // ---- Click-to-pin -------------------------------------------------------------------
+  function setupMapClick() {
+    const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+    handler.setInputAction((evt) => {
+      if (!pinMode) return;
+      const ray = viewer.camera.getPickRay(evt.position);
+      let cartesian = ray ? viewer.scene.globe.pick(ray, viewer.scene) : undefined;
+      if (!Cesium.defined(cartesian)) {
+        cartesian = viewer.camera.pickEllipsoid(evt.position, viewer.scene.globe.ellipsoid);
+      }
+      if (!Cesium.defined(cartesian)) {
+        setCustomStatus("Couldn't read that point — aim at the terrain", "error");
+        return;
+      }
+      const carto = Cesium.Cartographic.fromCartesian(cartesian);
+      const lat = Cesium.Math.toDegrees(carto.latitude);
+      const lon = Cesium.Math.toDegrees(carto.longitude);
+      setObserver({ name: `${lat.toFixed(4)}, ${lon.toFixed(4)}`, lat, lon });
+      setCustomStatus(`Pinned ${lat.toFixed(4)}, ${lon.toFixed(4)}`, "ok");
+    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+  }
+
+  function togglePinMode() {
+    pinMode = !pinMode;
+    const btn = document.getElementById("pinToggle");
+    viewer.scene.canvas.style.cursor = pinMode ? "crosshair" : "";
+    if (pinMode) {
+      btn.className = "mt-1.5 w-full inline-flex items-center justify-center gap-1.5 text-xs font-semibold bg-amber-500 text-slate-900 rounded-lg px-2 py-1.5 transition ring-2 ring-amber-300";
+      btn.innerHTML = '<i data-lucide="map-pinned" class="w-3.5 h-3.5"></i> Click map to pin…';
+      setCustomStatus("Click the map to set the location", "info");
+    } else {
+      btn.className = "mt-1.5 w-full inline-flex items-center justify-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2 py-1.5 transition";
+      btn.innerHTML = '<i data-lucide="map-pinned" class="w-3.5 h-3.5 text-amber-400"></i> Pin on map';
+      setCustomStatus("", "");
+    }
+    lucide.createIcons();
+  }
+
+  // ====================================================================================
+  //  CUSTOM LOCATION (coordinates / address / browser geolocation)
+  // ====================================================================================
+  function setCustomStatus(msg, type) {
+    const el = document.getElementById("customStatus");
+    if (!msg) { el.classList.add("hidden"); return; }
+    el.textContent = msg;
+    const color = type === "error" ? "text-red-400" : type === "ok" ? "text-emerald-400" : "text-slate-400";
+    el.className = "mt-1.5 text-[11px] " + color;
+  }
+
+  // Geocoding uses Photon rather than Nominatim. Nominatim's usage policy explicitly forbids
+  // autocomplete ("you must not implement such a service") and bans offenders; Photon is
+  // OSM-based and purpose-built for type-ahead. Results are biased toward Otago.
+  const PHOTON_URL = "https://photon.komoot.io/api/";
+  const BIAS = { lat: -45.1, lon: 169.2 };
+
+  function photonUrl(query, limit) {
+    return `${PHOTON_URL}?q=${encodeURIComponent(query)}&limit=${limit}` +
+           `&lat=${BIAS.lat}&lon=${BIAS.lon}&lang=en`;
+  }
+
+  // Build a readable label from Photon's structured properties.
+  function photonLabel(p) {
+    const parts = [
+      [p.name, p.housenumber && p.street ? `${p.housenumber} ${p.street}` : p.street].find(Boolean),
+      p.city || p.town || p.village || p.locality,
+      p.county || p.state,
+      p.country,
+    ].filter(Boolean);
+    const seen = new Set();
+    return parts.filter((x) => (seen.has(x) ? false : seen.add(x))).join(", ");
+  }
+
+  function photonFeatures(json) {
+    return (json.features || [])
+      .filter((f) => f.geometry && Array.isArray(f.geometry.coordinates))
+      .map((f) => ({
+        name: photonLabel(f.properties || {}),
+        lon: f.geometry.coordinates[0],
+        lat: f.geometry.coordinates[1],
+      }))
+      .filter((f) => f.name && Number.isFinite(f.lat) && Number.isFinite(f.lon));
+  }
+
+  async function geocodeAddress(query) {
+    const res = await fetch(photonUrl(query, 1), { headers: { Accept: "application/json" } });
+    if (!res.ok) throw new Error("Geocoding service unavailable");
+    const list = photonFeatures(await res.json());
+    if (!list.length) throw new Error("Address not found");
+    return { name: shortName(list[0].name), lat: list[0].lat, lon: list[0].lon };
+  }
+
+  // ---- Address autocomplete (Photon) -------------------------------------------------
+  let suggestTimer = null;
+  let suggestAbort = null;
+  let suggestItems = [];
+  let suggestActive = -1;
+  const COORD_RE = /^-?\d+(?:\.\d+)?\s*[, ]\s*-?\d+(?:\.\d+)?$/;
+
+  function hideSuggestions() {
+    document.getElementById("suggestions").classList.add("hidden");
+    suggestItems = [];
+    suggestActive = -1;
+  }
+
+  async function fetchSuggestions(q) {
+    if (suggestAbort) suggestAbort.abort();
+    suggestAbort = new AbortController();
+    try {
+      const res = await fetch(photonUrl(q, 5), {
+        signal: suggestAbort.signal,
+        headers: { Accept: "application/json" },
+      });
+      if (!res.ok) return;
+      renderSuggestions(photonFeatures(await res.json()));
+    } catch (e) { /* aborted or offline — ignore */ }
+  }
+
+  function renderSuggestions(items) {
+    const box = document.getElementById("suggestions");
+    if (!items || !items.length) { hideSuggestions(); return; }
+    suggestItems = items;
+    suggestActive = -1;
+    box.innerHTML = "";
+    suggestItems.forEach((it, i) => {
+      const el = document.createElement("button");
+      el.className = "suggest-item block w-full text-left text-xs px-2.5 py-2 hover:bg-slate-700/70 border-b border-slate-700/40 last:border-0";
+      el.textContent = it.name;
+      el.addEventListener("mousedown", (e) => { e.preventDefault(); chooseSuggestion(i); });
+      box.appendChild(el);
+    });
+    box.classList.remove("hidden");
+  }
+
+  function highlightSuggestion() {
+    document.querySelectorAll("#suggestions .suggest-item").forEach((el, i) => {
+      el.classList.toggle("bg-slate-700/70", i === suggestActive);
+      if (i === suggestActive) el.scrollIntoView({ block: "nearest" });
+    });
+  }
+
+  function shortName(name) { return name.length > 40 ? name.slice(0, 38) + "…" : name; }
+
+  function chooseSuggestion(i) {
+    const it = suggestItems[i];
+    if (!it) return;
+    document.getElementById("customInput").value = shortName(it.name);
+    hideSuggestions();
+    selectLocation({ name: shortName(it.name), lat: it.lat, lon: it.lon }, true);
+    setCustomStatus("", "ok");
+  }
+
+  async function goToCustom() {
+    hideSuggestions();
+    const raw = document.getElementById("customInput").value.trim();
+    if (!raw) return;
+    // "lat, lon" or "lat lon" → coordinates; otherwise treat as an address.
+    const m = raw.match(/^(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)$/);
+    setCustomStatus("Locating…", "info");
+    try {
+      let loc;
+      if (m) {
+        const lat = parseFloat(m[1]), lon = parseFloat(m[2]);
+        if (lat < -90 || lat > 90 || lon < -180 || lon > 180) throw new Error("Coordinates out of range");
+        loc = { name: `${lat.toFixed(4)}, ${lon.toFixed(4)}`, lat, lon };
+      } else {
+        loc = await geocodeAddress(raw);
+      }
+      await selectLocation(loc, true);
+      setCustomStatus("", "ok");
+    } catch (e) {
+      setCustomStatus(e.message || "Could not find that location", "error");
+    }
+  }
+
+  function useMyLocation() {
+    if (!navigator.geolocation) { setCustomStatus("Geolocation not supported", "error"); return; }
+    setCustomStatus("Requesting your location…", "info");
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        await selectLocation({ name: "My location", lat: latitude, lon: longitude }, true);
+        setCustomStatus("", "ok");
+      },
+      (err) => setCustomStatus(err.code === 1 ? "Location permission denied" : "Could not get your location", "error"),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }
+
+  // ====================================================================================
+  //  SIGHTLINE CHECK
+  // ====================================================================================
+  async function runSightlineCheck() {
+    const box = document.getElementById("resultBox");
+    const c = localCircumstances(activeGroundCartesian);
+
+    // Check the three moments that matter for this observer: first contact, maximum, last
+    // contact. The sun swings several degrees in azimuth across the ~2 hours between them,
+    // so terrain can block one and not another.
+    const moments = c && c.partialBegin
+      ? [
+          { label: "Start", j: c.partialBegin },
+          { label: "Maximum", j: c.peak },
+          { label: "End", j: c.partialEnd },
+        ]
+      : [{ label: "Now", j: viewer.clock.currentTime.clone() }];
+    for (const m of moments) {
+      const s = sunAltAz(m.j, activeGroundCartesian);
+      m.alt = s.altitude; m.az = s.azimuth; m.dir = s.dir;
+    }
+    const focus = moments.find((m) => m.label === "Maximum") || moments[0];
+
+    box.innerHTML = `<p class="text-slate-400 flex items-center gap-2"><i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Probing terrain at ${moments.length} eclipse times&hellip;</p>`;
+    lucide.createIcons();
+
+    // The terrain horizon does not depend on time — so sample it ONCE and test all three sun
+    // positions against it. Each moment's own bearing gets full radial resolution; a coarser
+    // fan spanning them all builds the silhouette for the chart.
+    const fine = radialDistances(0.03);
+    const coarse = radialDistances(0.06);
+    const azs = moments.map((m) => m.az);
+    const azLo = Math.min(...azs) - HORIZON_SPAN / 2;
+    const azHi = Math.max(...azs) + HORIZON_SPAN / 2;
+    const rays = moments.map((m) => ({ az: m.az, dists: fine, moment: m }));
+    for (let a = azLo; a <= azHi + 1e-9; a += HORIZON_STEP) {
+      if (moments.some((m) => Math.abs(m.az - a) < HORIZON_STEP / 2)) continue;
+      rays.push({ az: a, dists: coarse, moment: null });
+    }
+
+    const enuToFixed = Cesium.Transforms.eastNorthUpToFixedFrame(activeGroundCartesian);
+    const cartographics = [];
+    for (const ray of rays) {
+      const azRad = Cesium.Math.toRadians(ray.az);
+      for (const d of ray.dists) {
+        const offset = new Cesium.Cartesian3(d * Math.sin(azRad), d * Math.cos(azRad), 0);
+        const fixed = Cesium.Matrix4.multiplyByPoint(enuToFixed, offset, new Cesium.Cartesian3());
+        cartographics.push(Cesium.Cartographic.fromCartesian(fixed));
+      }
+    }
+
+    let sampled;
+    try {
+      sampled = await Cesium.sampleTerrainMostDetailed(viewer.terrainProvider, cartographics);
+    } catch (e) {
+      box.innerHTML = `<p class="text-red-400">Terrain sampling failed: ${e.message}</p>`;
+      return;
+    }
+
+    // Reduce each bearing to its horizon angle (max elevation angle along that ray).
+    const observerHeight = Cesium.Cartographic.fromCartesian(activeGroundCartesian).height;
+    const profile = [];
+    let k = 0;
+    for (const ray of rays) {
+      let rayMax = -90, rayDist = 0, rayHeight = 0;
+      for (const d of ray.dists) {
+        const h = sampled[k++].height || 0;
+        const drop = (d * d) / (2 * EARTH_RADIUS);           // earth curvature drop
+        const angle = Cesium.Math.toDegrees(Math.atan2(h - observerHeight - drop, d));
+        if (angle > rayMax) { rayMax = angle; rayDist = d; rayHeight = h; }
+      }
+      profile.push({ az: ray.az, angle: rayMax });
+      if (ray.moment) {
+        ray.moment.horizon = rayMax;
+        ray.moment.ridgeDist = rayDist;
+        ray.moment.ridgeHeight = rayHeight;
+        ray.moment.below = ray.moment.alt <= 0;
+        ray.moment.blocked = !ray.moment.below && rayMax >= ray.moment.alt;
+      }
+    }
+    profile.sort((a, b) => a.az - b.az);
+
+    drawSightline(focus.dir, !focus.blocked && !focus.below);
+    renderHorizonChart(profile, moments, azLo, azHi);
+    renderSightlineResults(moments, focus);
+  }
+
+  function renderSightlineResults(moments, focus) {
+    const box = document.getElementById("resultBox");
+    // Judge terrain only on moments where the sun is actually up. Across Otago the eclipse
+    // ends at or below the horizon — the sun sets mid-eclipse — so counting "sun already set"
+    // as an obstruction would wrongly downgrade an otherwise perfect site.
+    const up = moments.filter((m) => !m.below);
+    const blocked = up.filter((m) => m.blocked).length;
+    const headline =
+      up.length === 0
+        ? { cls: "slate", icon: "moon", text: "Sun below horizon" }
+        : blocked === 0
+        ? { cls: "emerald", icon: "check-circle", text: "Clear while sun is up" }
+        : blocked === up.length
+        ? { cls: "red", icon: "eye-off", text: "Not visible" }
+        : { cls: "amber", icon: "alert-triangle", text: "Partly visible" };
+    const plain = focus.below
+      ? "At the peak of the eclipse the sun has already set here."
+      : focus.blocked
+      ? `At the peak of the eclipse, high ground about ${(focus.ridgeDist / 1000).toFixed(1)} km to the ${compassName(focus.az)} will be in the way. You would need to move to somewhere more open, or higher up, to see it.`
+      : `You should have a clear view at the peak of the eclipse. Look ${heightPhrase(focus.alt)}, to the ${compassName(focus.az)} — the sun clears the skyline by about ${(focus.alt - focus.horizon).toFixed(1)}&deg;.`;
+    const setNote = moments.some((m) => m.below)
+      ? `<p class="text-[11px] text-slate-400 mt-2 flex items-start gap-1.5"><i data-lucide="info" class="w-3.5 h-3.5 mt-px shrink-0 text-slate-500"></i><span>The sun sets before the eclipse finishes here, so the final phase happens below the horizon.</span></p>`
+      : "";
+
+    const rows = moments
+      .map((m) => {
+        const state = m.below
+          ? `<span class="text-slate-500">sun below horizon</span>`
+          : m.blocked
+          ? `<span class="text-red-300">blocked by ${(m.horizon - m.alt).toFixed(1)}&deg;</span>`
+          : `<span class="text-emerald-300">clear by ${(m.alt - m.horizon).toFixed(1)}&deg;</span>`;
+        return `<tr>
+          <td class="py-1 pr-2 text-slate-300 whitespace-nowrap">${m.label}</td>
+          <td class="py-1 pr-2 font-mono text-slate-400 whitespace-nowrap">${formatNZST(m.j).slice(0, 5)}</td>
+          <td class="py-1 pr-2 font-mono text-slate-400 whitespace-nowrap">${m.alt.toFixed(1)}&deg;</td>
+          <td class="py-1">${state}</td>
+        </tr>`;
+      })
+      .join("");
+
+    box.innerHTML = `
+      <div class="rounded-lg bg-${headline.cls}-900/40 border border-${headline.cls}-600/40 p-3 mb-2">
+        <p class="font-semibold text-${headline.cls}-300 flex items-center gap-1.5">
+          <i data-lucide="${headline.icon}" class="w-4 h-4"></i> ${headline.text}
+        </p>
+      </div>
+      <p class="simple-only text-xs text-slate-300 leading-relaxed">${plain}</p>
+      <table class="expert-only w-full text-[11px] leading-tight">
+        <thead><tr class="text-slate-500 border-b border-slate-700/60">
+          <th class="text-left font-medium pb-1">Phase</th>
+          <th class="text-left font-medium pb-1">Time</th>
+          <th class="text-left font-medium pb-1">Sun</th>
+          <th class="text-left font-medium pb-1">Sightline</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p class="expert-only text-xs text-slate-400 mt-2">At maximum, terrain along bearing
+      ${focus.az.toFixed(0)}&deg; rises to <b>${focus.horizon.toFixed(1)}&deg;</b>
+      (${focus.ridgeHeight.toFixed(0)} m, ~${(focus.ridgeDist / 1000).toFixed(1)} km away).</p>
+      ${setNote}
+      <p class="text-[10px] text-slate-500 mt-1.5">Source: ${terrainSource === "ion" ? "Cesium World Terrain" : "Re:Earth Terrain (~30 m)"}</p>`;
+    lucide.createIcons();
+  }
+
+  // Terrain silhouette plotted against the sun's track through the eclipse — the view an
+  // eclipse chaser actually wants: does the sun's arc stay above the skyline?
+  function renderHorizonChart(profile, moments, azLo, azHi) {
+    const svg = document.getElementById("horizonSvg");
+    const L = 30, R = 6, T = 8, B = 22;
+    const W = 280, H = 150, pw = W - L - R, ph = H - T - B;
+    const azMin = azLo, azMax = azHi;
+    const sunAlt = Math.max(...moments.map((m) => m.alt));
+
+    const c = localCircumstances(activeGroundCartesian);
+
+    // Sun track across the clock window (cheap — no terrain involved). The exact contact
+    // times are injected so the totality segment is bounded precisely; totality lasts under
+    // three minutes, so a uniform grid alone would usually miss it.
+    const times = [];
+    const steps = 120;
+    for (let i = 0; i <= steps; i++) {
+      times.push(Cesium.JulianDate.addSeconds(startJulian, (i / steps) * windowSecs, new Cesium.JulianDate()));
+    }
+    if (c && c.totalBegin) {
+      const eps = 0.25; // s, nudge inside/outside the contact so segments split cleanly
+      times.push(Cesium.JulianDate.addSeconds(c.totalBegin, -eps, new Cesium.JulianDate()));
+      times.push(Cesium.JulianDate.addSeconds(c.totalBegin, eps, new Cesium.JulianDate()));
+      times.push(c.peak.clone());
+      times.push(Cesium.JulianDate.addSeconds(c.totalEnd, -eps, new Cesium.JulianDate()));
+      times.push(Cesium.JulianDate.addSeconds(c.totalEnd, eps, new Cesium.JulianDate()));
+    }
+    times.sort(Cesium.JulianDate.compare);
+
+    const track = times.map((t) => {
+      const s = sunAltAz(t, activeGroundCartesian);
+      return { t, az: s.azimuth, alt: s.altitude };
+    });
+
+    const maxTerrain = profile.reduce((m, p) => Math.max(m, p.angle), 0);
+    const yMax = Math.max(12, Math.ceil(Math.max(maxTerrain, sunAlt) + 3));
+    const X = (az) => L + ((az - azMin) / (azMax - azMin)) * pw;
+    const Y = (alt) => T + ph - (Cesium.Math.clamp(alt, 0, yMax) / yMax) * ph;
+    const inTotality = (t) =>
+      c && c.totalBegin &&
+      Cesium.JulianDate.greaterThanOrEquals(t, c.totalBegin) &&
+      Cesium.JulianDate.lessThanOrEquals(t, c.totalEnd);
+
+    const esc = (n) => n.toFixed(1);
+    let out = "";
+
+    // Grid + axis labels
+    for (let a = 0; a <= yMax; a += yMax > 20 ? 10 : 5) {
+      const y = Y(a);
+      out += `<line x1="${L}" y1="${esc(y)}" x2="${W - R}" y2="${esc(y)}" stroke="#334155" stroke-width="0.5"/>`;
+      out += `<text x="${L - 4}" y="${esc(y + 3)}" fill="#64748b" font-size="8" text-anchor="end">${a}&#176;</text>`;
+    }
+    [azMin, (azMin + azMax) / 2, azMax].forEach((az) => {
+      out += `<text x="${esc(X(az))}" y="${H - 8}" fill="#64748b" font-size="8" text-anchor="middle">${Math.round((az + 360) % 360)}&#176;</text>`;
+    });
+
+    // Terrain silhouette
+    let path = `M ${esc(X(profile[0].az))} ${esc(Y(profile[0].angle))}`;
+    for (const p of profile.slice(1)) path += ` L ${esc(X(p.az))} ${esc(Y(p.angle))}`;
+    const fill = path + ` L ${esc(X(profile[profile.length - 1].az))} ${esc(T + ph)} L ${esc(X(profile[0].az))} ${esc(T + ph)} Z`;
+    out += `<path d="${fill}" fill="#475569" opacity="0.85"/>`;
+    out += `<path d="${path}" fill="none" stroke="#94a3b8" stroke-width="1.2"/>`;
+
+    // Sun track (split into normal / totality segments)
+    let seg = null, segTot = false;
+    const flush = () => {
+      if (seg && seg.length > 1) {
+        const d = seg.map((p, i) => `${i ? "L" : "M"} ${esc(X(p.az))} ${esc(Y(p.alt))}`).join(" ");
+        out += `<path d="${d}" fill="none" stroke="${segTot ? "#f87171" : "#fbbf24"}" stroke-width="${segTot ? 3 : 1.6}" stroke-linecap="round"/>`;
+      }
+      seg = null;
+    };
+    for (const p of track) {
+      if (p.alt < 0 || p.az < azMin || p.az > azMax) { flush(); continue; }
+      const tot = inTotality(p.t);
+      if (seg && tot !== segTot) { const last = seg[seg.length - 1]; flush(); seg = [last]; segTot = tot; }
+      else if (!seg) { seg = []; segTot = tot; }
+      seg.push(p);
+    }
+    flush();
+
+    // One marker per checked moment, coloured by its verdict.
+    for (const m of moments) {
+      if (m.az < azMin || m.az > azMax) continue;
+      const y = Y(Math.max(m.alt, 0));
+      const fill = m.below ? "#64748b" : m.blocked ? "#f87171" : "#4ade80";
+      out += `<circle cx="${esc(X(m.az))}" cy="${esc(y)}" r="4" fill="${fill}" stroke="#0f172a" stroke-width="1.2"/>`;
+      out += `<text x="${esc(X(m.az))}" y="${esc(y - 7)}" fill="#94a3b8" font-size="7.5" text-anchor="middle">${m.label}</text>`;
+    }
+
+    svg.innerHTML = out;
+    document.getElementById("horizonCard").classList.remove("hidden");
+  }
+
+  function drawSightline(sunDir, clear) {
+    if (sightlinePrimitive) { viewer.entities.remove(sightlinePrimitive); sightlinePrimitive = null; }
+    const end = Cesium.Cartesian3.add(
+      activeGroundCartesian,
+      Cesium.Cartesian3.multiplyByScalar(sunDir, SIGHTLINE_RANGE, new Cesium.Cartesian3()),
+      new Cesium.Cartesian3()
+    );
+    sightlinePrimitive = viewer.entities.add({
+      polyline: {
+        positions: [activeGroundCartesian, end],
+        width: 3,
+        material: clear ? Cesium.Color.LIMEGREEN.withAlpha(0.9) : Cesium.Color.RED.withAlpha(0.9),
+        arcType: Cesium.ArcType.NONE,
+      },
+    });
+  }
+
+  // ====================================================================================
+  //  PRECOMPUTED VIEWPOINT CATALOGUE
+  //  Built offline by precompute/build_viewpoints.py over the whole land area from which
+  //  totality is visible, filtered to spots near a road or track. Loading is optional —
+  //  the app works fully without viewpoints.json present.
+  // ====================================================================================
+  let catalogue = null;
+
+  async function loadCatalogue() {
+    try {
+      const res = await fetch("viewpoints.json", { cache: "no-cache" });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data || !Array.isArray(data.spots) || !data.spots.length) return;
+      catalogue = data;
+      document.getElementById("topSpotsSection").classList.remove("hidden");
+      // Prefer named lookouts when the catalogue has them — a signposted viewpoint is a far
+      // more useful recommendation than a bare grid coordinate.
+      setSpotSource((data.pois && data.pois.length) ? "poi" : "grid");
+      lucide.createIcons();
+    } catch (e) {
+      /* no catalogue shipped — the live search still works */
+    }
+  }
+
+  // Great-circle distance and initial bearing between two lat/lon pairs, in metres/degrees.
+  function haversineM(lat1, lon1, lat2, lon2) {
+    const R = EARTH_RADIUS;
+    const p1 = Cesium.Math.toRadians(lat1), p2 = Cesium.Math.toRadians(lat2);
+    const dp = p2 - p1, dl = Cesium.Math.toRadians(lon2 - lon1);
+    const a = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+  }
+
+  function bearingDeg(lat1, lon1, lat2, lon2) {
+    const p1 = Cesium.Math.toRadians(lat1), p2 = Cesium.Math.toRadians(lat2);
+    const dl = Cesium.Math.toRadians(lon2 - lon1);
+    const y = Math.sin(dl) * Math.cos(p2);
+    const x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
+    return (Cesium.Math.toDegrees(Math.atan2(y, x)) + 360) % 360;
+  }
+
+  let spotSource = "poi";              // "poi" = named lookouts, "grid" = anywhere scanned
+  const POI_ICON = { viewpoint: "binoculars", peak: "triangle", picnic: "trees",
+    campsite: "tent", rest_area: "circle-parking", tower: "tower-control" };
+  const POI_LABEL = { viewpoint: "viewpoint", peak: "summit", picnic: "picnic area",
+    campsite: "campsite", rest_area: "rest area", tower: "lookout tower" };
+  const ACCESS_ICON = { sealed: "car", track: "truck", foot: "footprints", none: "mountain" };
+  const ACCESS_TIP = { sealed: "sealed road", track: "4WD track", foot: "walking track",
+    none: "no mapped access — off-track" };
+
+  function setSpotSource(src) {
+    spotSource = src;
+    const on = "src-btn flex-1 text-[11px] font-medium rounded-lg px-2 py-1 transition bg-amber-500 text-slate-900";
+    const off = "src-btn flex-1 text-[11px] font-medium rounded-lg px-2 py-1 transition bg-slate-800/70 hover:bg-slate-700 text-slate-300";
+    document.getElementById("srcPoi").className = src === "poi" ? on : off;
+    document.getElementById("srcGrid").className = src === "grid" ? on : off;
+    renderTopSpots();
+  }
+
+  function renderTopSpots() {
+    if (!catalogue) return;
+    // Exclusive tiers, not inclusive-downward. Ranking already puts sealed-road spots first,
+    // so an inclusive "road or track" filter showed the same all-sealed top 40 as "sealed" and
+    // looked broken. Exclusive matching also makes "walking track only" actually reachable.
+    const want = document.getElementById("accessFilter").value;
+    const allow = want === "sealed" ? ["sealed"]
+      : want === "track" ? ["track"]
+      : want === "foot" ? ["foot"]
+      : want === "drive" ? ["sealed", "track"]
+      : null;                                   // "any" = no filter
+
+    const usingPoi = spotSource === "poi";
+    const source = usingPoi ? (catalogue.pois || []) : (catalogue.spots || []);
+
+    // Distance from wherever the user currently is. This replaced a live grid search that
+    // re-probed terrain around the observer: the catalogue already covers the whole path at
+    // higher resolution and knows about road access, so all that was really missing was
+    // "near me".
+    const radiusKm = parseFloat(document.getElementById("distFilter").value) || 0;
+    let here = null;
+    if (activeGroundCartesian) {
+      const c = Cesium.Cartographic.fromCartesian(activeGroundCartesian);
+      here = { lat: Cesium.Math.toDegrees(c.latitude), lon: Cesium.Math.toDegrees(c.longitude) };
+    }
+    // Keep the original index: the entries below are copies, so indexOf would not find them.
+    const withDist = source.map((s, i) => {
+      if (!here) return { ...s, _i: i };
+      const m = haversineM(here.lat, here.lon, s.lat, s.lon);
+      return { ...s, _i: i, _km: m / 1000,
+               _bearing: compassShort(bearingDeg(here.lat, here.lon, s.lat, s.lon)) };
+    });
+
+    const matching = withDist.filter((s) =>
+      (!allow || allow.includes(s.access || "none")) &&
+      (!radiusKm || !here || s._km <= radiusKm));
+    const list = matching.slice(0, 40);
+
+    const wrap = document.getElementById("topSpots");
+    wrap.innerHTML = list.length
+      ? list.map((s) => {
+          const acc = s.access || "none";
+          const dur = `${Math.floor(s.totality / 60)}m${String(s.totality % 60).padStart(2, "0")}s`;
+          const title = usingPoi
+            ? (s.name || `Unnamed ${POI_LABEL[s.kind] || "spot"}`)
+            : `${s.lat.toFixed(4)}, ${s.lon.toFixed(4)}`;
+          const away = s._km == null ? ""
+            : ` · ${s._km < 1 ? "here" : s._km.toFixed(s._km < 10 ? 1 : 0) + " km " + s._bearing}`;
+          const sub = (usingPoi
+            ? `${POI_LABEL[s.kind] || s.kind} · ${s.elev} m · ${ACCESS_TIP[acc]}`
+            : `${s.elev} m · ${ACCESS_TIP[acc]}`) + away;
+          // A spot can clear the skyline at maximum yet be blocked at second or third
+          // contact — worth flagging, since you'd lose part of totality.
+          const partial = s.wholeTotality === false || s.totality < 60;
+          return `
+          <button data-src="${usingPoi ? "poi" : "grid"}" data-i="${s._i}"
+            class="spot-btn text-left text-xs bg-slate-800/70 hover:bg-slate-700 rounded-lg px-2 py-1.5 transition">
+            <span class="flex items-center gap-1.5">
+              <i data-lucide="${usingPoi ? (POI_ICON[s.kind] || "map-pin") : ACCESS_ICON[acc]}" class="w-3 h-3 text-amber-400 shrink-0"></i>
+              <span class="text-slate-200 truncate">${title}</span>
+              ${partial ? `<i data-lucide="alert-triangle" class="w-3 h-3 text-amber-400 shrink-0" title="Blocked for part of totality"></i>` : ""}
+              <span class="text-emerald-300 ml-auto shrink-0">+${s.clearance.toFixed(1)}&deg;</span>
+            </span>
+            <span class="block text-[10px] text-slate-500 mt-0.5 truncate">${sub} · ${dur}${
+              s.totality < 60 ? " · near path edge"
+              : s.wholeTotality === false ? " · part of totality blocked" : ""}</span>
+          </button>`;
+        }).join("")
+      : `<p class="text-[11px] text-slate-500">No ${usingPoi ? "lookouts" : "spots"} match${
+          radiusKm ? ` within ${radiusKm} km` : ""} — try widening the filters.</p>`;
+
+    // Count against the matching set, not the whole catalogue, so the filter visibly bites.
+    const shown = list.length === matching.length
+      ? `${matching.length}`
+      : `${list.length} of ${matching.length}`;
+    const tier = { sealed: " on sealed roads", track: " on 4WD tracks",
+      foot: " reachable on foot", drive: " you can drive to" }[want] || "";
+    const near = radiusKm ? ` within ${radiusKm} km` : "";
+    document.getElementById("topSpotsNote").textContent = list.length
+      ? `${shown}${tier}${near} · ranked by how far the sun clears the skyline`
+      : "";
+
+    wrap.querySelectorAll(".spot-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const arr = btn.dataset.src === "poi" ? catalogue.pois : catalogue.spots;
+        const s = arr[+btn.dataset.i];
+        const label = btn.dataset.src === "poi"
+          ? (s.name || `Unnamed ${POI_LABEL[s.kind] || "spot"}`)
+          : `${s.lat.toFixed(4)}, ${s.lon.toFixed(4)}`;
+        selectLocation({ name: label, lat: s.lat, lon: s.lon }, true);
+      });
+    });
+    lucide.createIcons();
+  }
+
+  // ====================================================================================
+  //  AUDIENCE MODE
+  // ====================================================================================
+  function syncPlayIcon() {
+    const btn = document.getElementById("playPause");
+    btn.innerHTML = `<i data-lucide="${viewer.clock.shouldAnimate ? "pause" : "play"}" class="w-4 h-4"></i>`;
+    lucide.createIcons();
+  }
+
+  function setMode(mode) {
+    document.body.dataset.mode = mode;
+    document.getElementById("modeLabel").textContent = mode === "simple" ? "Simple" : "Detailed";
+    try { localStorage.setItem("eclipseMode", mode); } catch (e) {}
+  }
+
+  // ====================================================================================
+  //  CINEMATIC PLAYBACK — "watch it happen"
+  // ====================================================================================
+  let cinematic = false;
+  let cinematicEnd = null;
+  const CINE_FAST = 60;    // through the long partial phases
+  const CINE_SLOW = 12;    // through totality itself
+
+  function narrate(text, sub) {
+    const box = document.getElementById("narration");
+    const el = document.getElementById("narrationText");
+    if (el.textContent !== text) {
+      el.textContent = text;
+      document.getElementById("narrationSub").textContent = sub || "";
+      box.classList.remove("hidden");
+      box.firstElementChild.classList.remove("narrate");
+      void box.firstElementChild.offsetWidth;   // restart the animation
+      box.firstElementChild.classList.add("narrate");
+    }
+  }
+
+  async function startCinematic() {
+    const c = localCircumstances(activeGroundCartesian);
+    if (!c || !c.peak) { narrate("No eclipse is visible from this spot.", ""); return; }
+
+    // Frame the low sun from just above the ground before the clock starts moving.
+    const s = sunAltAz(c.peak, activeGroundCartesian);
+    const ground = Cesium.Cartographic.fromCartesian(activeGroundCartesian);
+    viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromRadians(ground.longitude, ground.latitude, ground.height + 60),
+      orientation: {
+        heading: Cesium.Math.toRadians(s.azimuth),
+        pitch: Cesium.Math.toRadians(-3),
+        roll: 0,
+      },
+      duration: 2.2,
+    });
+
+    const begin = c.totalBegin || c.peak;
+    viewer.clock.currentTime = Cesium.JulianDate.addSeconds(begin, -480, new Cesium.JulianDate());
+    cinematicEnd = Cesium.JulianDate.addSeconds(c.totalEnd || c.peak, 120, new Cesium.JulianDate());
+    viewer.clock.multiplier = CINE_FAST;
+    viewer.clock.shouldAnimate = true;
+    cinematic = true;
+    syncPlayIcon();
+    narrate("Keep your eyes on the north-western sky…", "The eclipse is already under way");
+  }
+
+  function stopCinematic() {
+    cinematic = false;
+    viewer.clock.shouldAnimate = false;
+    viewer.clock.multiplier = 30;
+    syncPlayIcon();
+    document.getElementById("narration").classList.add("hidden");
+  }
+
+  function updateNarration(t, e) {
+    if (!cinematic) return;
+    if (cinematicEnd && Cesium.JulianDate.greaterThan(t, cinematicEnd)) { stopCinematic(); return; }
+    const o = e.obscuration;
+
+    // Slow right down through totality — it is the payoff, and at speed it flashes past.
+    const target = o >= 0.99 ? CINE_SLOW : CINE_FAST;
+    if (viewer.clock.multiplier !== target) viewer.clock.multiplier = target;
+
+    // Direction matters: the same coverage means something different coming out.
+    const c = localCircumstances(activeGroundCartesian);
+    const past = c && c.peak ? Cesium.JulianDate.greaterThan(t, c.peak) : false;
+
+    if (o >= 0.999) {
+      narrate("Totality — the sun is completely hidden.",
+        "The only time it is safe to look without eclipse glasses.");
+    } else if (!past) {
+      if (o >= 0.9) narrate("Almost there — the light is draining away fast.", "Watch the landscape darken.");
+      else if (o >= 0.4) narrate("More than half the sun is covered now.", "The daylight turns oddly flat and silvery.");
+      else if (o > 0.005) narrate("The moon has taken a bite out of the sun.", "Eclipse glasses required at this stage.");
+      else narrate("Any moment now…", `The sun sits ${heightPhrase(e.sunAlt)}, to the ${compassName(e.sunAz)}.`);
+    } else {
+      if (o >= 0.9) narrate("Totality is over — the first sliver of sun is back.", "Glasses back on.");
+      else if (o >= 0.4) narrate("The sun is climbing back out from behind the moon.", "Daylight returning.");
+      else if (o > 0.005) narrate("Just a last bite left.", "The eclipse is nearly finished.");
+      else narrate("That's the end of the eclipse.", `The sun is now ${heightPhrase(e.sunAlt)}.`);
+    }
+  }
+
+  // ====================================================================================
+  //  UI WIRING
+  // ====================================================================================
+  function buildPresetButtons() {
+    const wrap = document.getElementById("presetButtons");
+    LOCATIONS.forEach((loc) => {
+      const b = document.createElement("button");
+      b.className = "inline-flex items-center gap-2 text-sm bg-slate-800/70 hover:bg-slate-700 rounded-lg px-3 py-2 transition text-left";
+      b.innerHTML = `<i data-lucide="${loc.icon}" class="w-4 h-4 text-amber-400"></i> ${loc.name}`;
+      b.addEventListener("click", () => selectLocation(loc, true));
+      wrap.appendChild(b);
+    });
+  }
+
+  function wireControls() {
+    const scrub = document.getElementById("timeScrub");
+    scrub.addEventListener("input", () => {
+      scrub.dataset.dragging = "1";
+      const frac = scrub.value / 1000;
+      viewer.clock.currentTime = Cesium.JulianDate.addSeconds(startJulian, frac * windowSecs, new Cesium.JulianDate());
+      scrub.style.setProperty("--fill", (frac * 100).toFixed(1) + "%");
+      onTick(viewer.clock);
+    });
+    scrub.addEventListener("change", () => { delete scrub.dataset.dragging; });
+
+    document.getElementById("playPause").addEventListener("click", () => {
+      viewer.clock.shouldAnimate = !viewer.clock.shouldAnimate;
+      if (!viewer.clock.shouldAnimate && cinematic) stopCinematic();
+      syncPlayIcon();
+    });
+
+    document.getElementById("modeToggle").addEventListener("click", () => {
+      setMode(document.body.dataset.mode === "simple" ? "expert" : "simple");
+    });
+
+    // Mobile drawers: one at a time, and tapping the active tab closes it so the globe is
+    // never permanently hidden behind a panel.
+    const setPanel = (which) => {
+      const cur = document.body.dataset.panel || "none";
+      document.body.dataset.panel = cur === which ? "none" : which;
+      const on = "inline-flex items-center gap-1 text-[11px] font-medium bg-amber-500 text-slate-900 rounded-lg px-2 py-1 transition";
+      const off = "inline-flex items-center gap-1 text-[11px] font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2 py-1 transition";
+      const p = document.body.dataset.panel;
+      document.getElementById("tabPlaces").className = p === "places" ? on : off;
+      document.getElementById("tabInfo").className = p === "info" ? on : off;
+      lucide.createIcons();
+    };
+    document.getElementById("tabPlaces").addEventListener("click", () => setPanel("places"));
+    document.getElementById("tabInfo").addEventListener("click", () => setPanel("info"));
+    document.getElementById("watchIt").addEventListener("click", () => {
+      if (cinematic) stopCinematic(); else startCinematic();
+    });
+    document.getElementById("accessFilter").addEventListener("change", renderTopSpots);
+    document.getElementById("distFilter").addEventListener("change", renderTopSpots);
+    document.getElementById("srcPoi").addEventListener("click", () => setSpotSource("poi"));
+    document.getElementById("srcGrid").addEventListener("click", () => setSpotSource("grid"));
+
+    // Jump buttons use this observer's own contact times, so they shift as you move.
+    const jump = (pick) => () => {
+      const c = localCircumstances(activeGroundCartesian);
+      const target = c ? pick(c) : Cesium.JulianDate.fromIso8601(TOTALITY_MAX_UTC);
+      if (!target) return;
+      viewer.clock.currentTime = target.clone();
+      onTick(viewer.clock);
+    };
+    document.getElementById("jumpStart").addEventListener("click", jump((c) => c.partialBegin));
+    document.getElementById("jumpTotality").addEventListener("click", jump((c) => c.peak));
+    document.getElementById("jumpEnd").addEventListener("click", jump((c) => c.partialEnd));
+
+    document.getElementById("runSightline").addEventListener("click", runSightlineCheck);
+
+    document.getElementById("customGo").addEventListener("click", goToCustom);
+    document.getElementById("customGeo").addEventListener("click", useMyLocation);
+    document.getElementById("pinToggle").addEventListener("click", togglePinMode);
+
+    const inp = document.getElementById("customInput");
+    inp.addEventListener("input", () => {
+      const v = inp.value.trim();
+      if (!v || v.length < 3 || COORD_RE.test(v)) { hideSuggestions(); return; }
+      clearTimeout(suggestTimer);
+      suggestTimer = setTimeout(() => fetchSuggestions(v), 400);
+    });
+    inp.addEventListener("keydown", (e) => {
+      const open = !document.getElementById("suggestions").classList.contains("hidden") && suggestItems.length;
+      if (open && e.key === "ArrowDown") {
+        e.preventDefault(); suggestActive = Math.min(suggestActive + 1, suggestItems.length - 1); highlightSuggestion();
+      } else if (open && e.key === "ArrowUp") {
+        e.preventDefault(); suggestActive = Math.max(suggestActive - 1, 0); highlightSuggestion();
+      } else if (e.key === "Enter") {
+        if (open && suggestActive >= 0) { e.preventDefault(); chooseSuggestion(suggestActive); }
+        else goToCustom();
+      } else if (e.key === "Escape") {
+        hideSuggestions();
+      }
+    });
+    inp.addEventListener("blur", () => setTimeout(hideSuggestions, 150));
+  }
+
+  function revealUI() {
+    ["topBar", "presetPanel", "rightStack", "bottomBar"].forEach((id) =>
+      document.getElementById(id).classList.remove("hidden")
+    );
+    lucide.createIcons();
+  }
+
+  async function start() {
+    // Terrain is locked to the open Re:Earth source; ?terrain=ion is an escape hatch for
+    // higher-resolution work, but needs a token and is not surfaced in the UI.
+    const q = new URLSearchParams(location.search);
+    let token = CESIUM_ION_TOKEN;
+    const supplied = q.get("ionToken");
+    if (supplied) {
+      token = supplied;
+      try { localStorage.setItem("cesiumIonToken", supplied); } catch (e) {}
+    } else {
+      try { token = localStorage.getItem("cesiumIonToken") || token; } catch (e) {}
+    }
+    const mode = q.get("terrain") === "ion" && token ? "ion" : "open";
+    try {
+      await initViewer(mode, token);
+      document.getElementById("dataCredit").innerHTML = CREDITS[mode] || "";
+      document.getElementById("splash").classList.add("hidden");
+      revealUI();
+      await reframeCurrent();        // now the status bar and timeline are measurable
+      loadCatalogue();               // optional; fire-and-forget
+
+      // Keep the framing correct through resizes and phone rotation.
+      let resizeTimer = null;
+      window.addEventListener("resize", () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(reframeCurrent, 350);
+      });
+    } catch (e) {
+      const errEl = document.getElementById("splashError");
+      document.getElementById("splashStatus").classList.add("hidden");
+      errEl.textContent = "Could not load terrain: " + (e.message || e);
+      errEl.classList.remove("hidden");
+    }
+  }
+
+  // ====================================================================================
+  //  BOOT
+  // ====================================================================================
+  window.addEventListener("DOMContentLoaded", () => {
+    let saved = null;
+    try { saved = localStorage.getItem("eclipseMode"); } catch (e) {}
+    setMode(saved || "simple");   // casual visitors are the larger audience — start plain
+    document.body.dataset.panel = "none";   // on mobile, start with the globe unobstructed
+    buildPresetButtons();
+    wireControls();
+    lucide.createIcons();
+    start();
+  });
+  </script>
+</body>
+</html>

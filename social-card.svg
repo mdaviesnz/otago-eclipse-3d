@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="Otago Eclipse 3D — 22 July 2028 total solar eclipse">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#020617"/>
+      <stop offset="55%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <radialGradient id="corona" cx="50%" cy="50%" r="50%">
+      <stop offset="55%" stop-color="#fde68a" stop-opacity="0.95"/>
+      <stop offset="72%" stop-color="#fbbf24" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#fbbf24" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ridge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0b1220"/>
+      <stop offset="100%" stop-color="#020617"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#sky)"/>
+
+  <!-- corona + eclipsed sun, low in the sky as it will actually be -->
+  <circle cx="840" cy="250" r="170" fill="url(#corona)"/>
+  <circle cx="840" cy="250" r="62" fill="#fbbf24"/>
+  <circle cx="840" cy="250" r="56" fill="#020617"/>
+
+  <!-- a few stars, as at totality -->
+  <g fill="#e2e8f0" opacity="0.7">
+    <circle cx="180" cy="90" r="2"/><circle cx="320" cy="150" r="1.6"/><circle cx="1050" cy="110" r="2"/>
+    <circle cx="520" cy="70" r="1.4"/><circle cx="990" cy="330" r="1.6"/><circle cx="140" cy="260" r="1.5"/>
+  </g>
+
+  <!-- mountain silhouette: the whole point of the tool -->
+  <path d="M0 470 L150 392 L268 452 L392 350 L520 448 L640 386 L760 470 L900 404 L1030 462 L1200 396 L1200 630 L0 630 Z"
+        fill="url(#ridge)"/>
+
+  <g font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+    <text x="80" y="180" fill="#f8fafc" font-size="66" font-weight="700">Otago Eclipse 3D</text>
+    <text x="80" y="236" fill="#fbbf24" font-size="30" font-weight="600">Total solar eclipse · 22 July 2028</text>
+    <text x="80" y="300" fill="#94a3b8" font-size="26">The sun sits only ~8° above the horizon at totality.</text>
+    <text x="80" y="338" fill="#94a3b8" font-size="26">Will the mountains be in your way?</text>
+    <text x="80" y="576" fill="#64748b" font-size="20">3D terrain · per-location timings · best viewing spots</text>
+  </g>
+</svg>

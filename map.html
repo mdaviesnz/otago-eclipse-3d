@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Best eclipse viewing spots — overview map · Otago 2028</title>
+  <meta name="description" content="Map of the best places to watch the 22 July 2028 total solar eclipse in Otago, New Zealand — ranked by how far the sun clears the skyline, filtered by whether you can drive, 4WD or walk there." />
+  <meta name="theme-color" content="#0f172a" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Best eclipse viewing spots — Otago, 22 July 2028" />
+  <meta property="og:description" content="Every catalogued viewing spot, ranked by horizon clearance and filtered by road, track or walking access." />
+  <meta property="og:image" content="./social-card.svg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%230f172a'/%3E%3Ccircle cx='16' cy='16' r='9' fill='none' stroke='%23fbbf24' stroke-width='3'/%3E%3Ccircle cx='13' cy='14' r='8' fill='%230f172a'/%3E%3C/svg%3E" />
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    html, body, #map { width: 100%; height: 100%; margin: 0; padding: 0; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: #0f172a; }
+    .panel { backdrop-filter: blur(10px); background: rgba(15, 23, 42, 0.88); border: 1px solid rgba(148, 163, 184, 0.25); }
+    .leaflet-container { background: #0b1220; }
+    /* Dark popup to match the rest of the app */
+    .leaflet-popup-content-wrapper, .leaflet-popup-tip {
+      background: #0f172a; color: #e2e8f0; border: 1px solid rgba(148,163,184,0.3);
+    }
+    .leaflet-popup-content { margin: 10px 12px; font-size: 12px; line-height: 1.45; }
+    .leaflet-popup-close-button { color: #94a3b8 !important; }
+    .leaflet-bar a { background: #1e293b; color: #e2e8f0; border-color: #334155; }
+    .leaflet-bar a:hover { background: #334155; }
+    .leaflet-control-attribution { background: rgba(15,23,42,0.85) !important; color: #94a3b8 !important; font-size: 10px; }
+    .leaflet-control-attribution a { color: #fbbf24 !important; }
+  </style>
+</head>
+<body class="text-slate-100">
+
+  <div id="map"></div>
+
+  <!-- ============================= CONTROLS ============================= -->
+  <div class="fixed top-3 left-3 z-[1000] w-64">
+    <div class="panel rounded-xl p-3 shadow-2xl">
+      <div class="flex items-center gap-2 mb-1">
+        <i data-lucide="eclipse" class="w-5 h-5 text-amber-400"></i>
+        <h1 class="text-sm font-bold">Eclipse viewing spots</h1>
+      </div>
+      <p class="text-[11px] text-slate-400 mb-3">22 July 2028 · totality over Otago</p>
+
+      <div class="flex gap-1 mb-1.5">
+        <button id="srcPoi" class="flex-1 text-[11px] font-medium rounded-lg px-2 py-1 transition bg-amber-500 text-slate-900">Lookouts</button>
+        <button id="srcGrid" class="flex-1 text-[11px] font-medium rounded-lg px-2 py-1 transition bg-slate-800/70 hover:bg-slate-700 text-slate-300">Anywhere</button>
+        <button id="srcBoth" class="flex-1 text-[11px] font-medium rounded-lg px-2 py-1 transition bg-slate-800/70 hover:bg-slate-700 text-slate-300">Both</button>
+      </div>
+
+      <select id="accessFilter"
+        class="w-full text-xs bg-slate-800/80 border border-slate-600 rounded-lg px-2 py-1.5 mb-1.5 focus:outline-none focus:ring-2 focus:ring-amber-400 cursor-pointer">
+        <option value="any" selected>Any access</option>
+        <option value="sealed">Sealed road only</option>
+        <option value="track">4WD track only</option>
+        <option value="foot">Walking track only</option>
+        <option value="drive">Drivable (road or track)</option>
+      </select>
+
+      <label class="block text-[11px] text-slate-400 mb-1">
+        Minimum clearance: <span id="clearVal" class="text-amber-300 font-mono">0.0&deg;</span>
+      </label>
+      <input id="clearFilter" type="range" min="0" max="120" value="0"
+        class="w-full accent-amber-400 cursor-pointer mb-2" />
+
+      <label class="flex items-center gap-2 text-[11px] text-slate-400 mb-2 cursor-pointer">
+        <input id="wholeOnly" type="checkbox" class="accent-amber-400" />
+        Only spots clear for all of totality
+      </label>
+
+      <p id="count" class="text-[11px] text-slate-400"></p>
+      <p id="status" class="text-[11px] text-slate-500 mt-1"></p>
+    </div>
+
+    <!-- Legend -->
+    <div class="panel rounded-xl p-3 shadow-2xl mt-2">
+      <p class="text-[10px] uppercase tracking-wide text-slate-400 mb-1.5">Access</p>
+      <div class="flex flex-col gap-1 text-[11px]">
+        <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full" style="background:#34d399"></span> Sealed road</span>
+        <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full" style="background:#fbbf24"></span> 4WD track</span>
+        <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full" style="background:#60a5fa"></span> Walking track</span>
+      </div>
+      <p class="text-[10px] text-slate-500 mt-2 leading-snug">
+        Marker size shows how far the sun clears the skyline. Ringed markers are named lookouts.
+      </p>
+    </div>
+  </div>
+
+  <a href="index.html"
+     class="fixed top-3 right-3 z-[1000] panel rounded-xl px-3 py-2 shadow-2xl inline-flex items-center gap-2 text-xs font-medium hover:bg-slate-800 transition">
+    <i data-lucide="box" class="w-4 h-4 text-amber-400"></i> Open 3D simulator
+  </a>
+
+  <script>
+  // ====================================================================================
+  //  Overview map of the precomputed viewing-spot catalogue.
+  //  Reads the same viewpoints.json as index.html and applies the same access tiers, so the
+  //  two views can never disagree about what counts as reachable.
+  // ====================================================================================
+  const ACCESS_COLOUR = { sealed: "#34d399", track: "#fbbf24", foot: "#60a5fa", none: "#94a3b8" };
+  const ACCESS_LABEL = { sealed: "sealed road", track: "4WD track", foot: "walking track", none: "no mapped access" };
+  const POI_LABEL = { viewpoint: "viewpoint", peak: "summit", picnic: "picnic area",
+    campsite: "campsite", rest_area: "rest area", tower: "lookout tower" };
+
+  const map = L.map("map", { zoomControl: true, preferCanvas: true })
+    .setView([-45.2, 169.2], 8);
+
+  // Same imagery as the 3D view, so the two look like one product.
+  L.tileLayer(
+    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    { maxZoom: 17, attribution: "Imagery: Esri, Maxar, Earthstar Geographics" }
+  ).addTo(map);
+  L.tileLayer(
+    "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+    { maxZoom: 17, opacity: 0.9 }
+  ).addTo(map);
+
+  const layer = L.layerGroup().addTo(map);
+  let catalogue = null;
+  let source = "poi";
+
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const dur = (s) => `${Math.floor(s / 60)}m${String(s % 60).padStart(2, "0")}s`;
+
+  function entries() {
+    if (!catalogue) return [];
+    const pois = (catalogue.pois || []).map((p) => ({ ...p, isPoi: true }));
+    const grid = (catalogue.spots || []).map((s) => ({ ...s, isPoi: false }));
+    return source === "poi" ? pois : source === "grid" ? grid : pois.concat(grid);
+  }
+
+  function render() {
+    const want = document.getElementById("accessFilter").value;
+    const allow = want === "sealed" ? ["sealed"]
+      : want === "track" ? ["track"]
+      : want === "foot" ? ["foot"]
+      : want === "drive" ? ["sealed", "track"]
+      : null;
+    const minClear = document.getElementById("clearFilter").value / 10;
+    const wholeOnly = document.getElementById("wholeOnly").checked;
+    document.getElementById("clearVal").textContent = minClear.toFixed(1) + "°";
+
+    const list = entries().filter((s) =>
+      (!allow || allow.includes(s.access || "none")) &&
+      s.clearance >= minClear &&
+      (!wholeOnly || s.wholeTotality !== false));
+
+    layer.clearLayers();
+    for (const s of list) {
+      const colour = ACCESS_COLOUR[s.access || "none"];
+      // Kept deliberately small and semi-transparent: lookouts cluster tightly along ridges,
+      // and larger opaque markers merge into unreadable blobs once you zoom in.
+      const radius = 3 + Math.min(4, Math.max(0, s.clearance) * 0.4);
+      L.circleMarker([s.lat, s.lon], {
+        radius,
+        color: s.isPoi ? "#f8fafc" : colour,
+        weight: s.isPoi ? 1.2 : 0.8,
+        fillColor: colour,
+        fillOpacity: 0.7,
+        opacity: 0.9,
+      }).bindPopup(popupHtml(s)).addTo(layer);
+    }
+
+    const total = entries().length;
+    document.getElementById("count").textContent =
+      `${list.length} of ${total} shown`;
+  }
+
+  function popupHtml(s) {
+    const title = s.isPoi
+      ? (s.name || `Unnamed ${POI_LABEL[s.kind] || "spot"}`)
+      : `${s.lat.toFixed(4)}, ${s.lon.toFixed(4)}`;
+    const sub = s.isPoi ? (POI_LABEL[s.kind] || s.kind) : "scanned spot";
+    const url = `index.html?lat=${s.lat}&lon=${s.lon}&name=${encodeURIComponent(title)}`;
+    // Near the edge of the path totality collapses to seconds — worth calling out, since a
+    // great horizon there still buys you far less than the ~3 minutes on the centreline.
+    const warn = (s.wholeTotality === false
+        ? `<div style="color:#fbbf24;margin-top:4px">&#9888; blocked for part of totality</div>` : "")
+      + (s.totality < 60
+        ? `<div style="color:#fbbf24;margin-top:4px">&#9888; near the path edge &mdash; only ${dur(s.totality)} of totality</div>` : "");
+    return `
+      <div style="min-width:190px">
+        <div style="font-weight:600;color:#f8fafc">${esc(title)}</div>
+        <div style="color:#94a3b8;font-size:11px;margin-bottom:6px">${esc(sub)} &middot; ${s.elev} m</div>
+        <table style="font-size:11px;width:100%">
+          <tr><td style="color:#94a3b8">Clears skyline</td><td style="text-align:right;color:#6ee7b7">+${s.clearance.toFixed(1)}&deg;</td></tr>
+          <tr><td style="color:#94a3b8">Sun at maximum</td><td style="text-align:right">${s.sunAlt.toFixed(1)}&deg;</td></tr>
+          <tr><td style="color:#94a3b8">Totality</td><td style="text-align:right">${dur(s.totality)}</td></tr>
+          <tr><td style="color:#94a3b8">Access</td><td style="text-align:right">${ACCESS_LABEL[s.access || "none"]}</td></tr>
+        </table>
+        ${warn}
+        <a href="${url}" style="display:block;margin-top:8px;text-align:center;background:#f59e0b;color:#0f172a;font-weight:600;border-radius:6px;padding:5px 8px;text-decoration:none">
+          Open in 3D &rarr;
+        </a>
+        <div style="color:#64748b;font-size:10px;margin-top:6px">${s.lat.toFixed(5)}, ${s.lon.toFixed(5)}</div>
+      </div>`;
+  }
+
+  function setSource(src) {
+    source = src;
+    const on = "flex-1 text-[11px] font-medium rounded-lg px-2 py-1 transition bg-amber-500 text-slate-900";
+    const off = "flex-1 text-[11px] font-medium rounded-lg px-2 py-1 transition bg-slate-800/70 hover:bg-slate-700 text-slate-300";
+    document.getElementById("srcPoi").className = src === "poi" ? on : off;
+    document.getElementById("srcGrid").className = src === "grid" ? on : off;
+    document.getElementById("srcBoth").className = src === "both" ? on : off;
+    render();
+  }
+
+  async function load() {
+    const status = document.getElementById("status");
+    try {
+      const res = await fetch("viewpoints.json", { cache: "no-cache" });
+      if (!res.ok) throw new Error("viewpoints.json not found");
+      catalogue = await res.json();
+      if (!catalogue.spots || !catalogue.spots.length) throw new Error("catalogue is empty");
+      setSource("poi");
+      const all = entries().concat((catalogue.spots || []).map((s) => ({ ...s })));
+      map.fitBounds(L.latLngBounds(all.map((s) => [s.lat, s.lon])).pad(0.05));
+      status.textContent = `Catalogue generated ${(catalogue.generated || "").slice(0, 10)}`;
+      if ((catalogue.osmGaps || []).length) {
+        status.textContent += ` · ${catalogue.osmGaps.length} OSM gap(s)`;
+      }
+    } catch (e) {
+      status.innerHTML = `<span class="text-red-400">${esc(e.message)}</span> — run
+        <span class="font-mono">precompute/build_viewpoints.py</span> first.`;
+    }
+  }
+
+  ["accessFilter", "clearFilter", "wholeOnly"].forEach((id) =>
+    document.getElementById(id).addEventListener("input", render));
+  document.getElementById("srcPoi").addEventListener("click", () => setSource("poi"));
+  document.getElementById("srcGrid").addEventListener("click", () => setSource("grid"));
+  document.getElementById("srcBoth").addEventListener("click", () => setSource("both"));
+
+  lucide.createIcons();
+  load();
+  </script>
+</body>
+</html>
