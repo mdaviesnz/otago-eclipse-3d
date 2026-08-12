@@ -12,5 +12,12 @@
 /viewpoints.json
   Cache-Control: public, max-age=300, must-revalidate
 
-/*.html
+# Pages serves clean URLs: /index.html and /map.html both 308-redirect to / and /map.
+# A `/*.html` rule therefore only ever decorates the redirect, never the page it lands on —
+# match the served paths instead. Five minutes is short enough that a deploy reaches people
+# quickly, long enough that a back/forward navigation does not revalidate.
+/
+  Cache-Control: public, max-age=300, must-revalidate
+
+/map
   Cache-Control: public, max-age=300, must-revalidate
