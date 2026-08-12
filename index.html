@@ -142,9 +142,95 @@
         <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5 text-amber-400"></i>
         <span id="modeLabel">Simple</span>
       </button>
+      <button id="aboutBtn" title="About this tool"
+        class="inline-flex items-center gap-1.5 text-[11px] font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 py-1 transition">
+        <i data-lucide="info" class="w-3.5 h-3.5 text-amber-400"></i>
+        <span class="hidden sm:inline">About</span>
+      </button>
       <div id="totalityBadge" class="flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full bg-slate-700 text-slate-400">
         <span class="w-2 h-2 rounded-full bg-slate-500"></span>
         <span id="totalityText">PARTIAL</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================= ABOUT DIALOG ============================= -->
+  <div id="aboutOverlay" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-3 sm:p-6"
+       role="dialog" aria-modal="true" aria-labelledby="aboutTitle">
+    <div class="panel rounded-2xl shadow-2xl w-full max-w-lg max-h-[88vh] overflow-y-auto">
+      <div class="flex items-start gap-3 p-5 pb-3">
+        <i data-lucide="eclipse" class="w-7 h-7 text-amber-400 shrink-0 mt-0.5"></i>
+        <div class="min-w-0">
+          <h2 id="aboutTitle" class="text-lg font-bold leading-tight">Otago Eclipse 3D</h2>
+          <p class="text-xs text-amber-300 font-medium">Total solar eclipse &middot; 22 July 2028</p>
+        </div>
+        <button id="aboutClose" aria-label="Close"
+          class="ml-auto shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 transition">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div class="px-5 pb-5 space-y-4 text-sm text-slate-300 leading-relaxed">
+        <p>
+          On the afternoon of <b>22 July 2028</b> the moon's shadow crosses Otago. Totality
+          lasts up to about three minutes &mdash; but the sun will be only
+          <b>8&ndash;10&deg; above the horizon</b>, roughly one fist held at arm's length. At
+          that angle a single hill in the wrong place is enough to hide it completely.
+        </p>
+        <p>
+          This tool answers one question: <b>from where you are standing, will terrain be in
+          the way?</b> It flies you to a spot in 3D, works out the sun's exact position for
+          that location, and traces the sightline across real elevation data to the horizon.
+        </p>
+
+        <div>
+          <p class="text-[11px] uppercase tracking-wide text-slate-400 mb-1.5">Using it</p>
+          <ul class="space-y-1 text-xs text-slate-400">
+            <li><b class="text-slate-300">Can I see it?</b> &mdash; checks the sightline at the start, middle and end of the eclipse.</li>
+            <li><b class="text-slate-300">Watch it happen</b> &mdash; plays the eclipse through, with the landscape darkening.</li>
+            <li><b class="text-slate-300">Best viewing spots</b> &mdash; precomputed places across the path of totality, filterable by how you can get there.</li>
+            <li><b class="text-slate-300">Map</b> &mdash; all of those spots on one overview map.</li>
+          </ul>
+        </div>
+
+        <div class="rounded-lg bg-amber-900/25 border border-amber-600/30 p-3">
+          <p class="text-xs text-amber-200/90">
+            <b>Please treat results as a guide, not a guarantee.</b> Elevation data has limits,
+            and being near a mapped road is not a right of access &mdash; land may be private.
+            Check any spot in person before the day, and never look at the partially eclipsed
+            sun without proper eclipse glasses.
+          </p>
+        </div>
+
+        <div>
+          <p class="text-[11px] uppercase tracking-wide text-slate-400 mb-1.5">Data &amp; credits</p>
+          <ul class="space-y-1 text-xs text-slate-400">
+            <li>Terrain &mdash; <a class="text-amber-300 hover:underline" href="https://terrain.reearth.land" target="_blank" rel="noopener">Re:Earth Terrain</a> / Mapterhorn (CC BY 4.0)</li>
+            <li>Imagery &mdash; Esri World Imagery</li>
+            <li>Roads &amp; places &mdash; <a class="text-amber-300 hover:underline" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors (ODbL)</li>
+            <li>Sun &amp; moon &mdash; <a class="text-amber-300 hover:underline" href="https://github.com/cosinekitty/astronomy" target="_blank" rel="noopener">astronomy-engine</a></li>
+            <li>3D globe &mdash; <a class="text-amber-300 hover:underline" href="https://cesium.com/platform/cesiumjs/" target="_blank" rel="noopener">CesiumJS</a></li>
+          </ul>
+        </div>
+
+        <div class="border-t border-slate-700/60 pt-3">
+          <p class="text-[11px] uppercase tracking-wide text-slate-400 mb-1.5">Contact</p>
+          <p class="text-xs text-slate-400">
+            Built by <b class="text-slate-300">Michael Davies</b>. Corrections, questions and
+            reports of a spot that turned out wrong are all welcome &mdash; especially from
+            anyone with an astronomy background.
+          </p>
+          <div class="flex flex-wrap items-center gap-2 mt-2">
+            <a href="mailto:michael@davies.net.nz?subject=Otago%20Eclipse%203D"
+               class="inline-flex items-center gap-1.5 text-xs font-medium bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg px-3 py-1.5 transition">
+              <i data-lucide="mail" class="w-3.5 h-3.5"></i> michael@davies.net.nz
+            </a>
+            <a href="https://github.com/mdaviesnz/otago-eclipse-3d" target="_blank" rel="noopener"
+               class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-1.5 transition">
+              <i data-lucide="github" class="w-3.5 h-3.5 text-amber-400"></i> Source &amp; method
+            </a>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -1827,6 +1913,19 @@
     };
     document.getElementById("tabPlaces").addEventListener("click", () => setPanel("places"));
     document.getElementById("tabInfo").addEventListener("click", () => setPanel("info"));
+
+    // About dialog: closes on the X, on the backdrop, and on Escape.
+    const about = document.getElementById("aboutOverlay");
+    const showAbout = (on) => {
+      about.classList.toggle("hidden", !on);
+      if (on) document.getElementById("aboutClose").focus();
+    };
+    document.getElementById("aboutBtn").addEventListener("click", () => showAbout(true));
+    document.getElementById("aboutClose").addEventListener("click", () => showAbout(false));
+    about.addEventListener("click", (e) => { if (e.target === about) showAbout(false); });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !about.classList.contains("hidden")) showAbout(false);
+    });
     document.getElementById("watchIt").addEventListener("click", () => {
       if (cinematic) stopCinematic(); else startCinematic();
     });
