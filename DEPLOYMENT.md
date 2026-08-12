@@ -43,11 +43,19 @@ address.
 
 ### 2. Create the Pages project
 
-Cloudflare dashboard → **Workers & Pages** → **Create** → **Pages** → **Use direct upload**,
-and name it **`otago-eclipse-3d`**. The name must match `--project-name` in the workflow.
+The project must exist before the first deploy — Wrangler will not create it. Either use the
+dashboard (**Workers & Pages** → **Create** → **Pages** → **Use direct upload**) or run:
 
-Do *not* connect it to GitHub — the Action pushes to it directly. Connecting both causes two
-competing deploy paths.
+```bash
+npx wrangler pages project create otago-eclipse-3d --production-branch=main
+```
+
+The name must match `--project-name` in the workflow exactly. If it does not exist the deploy
+fails with `Project not found [code: 8000007]`; the preflight step now detects this and prints
+the command above.
+
+Do *not* connect the project to GitHub — the Action pushes to it directly. Connecting both
+causes two competing deploy paths.
 
 ### 3. Create an API token
 

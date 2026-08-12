@@ -80,31 +80,51 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # Fail with something actionable. Without this, a missing secret surfaces as an opaque
-      # wrangler authentication error several steps later.
-      - name: Check Cloudflare credentials are configured
+      # Fail with something actionable. Without this, both common setup mistakes surface as an
+      # opaque "npx exited 1" from wrangler several steps later. Checks the secrets exist AND
+      # that the Pages project does — the second is what actually blocked the first deploys.
+      - name: Preflight — Cloudflare credentials and project
         env:
           TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PROJECT: otago-eclipse-3d
         run: |
           missing=""
           [ -z "$TOKEN" ]   && missing="$missing CLOUDFLARE_API_TOKEN"
           [ -z "$ACCOUNT" ] && missing="$missing CLOUDFLARE_ACCOUNT_ID"
           if [ -n "$missing" ]; then
             echo "::error::Missing repository secret(s):$missing"
-            echo ""
-            echo "One-time setup (see DEPLOYMENT.md):"
-            echo "  1. Cloudflare dashboard -> Workers & Pages -> Create -> Pages -> Direct Upload"
-            echo "     Name the project exactly: otago-eclipse-3d"
-            echo "  2. My Profile -> API Tokens -> Create Token"
-            echo "     Permissions: Account -> Cloudflare Pages -> Edit"
-            echo "  3. This repo -> Settings -> Secrets and variables -> Actions"
-            echo "     Add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID"
-            echo ""
-            echo "Tests already passed; only publishing is blocked."
+            echo "Add them under Settings -> Secrets and variables -> Actions. See DEPLOYMENT.md."
             exit 1
           fi
-          echo "Both Cloudflare secrets are present."
+
+          code=$(curl -s -o /tmp/cf.json -w '%{http_code}' \
+            -H "Authorization: Bearer $TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT/pages/projects/$PROJECT")
+
+          case "$code" in
+            200)
+              echo "Secrets present and Pages project '$PROJECT' exists." ;;
+            404)
+              echo "::error::The Cloudflare Pages project '$PROJECT' does not exist."
+              echo ""
+              echo "Create it once, either in the dashboard:"
+              echo "  Workers & Pages -> Create -> Pages -> Direct Upload, named exactly: $PROJECT"
+              echo ""
+              echo "or from a terminal with CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID set:"
+              echo "  npx wrangler pages project create $PROJECT --production-branch=main"
+              echo ""
+              echo "Everything else is ready: tests passed and the credentials work."
+              exit 1 ;;
+            401|403)
+              echo "::error::Cloudflare rejected the API token (HTTP $code)."
+              echo "The token needs Account -> Cloudflare Pages -> Edit, and must belong to"
+              echo "the account in CLOUDFLARE_ACCOUNT_ID."
+              exit 1 ;;
+            *)
+              echo "::warning::Unexpected HTTP $code checking the Pages project; continuing anyway."
+              head -c 400 /tmp/cf.json || true ;;
+          esac
 
       # Assemble exactly what should be public. The precompute pipeline, tests and CI config
       # stay out of the deployed artifact.
@@ -119,7 +139,10 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # --commit-dirty: the checkout is clean, but dist/ is assembled at build time and
+          # wrangler flags any untracked path in a git working tree.
           command: >-
             pages deploy dist
             --project-name=otago-eclipse-3d
             --branch=${{ github.head_ref || github.ref_name }}
+            --commit-dirty=true
