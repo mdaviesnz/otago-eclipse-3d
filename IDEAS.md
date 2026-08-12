@@ -41,6 +41,20 @@ order:
    catalogue. Costs a Worker, a KV namespace, an invalidation story when terrain data changes,
    and it would mean logging where people are checking.
 
+### Proper contact form
+**Parked 2026-08-12.** The About dialog currently assembles a `mailto:` address in JavaScript
+at render time, which keeps it out of the served HTML and defeats naive address harvesters —
+but not a scraper that executes JS, and it still exposes a personal address publicly.
+
+A form would be better: no address on the page at all, spam filtering, and a reply-to field.
+On Cloudflare Pages the natural implementation is a **Pages Function** (`/functions/contact.js`)
+posting to an email API (Resend, MailChannels, Postmark) with a Turnstile challenge to stop
+bots. That is the first piece of server-side code in the project, so it also brings secrets
+management and a rate-limiting question with it — hence parked rather than done.
+
+Interim alternatives if the address starts attracting spam: point at the repo's GitHub Issues,
+or use a burnable alias.
+
 ### Better handling of unnamed lookouts
 96 of the 400 catalogued POIs are `tourism=viewpoint` with no `name` tag, so they show as
 "Unnamed viewpoint" and can only be identified by coordinates. Reverse-geocoding them to a

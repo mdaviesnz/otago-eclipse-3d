@@ -157,9 +157,11 @@
             reports of a spot that turned out wrong are all welcome.
           </p>
           <div class="flex flex-wrap items-center gap-2 mt-2">
-            <a href="mailto:michael@davies.net.nz?subject=Otago%20Eclipse%203D"
+            <!-- Address is assembled in JS below, so it is not in the served HTML for
+                 address harvesters to regex out. -->
+            <a id="contactLink" href="#"
                class="inline-flex items-center gap-1.5 text-xs font-medium bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg px-3 py-1.5 transition">
-              <i data-lucide="mail" class="w-3.5 h-3.5"></i> michael@davies.net.nz
+              <i data-lucide="mail" class="w-3.5 h-3.5"></i> <span id="contactAddr">Email me</span>
             </a>
             <a href="https://github.com/mdaviesnz/otago-eclipse-3d" target="_blank" rel="noopener"
                class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-1.5 transition">
@@ -312,6 +314,15 @@
   document.getElementById("srcPoi").addEventListener("click", () => setSource("poi"));
   document.getElementById("srcGrid").addEventListener("click", () => setSource("grid"));
   document.getElementById("srcBoth").addEventListener("click", () => setSource("both"));
+
+  // Build the contact address at runtime rather than shipping it in the markup. Stops naive
+  // harvesters that regex the served HTML; not a defence against a scraper that runs JS.
+  (() => {
+    const addr = ["michael", "davies.net.nz"].join("@");
+    const link = document.getElementById("contactLink");
+    link.href = `mailto:${addr}?subject=${encodeURIComponent("Otago Eclipse 3D")}`;
+    document.getElementById("contactAddr").textContent = addr;
+  })();
 
   // About dialog: closes on the X, on the backdrop, and on Escape.
   const aboutOverlay = document.getElementById("aboutOverlay");
