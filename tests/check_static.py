@@ -143,6 +143,96 @@ def check_catalogue() -> None:
     if not any(r.get("access") == "foot" for r in (d.get("spots") or [])):
         fail("viewpoints.json: no walk-in spots in 'spots' — the tier quota may have regressed")
 
+    check_presets(d, region)
+
+
+def check_presets(d: dict, region: dict) -> None:
+    """The app's "Fly to" buttons are answered from viewpoints.json rather than by probing
+    terrain, and it matches them by position. If the two coordinate lists drift apart the app
+    does not break — it silently falls back to a live probe on the busiest control on the page,
+    which is exactly the sort of quiet regression this file exists to catch."""
+    presets = d.get("presets")
+    if not presets:
+        fail("viewpoints.json: 'presets' is missing or empty — the Fly to buttons will probe "
+             "terrain on every click. Rebuild with precompute/build_viewpoints.py.")
+        return
+
+    # Presets are deliberately unfiltered, so no clearance assertion here: a blocked town is a
+    # legitimate row. Everything the app reads must still be present.
+    required = {"name", "lat", "lon", "elev", "sunAlt", "sunAz", "horizon", "clearance",
+                "clearBegin", "clearEnd", "wholeTotality", "totality"}
+    missing = [p.get("name", "?") for p in presets if not required.issubset(p)]
+    if missing:
+        fail(f"viewpoints.json: presets missing required fields: {missing}")
+    if region:
+        outside = [p["name"] for p in presets
+                   if not (region["lat_min"] <= p["lat"] <= region["lat_max"]
+                           and region["lon_min"] <= p["lon"] <= region["lon_max"])]
+        if outside:
+            fail(f"viewpoints.json: presets outside the declared region: {outside}")
+    bad = [p["name"] for p in presets if not (0 < p.get("totality", 0) <= 400)]
+    if bad:
+        fail(f"viewpoints.json: presets with implausible totality duration: {bad}")
+
+    # The horizon profile is what lets a preset render the full sightline card without touching
+    # the network. Without it the app silently drops back to the totality-only verdict, so the
+    # three parallel arrays must be present and the same length, and must span every bearing
+    # the app can ask for: the sun's own azimuth range plus HORIZON_SPAN/2 = 10 deg either side.
+    for p in presets:
+        pr = p.get("profile") or {}
+        arrays = [pr.get(k) for k in ("angles", "ridgeDist", "ridgeElev")]
+        if not all(isinstance(a, list) and a for a in arrays):
+            fail(f"preset '{p['name']}' has no usable horizon profile — the app will fall back "
+                 f"to a totality-only verdict")
+            continue
+        if len({len(a) for a in arrays}) != 1:
+            fail(f"preset '{p['name']}' profile arrays differ in length: "
+                 f"{[len(a) for a in arrays]}")
+            continue
+        step = pr.get("azStep") or 0
+        if step <= 0:
+            fail(f"preset '{p['name']}' profile has a non-positive azStep")
+            continue
+        lo = pr["azFrom"]
+        hi = lo + (len(pr["angles"]) - 1) * step
+        # sunAz is the bearing at maximum; the sun wanders either side of it across the eclipse.
+        if not (lo <= p["sunAz"] - 20 and p["sunAz"] + 20 <= hi):
+            fail(f"preset '{p['name']}' profile spans {lo}..{hi} deg, too narrow around "
+                 f"sunAz {p['sunAz']} — the app would extrapolate")
+        if max(pr["angles"]) > 60 or min(pr["angles"]) < -90:
+            fail(f"preset '{p['name']}' profile has implausible terrain angles "
+                 f"({min(pr['angles'])}..{max(pr['angles'])} deg)")
+
+    # The app's own list, parsed straight out of the markup it ships with.
+    html = (ROOT / "index.html").read_text(encoding="utf-8")
+    block = re.search(r"const LOCATIONS = \[(.*?)\];", html, re.S)
+    if not block:
+        fail("index.html: could not find the LOCATIONS array to cross-check presets against")
+        return
+    app = {
+        m.group("name"): (float(m.group("lat")), float(m.group("lon")))
+        for m in re.finditer(
+            r'\{\s*name:\s*"(?P<name>[^"]+)",\s*lon:\s*(?P<lon>-?[\d.]+),'
+            r'\s*lat:\s*(?P<lat>-?[\d.]+)', block.group(1))
+    }
+    if not app:
+        fail("index.html: LOCATIONS found but no entries parsed — the format has changed")
+        return
+
+    built = {p["name"]: (p["lat"], p["lon"]) for p in presets}
+    if set(app) != set(built):
+        fail(f"preset names differ — index.html has {sorted(app)}, "
+             f"viewpoints.json has {sorted(built)}")
+        return
+    # 1e-5 is the rounding the catalogue writes at; anything larger is real drift.
+    drifted = [n for n in app
+               if abs(app[n][0] - built[n][0]) > 1e-5 or abs(app[n][1] - built[n][1]) > 1e-5]
+    if drifted:
+        fail(f"preset coordinates differ between index.html and viewpoints.json: {drifted} — "
+             f"the app will fall back to a live terrain probe for these")
+    else:
+        ok(f"presets: {len(presets)} entries, fields OK, coordinates match index.html")
+
 
 def main() -> int:
     check_required_files()

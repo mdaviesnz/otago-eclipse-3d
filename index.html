@@ -508,6 +508,8 @@
   let sightlineRun = false;             // has the user asked for a check at least once?
   let sightlineToken = 0;               // guards against overlapping re-runs
   let locationMarker = null;            // visible marker at the checked location
+  let activeCatEntry = null;            // catalogue record the observer is standing on, or null
+  let resultPlaceholder = "";           // the panel's "nothing checked yet" copy, kept for reuse
   let pinMode = false;                  // when true, clicking the map sets the location
   const startJulian = Cesium.JulianDate.fromIso8601(CLOCK_START_UTC);
   const stopJulian  = Cesium.JulianDate.fromIso8601(CLOCK_STOP_UTC);
@@ -872,6 +874,10 @@
     activeLoc = loc;
     document.getElementById("activeLocation").textContent = loc.name;
 
+    // Does this spot already have an answer on disk? A catalogue click passes its own record
+    // through; anything else (a shared link, a dropped pin) is matched on coordinates.
+    activeCatEntry = loc.cat || findCatalogueEntry(loc.lat, loc.lon);
+
     // Sample ground height so the observer sits on the terrain.
     let groundHeight = 0;
     try {
@@ -892,12 +898,26 @@
 
     // A sightline result belongs to one spot, so retire the old one the moment we move —
     // otherwise the previous verdict sits on screen describing somewhere the user has left.
-    // The recalculation itself is deferred until the camera arrives (see refreshSightline).
-    if (sightlineRun) {
-      document.getElementById("horizonCard").classList.add("hidden");
+    // The horizon chart goes with it: neither the catalogue nor a pending probe has a profile
+    // to draw yet.
+    document.getElementById("horizonCard").classList.add("hidden");
+    if (activeCatEntry) {
+      // The answer is already on disk for this spot, so give it immediately. The live probe
+      // is a button inside the card rather than something that fires on arrival.
+      //
+      // A preset carries a whole horizon profile, so it gets the full card — table, chart and
+      // all — instead of the catalogue's totality-only verdict. The fallback matters: HTML and
+      // viewpoints.json are cached separately, so a browser can hold a new index.html against
+      // an older catalogue with no profiles in it.
+      if (activeCatEntry.profile) runPresetCheck(activeCatEntry);
+      else renderCatalogueVerdict(activeCatEntry);
+    } else if (sightlineRun) {
+      // The recalculation itself is deferred until the camera arrives (see refreshSightline).
       document.getElementById("resultBox").innerHTML =
         `<p class="text-slate-400 flex items-center gap-2"><i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Moving to ${loc.name}&hellip;</p>`;
       lucide.createIcons();
+    } else {
+      document.getElementById("resultBox").innerHTML = resultPlaceholder;
     }
 
     return groundHeight;
@@ -906,7 +926,12 @@
   // Recalculate only once the camera has settled. The maths does not depend on the camera —
   // terrain is sampled from the provider, not the rendered scene — but showing a new verdict
   // while the old view is still flying reads as though the answer arrived before the move.
+  //
+  // A catalogue spot is exempt: setObserver has already painted the precomputed verdict, and
+  // re-deriving it live would sample ~300 terrain tiles (~10 MB) to restate what we shipped in
+  // viewpoints.json. Clicking through ten catalogue spots used to cost ten full probes.
   function refreshSightlineIfRun() {
+    if (activeCatEntry) return;
     if (sightlineRun) runSightlineCheck();
   }
 
@@ -1331,6 +1356,9 @@
     const token = ++sightlineToken;
     const stale = () => token !== sightlineToken;
     sightlineRun = true;
+    // Remember whether we are refining a precomputed verdict, so the result can say how the
+    // two compare instead of quietly overwriting one number with a slightly different one.
+    const catAtStart = activeCatEntry;
 
     const c = localCircumstances(activeGroundCartesian);
 
@@ -1421,10 +1449,12 @@
 
     drawSightline(focus.dir, !focus.blocked && !focus.below);
     renderHorizonChart(profile, moments, azLo, azHi);
-    renderSightlineResults(moments, focus, missing / Math.max(1, total));
+    renderSightlineResults(moments, focus, missing / Math.max(1, total), catAtStart);
   }
 
-  function renderSightlineResults(moments, focus, missingFraction = 0) {
+  // `preset` set means the horizons came off a stored profile rather than the network — the
+  // card is otherwise identical, but it must not claim to be a live terrain reading.
+  function renderSightlineResults(moments, focus, missingFraction = 0, cat = null, preset = null) {
     const box = document.getElementById("resultBox");
     // Never present a confident verdict built on terrain that failed to download.
     const gapNote = missingFraction > 0.01
@@ -1455,6 +1485,39 @@
       : focus.blocked
       ? `At the peak of the eclipse, high ground about ${(focus.ridgeDist / 1000).toFixed(1)} km to the ${compassName(focus.az)} will be in the way. You would need to move to somewhere more open, or higher up, to see it.`
       : `You should have a clear view at the peak of the eclipse. Look ${heightPhrase(focus.alt)}, to the ${compassName(focus.az)} — the sun clears the skyline by about ${(focus.alt - focus.horizon).toFixed(1)}&deg;.`;
+    // Refining a catalogue spot: reconcile the two rather than silently replacing one verdict
+    // with another. There are two ways they can differ and they are not the same thing.
+    const catBits = [];
+    if (cat) {
+      // Resolution. Only the maximum is comparable — it is the one moment both evaluate.
+      // Under ~0.2 deg the 27 m DEM and the full-resolution mesh are merely disagreeing at
+      // their own noise level, which is not worth a sentence.
+      if (Number.isFinite(cat.horizon) && Number.isFinite(focus.horizon)
+          && Math.abs(cat.horizon - focus.horizon) >= 0.2) {
+        catBits.push(`The ${cat.profile ? "precomputed profile" : "catalogue"} put the skyline here at ${cat.horizon.toFixed(1)}&deg; from a ~27 m elevation model; at native terrain resolution it is ${focus.horizon.toFixed(1)}&deg;.`);
+      }
+      // Scope. The catalogue only ever rates totality, so it can call a spot clear while this
+      // check finds first or last contact blocked. Without saying so, that reads as the two
+      // contradicting each other. Presets are exempt — they carry a full profile and already
+      // evaluated all three contacts, so there is no scope gap to explain.
+      if (blocked > 0 && !focus.blocked && cat.wholeTotality !== false && !cat.profile) {
+        catBits.push(`The catalogue rated this spot on totality alone, which it still clears — what is blocked above is first or last contact, over an hour either side, when the sun is far lower.`);
+      }
+    }
+    const catNote = catBits.length
+      ? `<p class="text-[11px] text-slate-400 mt-2 flex items-start gap-1.5"><i data-lucide="info" class="w-3.5 h-3.5 mt-px shrink-0 text-slate-500"></i><span>${catBits.join(" ")}</span></p>`
+      : "";
+    // A blocked town is a real answer but a dead end on its own, so point at the catalogue,
+    // which already knows where to stand instead. The trigger is losing *totality*, not any
+    // blocked contact: Cromwell loses only fourth contact, an hour after totality ends with
+    // the sun at 0.5 deg, and telling people to move over that would be daft.
+    // Keyed off either argument: `preset` on the precomputed path, `cat` after a live
+    // re-check. Losing the pointer precisely because someone verified the bad news would be
+    // the wrong way round.
+    const town = preset || (cat && cat.isPreset ? cat : null);
+    const presetNote = town && (focus.blocked || town.wholeTotality === false)
+      ? `<p class="text-[11px] text-slate-400 mt-2 flex items-start gap-1.5"><i data-lucide="info" class="w-3.5 h-3.5 mt-px shrink-0 text-slate-500"></i><span>This is the town centre. <b class="text-slate-300">Best viewing spots</b> lists places with a clear view — set a distance filter to find the closest ones to here.</span></p>`
+      : "";
     const setNote = moments.some((m) => m.below)
       ? `<p class="text-[11px] text-slate-400 mt-2 flex items-start gap-1.5"><i data-lucide="info" class="w-3.5 h-3.5 mt-px shrink-0 text-slate-500"></i><span>The sun sets before the eclipse finishes here, so the final phase happens below the horizon.</span></p>`
       : "";
@@ -1495,8 +1558,12 @@
       ${focus.az.toFixed(0)}&deg; rises to <b>${focus.horizon.toFixed(1)}&deg;</b>
       (${focus.ridgeHeight.toFixed(0)} m, ~${(focus.ridgeDist / 1000).toFixed(1)} km away).</p>
       ${setNote}
+      ${catNote}
+      ${presetNote}
       ${gapNote}
-      <p class="text-[10px] text-slate-500 mt-1.5">Source: ${terrainSource === "ion" ? "Cesium World Terrain" : "Re:Earth Terrain (~30 m)"}</p>`;
+      <p class="text-[10px] text-slate-500 mt-1.5">Source: ${preset
+        ? "precomputed from a ~7 m elevation model (~27 m past 9 km)"
+        : terrainSource === "ion" ? "Cesium World Terrain" : "Re:Earth Terrain (~30 m)"}</p>`;
     lucide.createIcons();
   }
 
@@ -1629,8 +1696,20 @@
       document.getElementById("topSpotsSection").classList.remove("hidden");
       // Prefer named lookouts when the catalogue has them — a signposted viewpoint is a far
       // more useful recommendation than a bare grid coordinate.
+      // Presets are town centres rather than recommendations, and two of the four are blocked.
+      // Tag them so the verdict card can point somewhere useful instead of dead-ending.
+      (data.presets || []).forEach((p) => { p.isPreset = true; });
       setSpotSource((data.pois && data.pois.length) ? "poi" : "grid");
       lucide.createIcons();
+
+      // The catalogue arrives after the opening location has been selected, so a deep link
+      // (?lat=&lon=, which is how the overview map hands off) misses the match on the way in.
+      // Retry it once the data is here.
+      if (activeLoc && !activeCatEntry && !sightlineRun) {
+        activeCatEntry = findCatalogueEntry(activeLoc.lat, activeLoc.lon);
+        if (activeCatEntry?.profile) runPresetCheck(activeCatEntry);
+        else if (activeCatEntry) renderCatalogueVerdict(activeCatEntry);
+      }
     } catch (e) {
       /* no catalogue shipped — the live search still works */
     }
@@ -1651,6 +1730,213 @@
     const y = Math.sin(dl) * Math.cos(p2);
     const x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
     return (Cesium.Math.toDegrees(Math.atan2(y, x)) + 360) % 360;
+  }
+
+  // ------------------------------------------------------------------------------------
+  //  PRECOMPUTED VERDICTS
+  //  Every catalogue entry already carries the answer this app exists to give — the horizon
+  //  angle, the clearance at each contact, and whether totality itself survives the skyline —
+  //  computed offline against a 27 m DEM with the same probe geometry the live check uses.
+  //  Deriving that again in the browser costs ~300 quantized-mesh tiles (~10 MB) per click
+  //  from a best-effort third-party service, so for a catalogue spot we show what we already
+  //  know and make the live probe opt-in. It is also simply better: instant, not five seconds.
+  // ------------------------------------------------------------------------------------
+
+  // How close the observer must be to count as standing on a catalogue entry. Grid candidates
+  // are 250 m apart so this cannot match the wrong one, and it comfortably absorbs the 5 dp
+  // (~1 m) rounding that shared links carry.
+  const CAT_MATCH_M = 25;
+
+  function findCatalogueEntry(lat, lon) {
+    if (!catalogue || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    let best = null, bestM = CAT_MATCH_M;
+    // Nearest wins across all three lists. Presets are included so the four "Fly to" buttons —
+    // the most-clicked control on the page — are answered from disk too; their coordinates are
+    // byte-identical to LOCATIONS, so they always match at zero distance.
+    for (const arr of [catalogue.pois || [], catalogue.spots || [], catalogue.presets || []]) {
+      for (const s of arr) {
+        const m = haversineM(lat, lon, s.lat, s.lon);
+        if (m < bestM) { bestM = m; best = s; }
+      }
+    }
+    return best;
+  }
+
+  // Pure: reduce a catalogue record to a verdict. No DOM, no Cesium, no clock — so it can be
+  // tested directly and cannot drift from what the panel renders.
+  //
+  // Note the scope. clearBegin/clearEnd are SECOND and THIRD contact — the start and end of
+  // totality (build_viewpoints.py takes them from EclipseEvent.total_begin/total_end). The
+  // live check's "Start"/"End" are FIRST and LAST contact, over an hour either side, by which
+  // time the sun has sunk to ~1 deg. The two answer different questions and must not be
+  // labelled alike; the keys below double as field names on localCircumstances().
+  function catalogueVerdict(s) {
+    if (!s) return null;
+    const phases = [
+      { key: "totalBegin", label: "Totality begins", clear: s.clearBegin },
+      { key: "peak",       label: "Maximum",         clear: s.clearance },
+      { key: "totalEnd",   label: "Totality ends",   clear: s.clearEnd },
+    ].filter((p) => Number.isFinite(p.clear));
+    const blocked = phases.filter((p) => p.clear < 0).length;
+    // wholeTotality is stricter than clearance at maximum: the sun can clear the skyline at
+    // the peak and still be cut off before third contact, which costs you part of the two and
+    // a half minutes that are the entire point.
+    const partialTotality = s.wholeTotality === false;
+    const level = phases.length && blocked === phases.length ? "blocked"
+      : blocked > 0 || partialTotality ? "partial"
+      : "clear";
+    return { phases, blocked, partialTotality, level,
+             nearEdge: Number.isFinite(s.totality) && s.totality < 60 };
+  }
+
+  // Full literal class strings — Tailwind's scanner reads the source, so anything assembled
+  // at runtime is stripped from the built stylesheet. Same reasoning as the live result card.
+  // Worded for what the catalogue actually measured — totality — rather than borrowing the
+  // live card's "Clear while sun is up", which claims a wider window than this data covers.
+  const CAT_HEADLINE = {
+    clear:   { box: "bg-emerald-900/40 border-emerald-600/40", tone: "text-emerald-300",
+               icon: "check-circle", text: "Clear through totality" },
+    partial: { box: "bg-amber-900/40 border-amber-600/40", tone: "text-amber-300",
+               icon: "alert-triangle", text: "Part of totality blocked" },
+    blocked: { box: "bg-red-900/40 border-red-600/40", tone: "text-red-300",
+               icon: "eye-off", text: "Totality not visible" },
+  };
+
+  // Read a stored profile at an arbitrary bearing. Angles interpolate; the ridge that set the
+  // angle is a discrete feature, so that comes from the nearer sample rather than a blend of
+  // two different hillsides.
+  function profileAt(pr, az) {
+    const i = (az - pr.azFrom) / pr.azStep;
+    const last = pr.angles.length - 1;
+    const lo = Math.max(0, Math.min(last, Math.floor(i)));
+    const hi = Math.max(0, Math.min(last, lo + 1));
+    const t = Math.max(0, Math.min(1, i - lo));
+    const near = t < 0.5 ? lo : hi;
+    return {
+      angle: pr.angles[lo] * (1 - t) + pr.angles[hi] * t,
+      ridgeDist: pr.ridgeDist[near],
+      ridgeHeight: pr.ridgeElev[near],
+    };
+  }
+
+  // The full sightline card for a preset, with no terrain fetched.
+  //
+  // Only the horizon needs terrain, and for the four presets it is already on disk across the
+  // whole azimuth range the eclipse covers. Everything else — contact times, sun altitude and
+  // bearing — is pure astronomy and free in the browser, so this builds exactly the same
+  // `moments` array runSightlineCheck does and hands it to exactly the same renderers. The
+  // result is the complete card, chart included, that used to need a 234-tile probe.
+  function runPresetCheck(p) {
+    sightlineToken++;                 // any in-flight live probe no longer owns the panel
+    const c = localCircumstances(activeGroundCartesian);
+    const moments = c && c.partialBegin
+      ? [
+          { label: "Start", j: c.partialBegin },
+          { label: "Maximum", j: c.peak },
+          { label: "End", j: c.partialEnd },
+        ]
+      : [{ label: "Now", j: viewer.clock.currentTime.clone() }];
+    for (const m of moments) {
+      const s = sunAltAz(m.j, activeGroundCartesian);
+      m.alt = s.altitude; m.az = s.azimuth; m.dir = s.dir;
+      const h = profileAt(p.profile, m.az);
+      m.horizon = h.angle; m.ridgeDist = h.ridgeDist; m.ridgeHeight = h.ridgeHeight;
+      m.below = m.alt <= 0;
+      m.blocked = !m.below && m.horizon >= m.alt;
+    }
+    const focus = moments.find((m) => m.label === "Maximum") || moments[0];
+
+    // Plot the profile at its stored 1 deg resolution rather than the live check's 4 deg —
+    // it costs nothing here and draws a better silhouette.
+    const azs = moments.map((m) => m.az);
+    const azLo = Math.min(...azs) - HORIZON_SPAN / 2;
+    const azHi = Math.max(...azs) + HORIZON_SPAN / 2;
+    const profile = [];
+    for (let k = 0; k < p.profile.angles.length; k++) {
+      const az = p.profile.azFrom + k * p.profile.azStep;
+      if (az >= azLo && az <= azHi) profile.push({ az, angle: p.profile.angles[k] });
+    }
+
+    drawSightline(focus.dir, !focus.blocked && !focus.below);
+    renderHorizonChart(profile, moments, azLo, azHi);
+    renderSightlineResults(moments, focus, 0, null, p);
+  }
+
+  function renderCatalogueVerdict(s) {
+    const v = catalogueVerdict(s);
+    if (!v) return;
+    const box = document.getElementById("resultBox");
+    const headline = CAT_HEADLINE[v.level];
+
+    // Contact times come from this observer's own live circumstances, not the catalogue.
+    // They are pure astronomy and cost nothing; only the terrain figures are precomputed.
+    // Each phase key is also the field name to read off, so the times cannot drift from the
+    // clearances they sit beside.
+    const c = localCircumstances(activeGroundCartesian);
+
+    const plain = v.level === "blocked"
+      ? "Terrain blocks the sun from here for the whole of totality."
+      : `You should see ${v.level === "clear" ? "the whole of totality" : "the peak of the eclipse"} from here. Look ${heightPhrase(s.sunAlt)}, to the ${compassName(s.sunAz)} — the sun clears the skyline by about ${s.clearance.toFixed(1)}&deg; at maximum.`
+        + (v.level === "partial"
+          ? " The skyline cuts in before totality is over, though, so you would lose part of it."
+          : "");
+
+    const rows = v.phases.map((p) => `
+      <tr>
+        <td class="py-1 pr-2 text-slate-300 whitespace-nowrap">${p.label}</td>
+        <td class="py-1 pr-2 font-mono text-slate-400 whitespace-nowrap">${
+          c && c[p.key] ? formatNZST(c[p.key]).slice(0, 5) : "--:--"}</td>
+        <td class="py-1">${p.clear < 0
+          ? `<span class="text-red-300">blocked by ${Math.abs(p.clear).toFixed(1)}&deg;</span>`
+          : `<span class="text-emerald-300">clear by ${p.clear.toFixed(1)}&deg;</span>`}</td>
+      </tr>`).join("");
+
+    // A blocked preset is a real answer, but on its own it is a dead end — and it is the one
+    // the two most-clicked buttons give. Queenstown's skyline rises 20.6° to the north-west,
+    // so the useful next step is the catalogue, which already knows where to stand instead.
+    const presetNote = s.isPreset && v.level !== "clear"
+      ? `<p class="text-[11px] text-slate-400 mt-2 flex items-start gap-1.5"><i data-lucide="info" class="w-3.5 h-3.5 mt-px shrink-0 text-slate-500"></i><span>This is the town centre. <b class="text-slate-300">Best viewing spots</b> lists places with a clear view — set a distance filter to find the closest ones to here.</span></p>`
+      : "";
+
+    const edgeNote = v.nearEdge
+      ? `<p class="text-[11px] text-amber-300 mt-2 flex items-start gap-1.5"><i data-lucide="alert-triangle" class="w-3.5 h-3.5 mt-px shrink-0"></i><span>Totality lasts under a minute here — this spot is near the edge of the path. A few kilometres towards the centre line buys a lot more.</span></p>`
+      : "";
+
+    box.innerHTML = `
+      <div class="rounded-lg border p-3 mb-2 ${headline.box}">
+        <p class="font-semibold flex items-center gap-1.5 ${headline.tone}">
+          <i data-lucide="${headline.icon}" class="w-4 h-4"></i> ${headline.text}
+        </p>
+      </div>
+      <p class="simple-only text-xs text-slate-300 leading-relaxed">${plain}</p>
+      <table class="expert-only w-full text-[11px] leading-tight">
+        <thead><tr class="text-slate-500 border-b border-slate-700/60">
+          <th class="text-left font-medium pb-1">Phase</th>
+          <th class="text-left font-medium pb-1">Time</th>
+          <th class="text-left font-medium pb-1">Sightline</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p class="expert-only text-xs text-slate-400 mt-2">At maximum the sun sits at
+      <b>${s.sunAlt.toFixed(1)}&deg;</b> on bearing ${s.sunAz.toFixed(0)}&deg;, where terrain
+      rises to <b>${s.horizon.toFixed(1)}&deg;</b>. Ground elevation ${s.elev} m.</p>
+      ${presetNote}
+      ${edgeNote}
+      <p class="text-[10px] text-slate-500 mt-1.5">Source: precomputed catalogue, ~27 m
+      elevation model, totality only. A full check re-probes the terrain at native resolution
+      and also tests first and last contact, an hour either side.</p>
+      <button id="refineSightline"
+        class="mt-2 w-full inline-flex items-center justify-center gap-1.5 text-xs font-semibold bg-slate-700 hover:bg-slate-600 text-slate-100 rounded-lg px-3 py-1.5 transition">
+        <i data-lucide="scan-eye" class="w-3.5 h-3.5"></i> Check the whole eclipse in full detail
+      </button>`;
+    box.querySelector("#refineSightline").addEventListener("click", runSightlineCheck);
+    lucide.createIcons();
+
+    // The ray is a visual cue, so take its direction from live astronomy rather than the
+    // catalogue's own azimuth — the two agree to a tenth of a degree, which is invisible here.
+    if (c && c.peak && activeGroundCartesian) {
+      drawSightline(sunAltAz(c.peak, activeGroundCartesian).dir, v.level !== "blocked");
+    }
   }
 
   let spotSource = "poi";              // "poi" = named lookouts, "grid" = anywhere scanned
@@ -1760,7 +2046,8 @@
         const label = btn.dataset.src === "poi"
           ? (s.name || `Unnamed ${POI_LABEL[s.kind] || "spot"}`)
           : `${s.lat.toFixed(4)}, ${s.lon.toFixed(4)}`;
-        selectLocation({ name: label, lat: s.lat, lon: s.lon }, true);
+        // Pass the record itself, so the precomputed verdict is used without a lookup.
+        selectLocation({ name: label, lat: s.lat, lon: s.lon, cat: s }, true);
       });
     });
     lucide.createIcons();
@@ -2033,6 +2320,9 @@
   //  BOOT
   // ====================================================================================
   window.addEventListener("DOMContentLoaded", () => {
+    // Keep the "nothing checked yet" copy so leaving a spot can restore it rather than
+    // stranding a verdict that describes somewhere the user has left.
+    resultPlaceholder = document.getElementById("resultBox").innerHTML;
     let saved = null;
     try { saved = localStorage.getItem("eclipseMode"); } catch (e) {}
     setMode(saved || "simple");   // casual visitors are the larger audience — start plain

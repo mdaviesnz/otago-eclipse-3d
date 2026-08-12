@@ -8,7 +8,8 @@ Each entry carries enough context to act on without re-deriving the reasoning.
 ## Parked
 
 ### Caching sightline checks
-**Parked 2026-08-12.** Worth revisiting if the site gets real traffic or checks feel slow.
+**Parked 2026-08-12; option 2 implemented 2026-08-12.** Revisit options 1 and 3 if the site
+gets real traffic.
 
 The expensive part is **not** the computation — a check samples ~1,500 points and the maths
 afterwards is microseconds. Nearly all the wall-clock is `sampleTerrainMostDetailed` fetching
@@ -24,17 +25,52 @@ order:
    *Caveat:* proxying someone else's free service at scale is a bigger ask than direct use.
    Attribution is already displayed; a courtesy note to Re:Earth would be fair if traffic grows.
 
-2. **Use the verdicts already in `viewpoints.json`.** Every one of the 800 catalogue entries
-   already carries `clearance`, `clearBegin`, `clearEnd`, `horizon` and `wholeTotality`,
-   computed at 27 m with the same probe geometry the app uses. For catalogue spots the answer is
-   already on disk and the app simply ignores it. Showing it instantly on arrival — then
-   optionally refining live — would make the common path feel instant with **no new
-   infrastructure**. Highest value per unit of work.
-   *Caveat:* precomputed and live results will not always match exactly. The catalogue uses a
-   27 m raster DEM; the live check uses quantized-mesh at full detail. Measured gap: 0.07° at
-   the Dunedin viewpoint, but 1.3° at Halfway Remarkables before the probe geometry was
-   matched. Silently replacing a cached verdict with a slightly different live one looks like a
-   bug — label which is which, or only refine when the difference is material.
+2. ~~**Use the verdicts already in `viewpoints.json`.**~~ **Done 2026-08-12.** Selecting a
+   catalogue spot now renders its precomputed verdict immediately and does not probe terrain
+   at all; the live check is a button inside that card. Measured on Halfway Remarkables:
+   **2 terrain tiles to select a spot, 234 to refine it** (~8 MB). With a check already run,
+   moving between catalogue spots used to cost a full probe each time and now costs zero.
+   A spot is matched by its own record on click, or within 25 m by coordinates — which also
+   catches arrivals from the overview map's `?lat=&lon=` links.
+
+   The four **"Fly to" presets get the whole thing precomputed**, not just a verdict: each
+   carries a `profile` of terrain elevation angle vs azimuth at 1° steps across the ~52° the
+   eclipse spans, with the ridge distance and height responsible for each bearing. That is the
+   only thing the browser cannot work out for itself — contact times and sun positions are pure
+   astronomy and free — so a preset renders the *complete* sightline card, horizon chart
+   included, with **zero terrain requests** and no button to press. Cost: 4.1 KB of JSON
+   (184,065 → 188,181 bytes) and ~200 extra ray-marches in the precompute.
+
+   Doing the same for all 800 catalogue entries would add roughly 600 KB, tripling the file for
+   spots most people never open — hence verdict-only there and full detail here.
+
+   Because there is no "check it properly" button on a preset, the four of them are built on a
+   **sharper DEM than the catalogue**: z13 (~6.8 m/px) within 9 km, over the region-wide z11
+   (~27 m) mosaic beyond. See "DEM resolution is a near-field problem" below for why that
+   split, and what it is worth.
+
+   The presets are their own unfiltered array (a blocked town is a real answer, and these are
+   the most-clicked buttons on the page).
+   `tests/check_static.py` parses `LOCATIONS` out of the shipped markup and fails the build if
+   it disagrees with the built coordinates — drift would not break the app, it would silently
+   revert those buttons to a live probe, which is precisely the kind of invisible regression
+   that file exists to catch.
+
+   Two things fell out of doing it, both worth keeping in mind:
+
+   - **`clearBegin` / `clearEnd` are second and third contact**, i.e. the start and end of
+     *totality* — `build_viewpoints.py` reads them off `EclipseEvent.total_begin/total_end`.
+     The live check's "Start" and "End" are *first and last* contact, over an hour either side,
+     by which point the sun has sunk to ~1°. The labels look interchangeable and are not. The
+     catalogue card therefore says "Totality begins/ends" and pairs those numbers with
+     `totalBegin`/`totalEnd`, and its headline is scoped ("Clear through totality") rather than
+     borrowing the live card's wider "Clear while sun is up".
+   - Because the catalogue only ever rates totality, it can call a spot clear while the live
+     check finds last contact blocked — which is exactly what happens at Halfway Remarkables.
+     That is a difference of *scope*, not of resolution, and the refined card now says so
+     explicitly. The resolution comparison is separate and only fires when the two horizons at
+     maximum differ by ≥0.2°; at Halfway Remarkables they agree to within 0.1°, so the 1.3°
+     figure below is fully explained by the probe geometry fix, not by DEM resolution.
 
 3. **KV cache of arbitrary check results.** Keyed on rounded lat/lon. Skipped: it only pays off
    if users repeatedly check the *same* arbitrary point, which is unlikely outside the
@@ -133,6 +169,74 @@ netting roughly 4′ conservative.
 Fixing means picking one convention for both paths and rebuilding the catalogue. Deferred until
 an astronomy reviewer has commented, since the right refraction coefficient for a July Otago
 basin — inversion-prone, late afternoon — is not obviously the textbook k = 0.13.
+
+### DEM resolution is a near-field problem
+**Measured 2026-08-12** against live native-resolution probes, while making the presets good
+enough to stand without a re-check button.
+
+The error in a raster horizon is a *smoothing* error, and it scales with pixel size over the
+distance to the ridge that sets the skyline: a coarse grid averages a sharp crest down. So the
+same 27 m DEM is excellent at one town and poor at the next, depending only on how close the
+horizon is. Error against a live probe, at each town's three contact bearings:
+
+| Town | Ridge distance | z11 (27 m) error |
+|---|---|---|
+| Arrowtown | ~775 m | +0.45, **+0.64**, +0.49 |
+| Queenstown | 1.2–3.7 km | +0.22, +0.20, +0.24 |
+| Dunedin | distant | +0.04, +0.15, +0.06 |
+| Cromwell | distant | +0.04, −0.03, +0.05 |
+
+Always positive: the raster reads terrain *low*, which biases verdicts optimistic — the wrong
+direction for a tool answering "will I see it".
+
+Two things worth knowing before spending tiles on this:
+
+- **Re:Earth's Terrarium endpoint serves no z12.** It 404s. Available zooms jump 11 → 13.
+- **z14 is worse than z13, not better.** At 3.4 m/px it over-reads by up to 0.38°, because it
+  resolves detail that the quantized mesh the app compares against has itself smoothed away.
+  Chasing resolution past the reference is chasing noise.
+
+z13 within 9 km brings the worst of the twelve town/contact comparisons from 0.64° to **0.13°**
+for 189 extra tiles, and — more telling than the size — turns a systematic under-read into a
+zero-mean scatter, which is what convergence on the reference looks like rather than a smaller
+bias. Final errors against live, in degrees:
+
+| Town | First | Maximum | Last |
+|---|---|---|---|
+| Queenstown | −0.111 | +0.035 | −0.008 |
+| Arrowtown | +0.018 | +0.069 | −0.131 |
+| Cromwell | +0.029 | −0.058 | −0.003 |
+| Dunedin | −0.010 | −0.013 | −0.027 |
+
+Beyond ~9 km a 27 m pixel subtends under 0.2°, so the coarse mosaic is already fine out there —
+which is exactly why this is affordable for four presets and would not be for 800 catalogue
+entries. Note this makes the presets *more* accurate than the catalogue they sit beside; if the
+refraction question above is ever settled, they are the natural place to apply it first.
+
+### Queenstown and Arrowtown cannot see totality from town
+**Measured 2026-08-12** when the presets were precomputed, and cross-checked live.
+
+| | Ground | Sun at max | Terrain | Verdict |
+|---|---|---|---|---|
+| Queenstown | 318 m | 10.0° @ 312° | **20.6°** | blocked by 10.7° |
+| Arrowtown | 410 m | 10.0° @ 312° | 15.2° | blocked by 5.3° |
+| Cromwell | 210 m | 9.7° @ 312° | 7.2° | clear by 2.5° |
+| Dunedin | 2 m | 8.4° @ 311° | 6.7° | clear by 1.7° |
+
+Ben Lomond and Bob's Peak rise ~20.8° above the Queenstown town centre on exactly the bearing
+the eclipsed sun sits at. Precomputed against live, once the near-field DEM was sharpened:
+
+| Contact | Precomputed | Live (native mesh) |
+|---|---|---|
+| First contact | clear by 2.3° | clear by 2.4° |
+| Maximum | blocked by 10.9° | blocked by 10.9° |
+| Last contact | blocked by 20.6° | blocked by 20.6° |
+
+This is the single most useful thing the app can tell a visitor, since Queenstown is the
+obvious base for the event and the answer is counter-intuitive. The preset card says so
+immediately on arrival and points at the catalogue. Note that Cromwell and Dunedin clear by
+under 2.5°, so their verdicts are genuinely marginal — well inside the range where the
+unresolved refraction question above could move them.
 
 ## Known gaps and risks
 

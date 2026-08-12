@@ -97,6 +97,89 @@ test("astronomy reproduces the published Dunedin circumstances", async ({ page }
   expect(r.peakAlt).toBeLessThan(8.8);
 });
 
+// A catalogue spot must be answered from viewpoints.json, not by re-probing terrain: the live
+// check costs ~230 quantized-mesh tiles (~8 MB) from a best-effort third party, and clicking
+// through a shortlist used to pay that per click. The matching and verdict logic is pure, so
+// it tests without a GPU even when the globe itself does not come up in CI.
+test("catalogue spots are answered from precomputed data", async ({ page }) => {
+  const errs = errors(page);
+  await page.goto("/index.html");
+
+  // `let catalogue` is a global lexical binding, not a property of window — reference the
+  // bare identifier, never window.catalogue. Load it directly if the viewer never got there.
+  await page.waitForFunction(() => typeof loadCatalogue === "function", null, { timeout: 20000 });
+  await page.evaluate(() => (typeof catalogue !== "undefined" && catalogue ? null : loadCatalogue()));
+  await page.waitForFunction(() => typeof catalogue !== "undefined" && !!catalogue,
+    null, { timeout: 20000 });
+
+  const r = await page.evaluate(() => {
+    const p = catalogue.pois[0];
+    const partial = [...catalogue.pois, ...catalogue.spots].find((s) => s.wholeTotality === false);
+    // Every "Fly to" button must resolve to a preset row carrying a full horizon profile, or
+    // it falls back to a live probe (no match) or a totality-only verdict (no profile).
+    const presetHits = LOCATIONS.map((l) => {
+      const hit = findCatalogueEntry(l.lat, l.lon);
+      if (!hit) return { name: l.name, matched: null };
+      const pr = hit.profile;
+      const lo = pr && pr.azFrom;
+      const hi = pr && lo + (pr.angles.length - 1) * pr.azStep;
+      return {
+        name: l.name, matched: hit.name, level: catalogueVerdict(hit).level,
+        lens: pr && [pr.angles.length, pr.ridgeDist.length, pr.ridgeElev.length],
+        // The app fans HORIZON_SPAN/2 either side of the sun's own azimuth range.
+        spansSun: !!pr && lo <= hit.sunAz - 20 && hit.sunAz + 20 <= hi,
+        // A lookup exactly on a stored bearing must return that bearing's own value.
+        exactLookup: pr && profileAt(pr, lo + 3 * pr.azStep).angle,
+        exactStored: pr && pr.angles[3],
+        // ...and one halfway between two must land between them.
+        midBetween: pr && (() => {
+          const m = profileAt(pr, lo + 3.5 * pr.azStep).angle;
+          return m >= Math.min(pr.angles[3], pr.angles[4])
+              && m <= Math.max(pr.angles[3], pr.angles[4]);
+        })(),
+      };
+    });
+    return {
+      exact: findCatalogueEntry(p.lat, p.lon) === p,
+      rounded: findCatalogueEntry(+p.lat.toFixed(5), +p.lon.toFixed(5)) === p,
+      far: findCatalogueEntry(p.lat + 0.05, p.lon),          // ~5.5 km away
+      justOutside: findCatalogueEntry(p.lat + 0.00027, p.lon), // ~30 m away
+      clearLevel: catalogueVerdict(p).level,
+      partialLevel: partial && catalogueVerdict(partial).level,
+      phaseKeys: catalogueVerdict(p).phases.map((x) => x.key),
+      nullSafe: catalogueVerdict(null),
+      presetHits,
+    };
+  });
+
+  // Presets are unfiltered, so any of the three levels is legitimate — what matters is that
+  // each button matches its own row, and that the row carries enough to render the full card
+  // without touching the network.
+  for (const h of r.presetHits) {
+    expect(h.matched, `"${h.name}" must resolve to a precomputed preset`).toBe(h.name);
+    expect(["clear", "partial", "blocked"]).toContain(h.level);
+    expect(h.lens, `"${h.name}" must carry a horizon profile`).toBeTruthy();
+    expect(new Set(h.lens).size, `"${h.name}" profile arrays must agree in length`).toBe(1);
+    expect(h.spansSun, `"${h.name}" profile must cover the whole fan the chart draws`).toBe(true);
+    expect(h.exactLookup).toBeCloseTo(h.exactStored, 6);
+    expect(h.midBetween, `"${h.name}" profile interpolation must stay between samples`).toBe(true);
+  }
+
+  expect(r.exact, "a catalogue entry must match its own coordinates").toBeTruthy();
+  expect(r.rounded, "5 dp coordinates, as shared links carry, must still match").toBeTruthy();
+  expect(r.far, "5 km away is a different place").toBeNull();
+  expect(r.justOutside, "30 m away is outside the 25 m match radius").toBeNull();
+  expect(r.clearLevel).toBe("clear");
+  expect(r.partialLevel, "wholeTotality:false must not read as fully clear").toBe("partial");
+  // clearBegin/clearEnd are SECOND and THIRD contact (build_viewpoints.py reads them off
+  // EclipseEvent.total_begin/total_end), not the partial phases. Labelling them with
+  // partialBegin/partialEnd would sit an 8 deg totality clearance beside a 1 deg sun.
+  expect(r.phaseKeys).toEqual(["totalBegin", "peak", "totalEnd"]);
+  expect(r.nullSafe).toBeNull();
+
+  expect(errs, "no JS errors while reading the catalogue").toEqual([]);
+});
+
 test("simulator loads without JS errors and wires up its controls", async ({ page }) => {
   const errs = errors(page);
   await page.goto("/index.html");

@@ -52,6 +52,22 @@ import astronomy as A
 # below discards anything outside it, so this only needs to be a generous land envelope.
 REGION = dict(lat_min=-46.60, lat_max=-43.30, lon_min=166.00, lon_max=171.60)
 
+# The app's fixed "Fly to" buttons. These are town centres, not viewing recommendations, so
+# they are emitted as their own list rather than mixed into the ranked catalogue -- and unlike
+# the catalogue they are never filtered on clearance, because "Queenstown is blocked" is a
+# useful answer and dropping it would send the app back to a live terrain probe for the
+# most-clicked buttons on the page.
+#
+# These coordinates must stay identical to LOCATIONS in index.html: the app matches a preset by
+# position, so any drift silently reverts it to probing terrain. tests/check_static.py asserts
+# the two lists agree.
+PRESETS = [
+    ("Queenstown", -45.0312, 168.6626),
+    ("Arrowtown",  -44.9385, 168.8306),
+    ("Cromwell",   -45.0382, 169.2030),
+    ("Dunedin",    -45.8788, 170.5028),
+]
+
 ECLIPSE_SEARCH_FROM = datetime(2028, 7, 21, tzinfo=timezone.utc)
 
 TERRARIUM_URL = "https://terrain.reearth.land/terrarium/elevation/{z}/{x}/{y}.png"
@@ -369,6 +385,160 @@ def horizon_angles(dem: Dem, lat: np.ndarray, lon: np.ndarray, az_deg: np.ndarra
         ang = np.degrees(np.arctan2(h - eye - drop, d))
         np.maximum(best, np.nan_to_num(ang, nan=-90.0), out=best)
     return best
+
+
+# The sun sweeps only ~26.5 deg of azimuth between first and last contact, and the app fans
+# HORIZON_SPAN/2 = 10 deg either side of that for its chart. Padding by 12 guarantees every
+# bearing the app can ask for falls inside the stored profile, so it never has to extrapolate.
+PRESET_AZ_PAD = 12.0
+PRESET_AZ_STEP = 1.0
+
+# The presets are answered entirely from this data -- there is no "check it properly" button --
+# so they get a sharper DEM than the 27 m mosaic the catalogue is built on.
+#
+# The error in a raster horizon is a smoothing error: it scales with pixel size over the
+# distance to the ridge that sets the skyline, because a coarse grid averages a sharp crest
+# down. Measured against a live native-resolution probe, z11 read Arrowtown's skyline 0.64 deg
+# low -- its horizon is a ridge only 775 m away, where a 27 m pixel already subtends 2 deg.
+# Queenstown, whose ridges are 1.2-3.7 km out, was 0.20 deg low; Cromwell and Dunedin, whose
+# horizons are distant, were within 0.05 deg.
+#
+# So only the near field needs resolution. z13 (~6.8 m/px) within 9 km, over the existing z11
+# mosaic beyond, brings the worst of the twelve town/contact comparisons to 0.13 deg for 189
+# extra tiles. z14 was tried and is worse, not better: it resolves detail that the quantized
+# mesh the app compares against has itself smoothed away, and overshot by up to 0.38 deg.
+PRESET_NEAR_ZOOM = 13
+PRESET_NEAR_M = 9000.0
+
+
+def build_dem_bbox(z: int, lat_min: float, lat_max: float, lon_min: float, lon_max: float):
+    """A small DEM mosaic over one bounding box. Returns (Dem, tiles fetched, tiles missing)."""
+    x0 = int(math.floor(lon_to_tile_x(lon_min, z)))
+    x1 = int(math.floor(lon_to_tile_x(lon_max, z)))
+    y0 = int(math.floor(lat_to_tile_y(lat_max, z)))
+    y1 = int(math.floor(lat_to_tile_y(lat_min, z)))
+    nx, ny = x1 - x0 + 1, y1 - y0 + 1
+    probe = fetch_tile(z, x0, y0, SESSION)
+    tile_px = probe.shape[0] if probe is not None else 512
+    grid = np.zeros((ny * tile_px, nx * tile_px), dtype=np.int16)
+    missing = 0
+
+    def job(args):
+        ix, iy = args
+        return ix, iy, fetch_tile(z, x0 + ix, y0 + iy, SESSION)
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        for ix, iy, tile in pool.map(job, [(i, j) for j in range(ny) for i in range(nx)]):
+            if tile is not None and tile.shape == (tile_px, tile_px):
+                grid[iy * tile_px:(iy + 1) * tile_px, ix * tile_px:(ix + 1) * tile_px] = tile
+            else:
+                missing += 1
+    return Dem(grid, z, x0 * float(tile_px), y0 * float(tile_px), tile_px), nx * ny, missing
+
+
+def ray_horizon(near: "Dem", far: "Dem", lat: float, lon: float, eye: float, az_deg: float):
+    """Terrain elevation angle along one bearing, and the ridge that sets it.
+
+    Same geometry as horizon_angles, but for a single point and bearing, reading the sharp
+    near-field DEM out to PRESET_NEAR_M and the region-wide one beyond. It also reports *which*
+    rise won -- the app needs that to say "high ground 3 km to the north-west".
+    """
+    ds = probe_distances()
+    a = math.radians(az_deg)
+    plat = lat + (ds * math.cos(a)) / 111132.0
+    plon = lon + (ds * math.sin(a)) / (111320.0 * math.cos(math.radians(lat)))
+    h = np.where(ds <= PRESET_NEAR_M, near.sample(plat, plon), far.sample(plat, plon))
+    drop = (ds * ds) / (2 * EARTH_R)
+    ang = np.nan_to_num(np.degrees(np.arctan2(h - eye - drop, ds)), nan=-90.0)
+    k = int(np.argmax(ang))
+    return float(ang[k]), float(ds[k]), float(np.nan_to_num(h[k], nan=0.0))
+
+
+def preset_rows(dem: "Dem") -> list:
+    """Full precomputed sightline data for the app's fixed presets.
+
+    The catalogue stores a verdict for totality only, because storing a whole horizon profile
+    for 800 spots would triple the file. There are four presets, so they can afford the lot: a
+    terrain profile across the entire azimuth range the eclipse covers, at 1 deg steps and full
+    radial resolution. That is everything the app cannot work out for itself -- sun positions
+    and contact times are pure astronomy and cost nothing in the browser -- so a preset renders
+    the complete sightline card, chart included, with no terrain fetched at all.
+
+    Circumstances come from a direct ephemeris search per preset rather than the interpolated
+    field: it is four searches, and exact beats bilinear when it is this cheap.
+
+    Nothing here is filtered on clearance. Two of the four towns are blocked, and that is the
+    most useful thing the app has to say.
+    """
+    t0 = A.Time.Make(2028, 7, 21, 0, 0, 0)
+    pad_lat = PRESET_NEAR_M / 111132.0 * 1.15
+    out = []
+    for name, la, lo in PRESETS:
+        obs = A.Observer(la, lo, 0.0)
+        e = A.SearchLocalSolarEclipse(t0, obs)
+        # Sharp DEM over the near field only, padded past PRESET_NEAR_M so a ray on any
+        # diagonal bearing stays inside it rather than falling through to the coarse mosaic.
+        pad_lon = PRESET_NEAR_M / (111320.0 * math.cos(math.radians(la))) * 1.15
+        near, n_tiles, n_missing = build_dem_bbox(
+            PRESET_NEAR_ZOOM, la - pad_lat, la + pad_lat, lo - pad_lon, lo + pad_lon)
+        if n_missing:
+            print(f"    WARNING: {name} near-field DEM is missing {n_missing}/{n_tiles} "
+                  f"z{PRESET_NEAR_ZOOM} tiles — its horizon may read low")
+        ground = float(np.nan_to_num(near.sample(np.array([la]), np.array([lo])), nan=0.0)[0])
+        eye = ground + EYE_HEIGHT
+
+        def sun_az(t):
+            eq = A.Equator(A.Body.Sun, t, obs, True, True)
+            return A.Horizon(t, obs, eq.ra, eq.dec, A.Refraction.Airless).azimuth
+
+        contacts = [("partialBegin", e.partial_begin), ("totalBegin", e.total_begin),
+                    ("peak", e.peak), ("totalEnd", e.total_end), ("partialEnd", e.partial_end)]
+        azs = [sun_az(v.time) for _, v in contacts if v is not None]
+        az_from = math.floor(min(azs) - PRESET_AZ_PAD)
+        az_to = math.ceil(max(azs) + PRESET_AZ_PAD)
+
+        angles, ridge_m, ridge_h = [], [], []
+        az = float(az_from)
+        while az <= az_to + 1e-9:
+            ang, dist, hgt = ray_horizon(near, dem, la, lo, eye, az)
+            angles.append(round(ang, 2))
+            ridge_m.append(int(round(dist)))
+            ridge_h.append(int(round(hgt)))
+            az += PRESET_AZ_STEP
+
+        def clearance_at(ev):
+            if ev is None:
+                return None
+            return round(ev.altitude - ray_horizon(near, dem, la, lo, eye, sun_az(ev.time))[0], 2)
+
+        clr = clearance_at(e.peak)
+        cB, cE = clearance_at(e.total_begin), clearance_at(e.total_end)
+        dur = ((e.total_end.time.ut - e.total_begin.time.ut) * 86400.0
+               if e.total_begin and e.total_end else 0.0)
+        out.append({
+            "name": name,
+            "lat": round(la, 5),
+            "lon": round(lo, 5),
+            "elev": int(round(ground)),
+            "sunAlt": round(e.peak.altitude, 2),
+            "sunAz": round(sun_az(e.peak.time), 1),
+            "horizon": round(e.peak.altitude - clr, 2),
+            "clearance": clr,
+            "clearBegin": cB,
+            "clearEnd": cE,
+            "wholeTotality": bool(clr > 0 and (cB or 0) > 0 and (cE or 0) > 0),
+            "totality": int(round(dur)),
+            # Terrain elevation angle vs azimuth, and the rise responsible for each. Angles are
+            # degrees; ridgeDist is metres out along the bearing; ridgeElev is its height.
+            "profile": {
+                "azFrom": az_from,
+                "azStep": PRESET_AZ_STEP,
+                "angles": angles,
+                "ridgeDist": ridge_m,
+                "ridgeElev": ridge_h,
+            },
+        })
+    return out
 
 
 # ----------------------------------------------------------------------------------------
@@ -836,6 +1006,16 @@ def main():
         "access": rank_name[int(access[i])] if access.size else "unknown",
     } for i in chosen]
 
+    print("  computing the app's fixed presets (full horizon profiles)")
+    presets = preset_rows(dem)
+    for p in presets:
+        state = ("clear through totality" if p["wholeTotality"]
+                 else "clear at maximum only" if p["clearance"] > 0 else "BLOCKED")
+        pr = p["profile"]
+        print(f"    {p['name']:<12} {p['elev']:>4d} m  clear {p['clearance']:+.1f}deg  "
+              f"{state}  profile {pr['azFrom']}..{pr['azFrom'] + len(pr['angles']) - 1}deg "
+              f"({len(pr['angles'])} bearings)")
+
     payload = {
         "generated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "eclipse": "2028-07-22 total solar eclipse, New Zealand",
@@ -861,6 +1041,9 @@ def main():
         "spots": spots,
         "poiCount": len(poi_out),
         "pois": poi_out,
+        # Not viewing recommendations — the app's fixed "Fly to" buttons, precomputed so that
+        # clicking one costs no terrain probe. Deliberately unfiltered and unranked.
+        "presets": presets,
         "osmGaps": osm_gaps,
     }
     if osm_gaps:
