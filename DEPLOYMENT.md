@@ -76,6 +76,24 @@ Any other branch deploys as a preview.
 
 ---
 
+## Troubleshooting the deploy job
+
+The `deploy` job fails until the four setup steps above are complete — that is expected on the
+first push, and the test jobs still run and report normally.
+
+A preflight step checks both secrets are present and prints the setup instructions if not, so
+a missing secret does not surface as an opaque wrangler authentication error.
+
+| Symptom | Cause |
+|---|---|
+| `Missing repository secret(s)` | Steps 3–4 not done |
+| `Project not found` / `8000007` | Pages project missing, or its name is not `otago-eclipse-3d` |
+| `Authentication error` / `10000` | Token lacks **Account → Cloudflare Pages → Edit**, or belongs to a different account than `CLOUDFLARE_ACCOUNT_ID` |
+| Deploy skipped entirely | PR from a fork — forks cannot read secrets, by design |
+
+Reading logs needs repo admin rights, so if you want someone else to diagnose a failure, either
+paste the failing step's output or give them access.
+
 ## What runs on every push
 
 ```

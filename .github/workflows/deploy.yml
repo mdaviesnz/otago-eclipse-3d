@@ -26,8 +26,8 @@ jobs:
     name: Static checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       # No pip installs: these checks deliberately use only the standard library so they
@@ -39,10 +39,12 @@ jobs:
     name: Browser smoke tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      # Node 24 matches the runner's action runtime and the current LTS, so CI and a local
+      # `winget install OpenJS.NodeJS.LTS` machine run the same major version.
+      - uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
       - run: npm ci || npm install
 
@@ -62,7 +64,7 @@ jobs:
 
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-report
@@ -76,7 +78,33 @@ jobs:
     # Skip for PRs raised from forks, which cannot read repository secrets.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+
+      # Fail with something actionable. Without this, a missing secret surfaces as an opaque
+      # wrangler authentication error several steps later.
+      - name: Check Cloudflare credentials are configured
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          missing=""
+          [ -z "$TOKEN" ]   && missing="$missing CLOUDFLARE_API_TOKEN"
+          [ -z "$ACCOUNT" ] && missing="$missing CLOUDFLARE_ACCOUNT_ID"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secret(s):$missing"
+            echo ""
+            echo "One-time setup (see DEPLOYMENT.md):"
+            echo "  1. Cloudflare dashboard -> Workers & Pages -> Create -> Pages -> Direct Upload"
+            echo "     Name the project exactly: otago-eclipse-3d"
+            echo "  2. My Profile -> API Tokens -> Create Token"
+            echo "     Permissions: Account -> Cloudflare Pages -> Edit"
+            echo "  3. This repo -> Settings -> Secrets and variables -> Actions"
+            echo "     Add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID"
+            echo ""
+            echo "Tests already passed; only publishing is blocked."
+            exit 1
+          fi
+          echo "Both Cloudflare secrets are present."
 
       # Assemble exactly what should be public. The precompute pipeline, tests and CI config
       # stay out of the deployed artifact.
@@ -87,7 +115,7 @@ jobs:
           echo "Deploying:"; ls -lh dist/
 
       - name: Publish
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
