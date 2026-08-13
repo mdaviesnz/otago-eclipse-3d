@@ -147,6 +147,9 @@ Aimed at failure modes this project has actually hit, not generic linting:
   every grid spot sealed-road, which quietly emptied the walking filter).
 - **`precompute/cache/` is not tracked** — ~1,750 files and ~400 MB.
 - **Local asset references resolve**, so a renamed file cannot 404 in production.
+- **The Web Analytics beacon is on both pages, with the same site token.** Since the beacon
+  lives in the markup rather than a dashboard toggle, an edit can drop it, and a dropped beacon
+  is invisible — the site works and simply stops reporting.
 
 ### `test` — `tests/smoke.spec.mjs`
 
@@ -223,21 +226,25 @@ toggle; a Worker has no such toggle. Automatic injection only continues to work 
 against a custom hostname proxied through Cloudflare, in which case it is keyed to the hostname
 rather than to the Pages project and keeps working once that hostname points at the Worker.
 
-Rather than depend on knowing which of those applies, the beacon should be added to
-`index.html` and `map.html` explicitly:
+Rather than depend on knowing which of those applies, the beacon is inlined at the end of
+`index.html` and `map.html`:
 
 ```html
-<script defer src="https://static.cloudflareinsights.com/beacon.min.js"
-        data-cf-beacon='{"token": "<site token>"}'></script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js"
+        data-cf-beacon='{"token": "…"}'></script>
 ```
 
 The site token is public by design — it identifies the site, it does not authorise anything.
-Taking the manual route means analytics is version-controlled, survives any future hosting
-change, and can be asserted by `tests/check_static.py` so it cannot silently disappear. Turn the
-dashboard's automatic injection **off** once this is in, or the beacon loads twice.
+Taking the manual route means analytics is version-controlled and survives any future hosting
+change. Two things follow from it:
 
-**This is not done yet** — it needs the site token from Web Analytics → the site → **Manage
-site**.
+- `check_static.py` asserts the beacon is on both pages and that both carry the *same* token.
+  A dropped beacon is otherwise invisible: the site keeps working and simply stops reporting.
+- `smoke.spec.mjs` aborts requests to `beacon.min.js`, so CI runs and local test runs do not
+  report themselves as visits.
+
+If Web Analytics was ever also set up automatically against the custom hostname, turn that
+off — otherwise the beacon loads twice and every visit is counted twice.
 
 ---
 

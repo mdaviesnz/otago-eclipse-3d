@@ -65,6 +65,34 @@ def check_no_secrets() -> None:
         ok("no tokens or credentials in deployable files")
 
 
+def check_analytics_beacon() -> None:
+    """Web Analytics lives in the markup, so an edit can lose it.
+
+    Cloudflare Pages injected the beacon from a per-project dashboard toggle; Workers has no
+    equivalent, so it is inlined in both pages instead. A dropped beacon is invisible — the
+    site works perfectly and merely stops reporting — which is exactly the kind of silent
+    regression this file exists to catch.
+    """
+    pattern = re.compile(r'data-cf-beacon=[\'"]\{"token":\s*"([0-9a-f]{32})"\}')
+    pages = ("index.html", "map.html")
+    tokens = set()
+    bad = False
+    for name in pages:
+        text = (ROOT / name).read_text(encoding="utf-8", errors="replace")
+        if "static.cloudflareinsights.com/beacon.min.js" not in text:
+            fail(f"{name}: Cloudflare Web Analytics beacon is missing")
+            bad = True
+        elif m := pattern.search(text):
+            tokens.add(m.group(1))
+        else:
+            fail(f"{name}: analytics beacon present but carries no valid 32-hex site token")
+            bad = True
+    if len(tokens) > 1:
+        fail(f"index.html and map.html report to different analytics sites: {sorted(tokens)}")
+    elif not bad:
+        ok(f"analytics beacon on all {len(pages)} pages, same site token")
+
+
 def check_cache_not_tracked() -> None:
     try:
         out = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True,
@@ -237,6 +265,7 @@ def check_presets(d: dict, region: dict) -> None:
 def main() -> int:
     check_required_files()
     check_no_secrets()
+    check_analytics_beacon()
     check_cache_not_tracked()
     check_local_references()
     check_catalogue()

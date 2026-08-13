@@ -2333,5 +2333,14 @@
     start();
   });
   </script>
+
+  <!-- Cloudflare Web Analytics. Inlined rather than left to the dashboard's automatic
+       injection: that is a per-project Pages feature with no Workers equivalent, so it did not
+       survive the move off Pages. Keeping it in the markup means it is version-controlled,
+       survives the next hosting change too, and check_static.py can assert it is still here —
+       a dropped beacon is invisible, since the site keeps working and merely stops reporting.
+       The token identifies the site and authorises nothing; it is public by design. -->
+  <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js"
+          data-cf-beacon='{"token": "355348029404494388c57e7d5afa2655"}'></script>
 </body>
 </html>

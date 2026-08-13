@@ -19,6 +19,14 @@ const errors = (page) => {
   return found;
 };
 
+// The Cloudflare Web Analytics beacon is live in the markup, so without this every CI run and
+// every local `npx playwright test` would report a handful of visits against real traffic.
+// Blocking it also keeps the tests hermetic; that the beacon is actually present is asserted
+// statically by tests/check_static.py, which is the right layer for it.
+test.beforeEach(async ({ page }) => {
+  await page.route("**/beacon.min.js*", (route) => route.abort());
+});
+
 test("catalogue is served and well-formed", async ({ request }) => {
   const res = await request.get("/viewpoints.json");
   expect(res.ok()).toBeTruthy();
