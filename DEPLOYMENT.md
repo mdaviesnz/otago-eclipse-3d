@@ -73,6 +73,21 @@ existing one. The preflight step catches this before wrangler runs.
 There is no separate "create the project" step. Unlike Pages, `wrangler deploy` creates the
 Worker on first run, so the `Project not found [code: 8000007]` failure mode is gone.
 
+**Do not connect the Worker to GitHub.** If the Worker is created through the dashboard's
+"import a repository" flow, Cloudflare enables **Workers Builds** and starts deploying on every
+push by itself. That is two competing deploy paths, and the Cloudflare one ships without running
+the tests — the exact failure this project's deploy design exists to prevent. It also fails
+immediately, because `dist/` is gitignored and assembled by the workflow rather than committed:
+
+```
+✘ [ERROR] The directory specified by the "assets.directory" field in your configuration
+  file does not exist:  /opt/buildhome/repo/dist
+```
+
+That error is the *symptom*; the fix is not to make the Cloudflare build work but to turn it
+off — Worker → **Settings** → **Build** → disconnect the repository. The Worker survives; only
+the automatic builds stop.
+
 ### 3. Add repository secrets
 
 GitHub repo → **Settings** → **Secrets and variables** → **Actions** → **New repository
@@ -104,6 +119,7 @@ so neither a missing secret nor a Pages-scoped token surfaces as an opaque wrang
 | `Missing repository secret(s)` | Steps 2–3 not done |
 | `Cloudflare rejected the API token for Workers` | Token lacks **Account → Workers Scripts → Edit** (common right after the Pages migration), or belongs to a different account than `CLOUDFLARE_ACCOUNT_ID` |
 | `workers.script.not_found` on a PR | No production deploy has happened yet — see step 4 |
+| `assets.directory ... does not exist: /opt/buildhome/repo/dist` | Not this workflow — Workers Builds is deploying from the repo. Disconnect it; see step 2 |
 | Deploy skipped entirely | PR from a fork — forks cannot read secrets, by design |
 
 Reading logs needs repo admin rights, so if you want someone else to diagnose a failure, either
