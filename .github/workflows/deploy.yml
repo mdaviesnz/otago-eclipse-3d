@@ -14,8 +14,6 @@ on:
 
 permissions:
   contents: read
-  deployments: write
-  pull-requests: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -72,7 +70,7 @@ jobs:
           retention-days: 7
 
   deploy:
-    name: Deploy to Cloudflare Pages
+    name: Deploy to Cloudflare Workers
     runs-on: ubuntu-latest
     needs: [check, test]
     # Skip for PRs raised from forks, which cannot read repository secrets.
@@ -80,14 +78,17 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # Fail with something actionable. Without this, both common setup mistakes surface as an
-      # opaque "npx exited 1" from wrangler several steps later. Checks the secrets exist AND
-      # that the Pages project does — the second is what actually blocked the first deploys.
-      - name: Preflight — Cloudflare credentials and project
+      # Fail with something actionable. Without this, a setup mistake surfaces as an opaque
+      # "npx exited 1" from wrangler several steps later.
+      #
+      # Unlike Pages, `wrangler deploy` creates the Worker on first run, so the "project does
+      # not exist" failure mode that blocked the first deploys is simply gone. What remains is
+      # the token: one scoped only to Cloudflare Pages authenticates perfectly well and then
+      # fails at upload. Listing Workers scripts is free and proves the permission is there.
+      - name: Preflight — Cloudflare credentials
         env:
           TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          PROJECT: otago-eclipse-3d
         run: |
           missing=""
           [ -z "$TOKEN" ]   && missing="$missing CLOUDFLARE_API_TOKEN"
@@ -100,49 +101,60 @@ jobs:
 
           code=$(curl -s -o /tmp/cf.json -w '%{http_code}' \
             -H "Authorization: Bearer $TOKEN" \
-            "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT/pages/projects/$PROJECT")
+            "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT/workers/scripts")
 
           case "$code" in
             200)
-              echo "Secrets present and Pages project '$PROJECT' exists." ;;
-            404)
-              echo "::error::The Cloudflare Pages project '$PROJECT' does not exist."
-              echo ""
-              echo "Create it once, either in the dashboard:"
-              echo "  Workers & Pages -> Create -> Pages -> Direct Upload, named exactly: $PROJECT"
-              echo ""
-              echo "or from a terminal with CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID set:"
-              echo "  npx wrangler pages project create $PROJECT --production-branch=main"
-              echo ""
-              echo "Everything else is ready: tests passed and the credentials work."
-              exit 1 ;;
+              echo "Secrets present; the token can manage Workers on this account." ;;
             401|403)
-              echo "::error::Cloudflare rejected the API token (HTTP $code)."
-              echo "The token needs Account -> Cloudflare Pages -> Edit, and must belong to"
-              echo "the account in CLOUDFLARE_ACCOUNT_ID."
+              echo "::error::Cloudflare rejected the API token for Workers (HTTP $code)."
+              echo ""
+              echo "The token needs Account -> Workers Scripts -> Edit, and must belong to the"
+              echo "account in CLOUDFLARE_ACCOUNT_ID. A token scoped only to Cloudflare Pages"
+              echo "will reach exactly this point and no further — see DEPLOYMENT.md."
               exit 1 ;;
             *)
-              echo "::warning::Unexpected HTTP $code checking the Pages project; continuing anyway."
+              echo "::warning::Unexpected HTTP $code listing Workers scripts; continuing anyway."
               head -c 400 /tmp/cf.json || true ;;
           esac
 
       # Assemble exactly what should be public. The precompute pipeline, tests and CI config
-      # stay out of the deployed artifact.
+      # stay out of the deployed artifact. wrangler.jsonc points `assets.directory` here.
       - name: Assemble dist/
         run: |
           mkdir -p dist
           cp index.html map.html app.css viewpoints.json social-card.svg _headers dist/
           echo "Deploying:"; ls -lh dist/
 
-      - name: Publish
+      - name: Publish to production
+        if: github.event_name != 'pull_request'
+        id: prod
         uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # --commit-dirty: the checkout is clean, but dist/ is assembled at build time and
-          # wrangler flags any untracked path in a git working tree.
-          command: >-
-            pages deploy dist
-            --project-name=otago-eclipse-3d
-            --branch=${{ github.head_ref || github.ref_name }}
-            --commit-dirty=true
+          command: deploy
+
+      # Pages gave every branch its own preview deployment. The Workers equivalent is uploading
+      # a *version*: it gets its own preview URL and takes no production traffic until promoted,
+      # which it never is here — merging to main redeploys from scratch.
+      - name: Upload preview version
+        if: github.event_name == 'pull_request'
+        id: preview
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: versions upload
+
+      # Preview URLs are not surfaced automatically the way Pages' were, so put the URL
+      # somewhere a reviewer will find it without opening the step log.
+      - name: Link the deployment
+        env:
+          URL: ${{ steps.prod.outputs.deployment-url || steps.preview.outputs.deployment-url }}
+        run: |
+          if [ -n "$URL" ]; then
+            echo "### Deployed: <$URL>" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### Deployed — wrangler reported no URL; see the publish step log." >> "$GITHUB_STEP_SUMMARY"
+          fi

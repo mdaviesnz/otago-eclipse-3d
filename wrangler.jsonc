@@ -1,0 +1,31 @@
+{
+  // Static-asset Worker. There is deliberately no `main`, so no Worker script exists and every
+  // request is served straight from the asset store — those requests are free and unmetered,
+  // exactly as they were on Pages. Nothing about serving the site changes; what the migration
+  // buys is somewhere to put server-side code later (Photon caching, the contact form,
+  // telemetry) without a second hosting product and without Pages Functions.
+  //
+  // Adding a `main` later makes the Worker script run *before* assets are considered, and every
+  // request then bills as a Worker invocation. Keep the static path free by routing narrowly —
+  // see DEPLOYMENT.md, "Adding server-side code later".
+  "name": "otago-eclipse",
+  "compatibility_date": "2026-08-13",
+
+  "assets": {
+    // Assembled by the deploy workflow. The file list lives in tests/check_static.py
+    // (SITE_FILES) and is mirrored by the workflow's copy step.
+    "directory": "./dist",
+
+    // Both of these are the wrangler defaults, stated explicitly because _headers depends on
+    // them:
+    //
+    //   auto-trailing-slash serves index.html at / and map.html at /map, and 308-redirects the
+    //   .html paths to those — the same behaviour the _headers rules were written against, so
+    //   the `/` and `/map` entries keep matching the paths users actually land on.
+    //
+    //   none returns a plain 404 for an unknown path. This is not an SPA; rewriting misses to
+    //   index.html would serve the app with a broken URL instead of failing honestly.
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "none"
+  }
+}

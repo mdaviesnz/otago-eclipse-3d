@@ -1,5 +1,6 @@
-# Cloudflare Pages headers.
-# https://developers.cloudflare.com/pages/configuration/headers/
+# Cloudflare static-asset headers. Supported identically by Workers (assets) and Pages; the
+# site moved from the latter to the former on 2026-08-13 without changing this file.
+# https://developers.cloudflare.com/workers/static-assets/headers/
 
 /*
   X-Content-Type-Options: nosniff

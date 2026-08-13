@@ -266,8 +266,10 @@ reliably.
 
 ## Deploying
 
-On **Cloudflare Pages**: connect the repo, leave the build command empty, output directory =
-repo root.
+On **Cloudflare Workers** as a static-asset site: `wrangler.jsonc` declares an asset directory
+and no Worker script, and GitHub Actions assembles that directory and uploads it only once the
+checks pass. See [DEPLOYMENT.md](DEPLOYMENT.md) for the full setup, including why this is not
+Cloudflare's Git integration.
 
 `precompute/` is a dev tool and harmless if deployed, but **`precompute/cache/` must never be
 committed** — ~1,750 files and ~400 MB of tiles and Overpass responses. `.gitignore` excludes

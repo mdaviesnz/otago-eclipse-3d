@@ -83,10 +83,12 @@ at render time, which keeps it out of the served HTML and defeats naive address 
 but not a scraper that executes JS, and it still exposes a personal address publicly.
 
 A form would be better: no address on the page at all, spam filtering, and a reply-to field.
-On Cloudflare Pages the natural implementation is a **Pages Function** (`/functions/contact.js`)
-posting to an email API (Resend, MailChannels, Postmark) with a Turnstile challenge to stop
-bots. That is the first piece of server-side code in the project, so it also brings secrets
-management and a rate-limiting question with it — hence parked rather than done.
+The natural implementation is a route on the site's Worker posting to an email API (Resend,
+MailChannels, Postmark) with a Turnstile challenge to stop bots. That is the first piece of
+server-side code in the project, so it also brings secrets management and a rate-limiting
+question with it — hence parked rather than done. Note that adding a `main` to `wrangler.jsonc`
+makes *every* request an invocation, including static assets; see DEPLOYMENT.md, "Adding
+server-side code later", before wiring it in.
 
 Interim alternatives if the address starts attracting spam: point at the repo's GitHub Issues,
 or use a burnable alias.
