@@ -260,7 +260,7 @@
             </a>
             <a href="https://github.com/mdaviesnz/otago-eclipse-3d" target="_blank" rel="noopener"
                class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-1.5 transition">
-              <i data-lucide="github" class="w-3.5 h-3.5 text-amber-400"></i> GitHub
+              <svg class="w-3.5 h-3.5 text-amber-400 fill-current" viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg> GitHub
             </a>
           </div>
         </div>
@@ -802,49 +802,50 @@
   //  160 km range, foreground 3D mountain ridges naturally occlude the sun and corona.
   // ====================================================================================
   const SKY_ECLIPSE_DIST = 160000;     // 160 km: beyond all South Island terrain, inside frustum
-  const CRESCENT_STEPS = 40;
+  const CRESCENT_STEPS = 32;
   let eclipseBillboards = null;
   let bbTwilight = null, bbCorona = null, bbMoon = null, bbCrescent = null, bbGlare = null, bbDiamond = null;
+  let currentCrescentIdx = -1;
   let skyGhostEntity = null;
   let currentSightlineBlocked = false;
   let currentHorizonAtSun = null;
 
   function makeTwilightTexture() {
     const cv = document.createElement("canvas");
-    cv.width = 512; cv.height = 320;
+    cv.width = 256; cv.height = 160;
     const ctx = cv.getContext("2d");
     // Deep coronal indigo halo around the sun centre
-    const halo = ctx.createRadialGradient(256, 160, 10, 256, 160, 240);
+    const halo = ctx.createRadialGradient(128, 80, 5, 128, 80, 120);
     halo.addColorStop(0, "rgba(148, 163, 184, 0.38)");
     halo.addColorStop(0.35, "rgba(56, 189, 248, 0.16)");
     halo.addColorStop(0.7, "rgba(30, 58, 138, 0.10)");
     halo.addColorStop(1, "rgba(15, 23, 42, 0)");
     ctx.fillStyle = halo;
-    ctx.fillRect(0, 0, 512, 320);
+    ctx.fillRect(0, 0, 256, 160);
 
     // Warm 360-degree twilight horizon glow along the lower sky (backlights mountain silhouettes)
-    const horiz = ctx.createRadialGradient(256, 255, 15, 256, 255, 250);
+    const horiz = ctx.createRadialGradient(128, 155, 8, 128, 155, 130);
     horiz.addColorStop(0, "rgba(251, 146, 60, 0.62)");
     horiz.addColorStop(0.35, "rgba(245, 158, 11, 0.38)");
     horiz.addColorStop(0.7, "rgba(217, 119, 6, 0.14)");
     horiz.addColorStop(1, "rgba(15, 23, 42, 0)");
     ctx.fillStyle = horiz;
-    ctx.fillRect(0, 0, 512, 320);
+    ctx.fillRect(0, 0, 256, 160);
     return cv;
   }
 
   function makeGlareTexture() {
     const cv = document.createElement("canvas");
-    cv.width = 256; cv.height = 256;
+    cv.width = 160; cv.height = 160;
     const ctx = cv.getContext("2d");
-    const g = ctx.createRadialGradient(128, 128, 4, 128, 128, 124);
+    const g = ctx.createRadialGradient(80, 80, 2, 80, 80, 78);
     g.addColorStop(0, "rgba(255, 255, 255, 0.95)");
     g.addColorStop(0.16, "rgba(254, 240, 138, 0.82)");
     g.addColorStop(0.42, "rgba(251, 191, 36, 0.38)");
     g.addColorStop(0.72, "rgba(245, 158, 11, 0.12)");
     g.addColorStop(1, "rgba(245, 158, 11, 0)");
     ctx.fillStyle = g;
-    ctx.fillRect(0, 0, 256, 256);
+    ctx.fillRect(0, 0, 160, 160);
     return cv;
   }
 
@@ -969,34 +970,34 @@
 
   function makeMoonTexture() {
     const cv = document.createElement("canvas");
-    cv.width = 256; cv.height = 256;
+    cv.width = 160; cv.height = 160;
     const ctx = cv.getContext("2d");
-    const R = 64;
-    const g = ctx.createRadialGradient(122, 122, 6, 128, 128, R);
+    const R = 42;
+    const g = ctx.createRadialGradient(76, 76, 4, 80, 80, R);
     g.addColorStop(0, "rgb(9, 14, 28)");
     g.addColorStop(0.82, "rgb(5, 8, 18)");
     g.addColorStop(0.97, "rgb(3, 6, 14)");
     g.addColorStop(1, "rgba(3, 6, 14, 0)");
     ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.arc(128, 128, R, 0, Math.PI * 2);
+    ctx.arc(80, 80, R, 0, Math.PI * 2);
     ctx.fill();
     return cv;
   }
 
   function makeDiamondTexture() {
     const cv = document.createElement("canvas");
-    cv.width = 256; cv.height = 256;
+    cv.width = 160; cv.height = 160;
     const ctx = cv.getContext("2d");
-    const cx = 128, cy = 128;
-    const g = ctx.createRadialGradient(cx, cy, 1, cx, cy, 78);
+    const cx = 80, cy = 80;
+    const g = ctx.createRadialGradient(cx, cy, 1, cx, cy, 52);
     g.addColorStop(0, "rgba(255, 255, 255, 1)");
     g.addColorStop(0.14, "rgba(254, 249, 195, 0.95)");
     g.addColorStop(0.35, "rgba(251, 191, 36, 0.48)");
     g.addColorStop(0.7, "rgba(245, 158, 11, 0.12)");
     g.addColorStop(1, "rgba(245, 158, 11, 0)");
     ctx.fillStyle = g;
-    ctx.fillRect(0, 0, 256, 256);
+    ctx.fillRect(0, 0, 160, 160);
 
     // 4-point + diagonal diffraction spikes
     const drawSpike = (ang, len, w, alpha) => {
@@ -1018,10 +1019,10 @@
       ctx.fill();
       ctx.restore();
     };
-    drawSpike(0.2, 122, 3.2, 0.95);
-    drawSpike(0.2 + Math.PI / 2, 122, 3.2, 0.95);
-    drawSpike(0.2 + Math.PI / 4, 80, 2.0, 0.65);
-    drawSpike(0.2 - Math.PI / 4, 80, 2.0, 0.65);
+    drawSpike(0.2, 76, 2.4, 0.95);
+    drawSpike(0.2 + Math.PI / 2, 76, 2.4, 0.95);
+    drawSpike(0.2 + Math.PI / 4, 50, 1.5, 0.65);
+    drawSpike(0.2 - Math.PI / 4, 50, 1.5, 0.65);
     return cv;
   }
 
@@ -1101,46 +1102,61 @@
     eclipseBillboards = viewer.scene.primitives.add(new Cesium.BillboardCollection());
     for (let i = 0; i <= CRESCENT_STEPS; i++) {
       const sepR = (i / CRESCENT_STEPS) * 2.08;
-      crescentCanvases.push(makeCrescentTexture(sepR));
+      const cv = makeCrescentTexture(sepR);
+      cv.src = `eclipse_crescent_${i}`;
+      crescentCanvases.push(cv);
     }
 
+    const twCv = makeTwilightTexture(); twCv.src = "eclipse_twilight";
     bbTwilight = eclipseBillboards.add({
-      image: makeTwilightTexture(),
+      image: twCv,
       width: 960,
       height: 600,
       disableDepthTestDistance: 0,
       show: false,
     });
+
+    const glCv = makeGlareTexture(); glCv.src = "eclipse_glare";
     bbGlare = eclipseBillboards.add({
-      image: makeGlareTexture(),
+      image: glCv,
       width: 220,
       height: 220,
       disableDepthTestDistance: 0,
       show: false,
     });
+
+    const corCv = makeCoronaTexture(); corCv.src = "eclipse_corona";
     bbCorona = eclipseBillboards.add({
-      image: makeCoronaTexture(),
+      image: corCv,
       width: 268,
       height: 268,
       disableDepthTestDistance: 0,
       show: false,
     });
+
+    const moonCv = makeMoonTexture(); moonCv.src = "eclipse_moon";
     bbMoon = eclipseBillboards.add({
-      image: makeMoonTexture(),
+      image: moonCv,
       width: 82,
       height: 82,
       disableDepthTestDistance: 0,
       show: false,
     });
+
+    const crInit = crescentCanvases[CRESCENT_STEPS];
     bbCrescent = eclipseBillboards.add({
-      image: crescentCanvases[CRESCENT_STEPS],
+      image: crInit,
       width: 82,
       height: 82,
       disableDepthTestDistance: 0,
       show: false,
     });
+    bbCrescent.setImage(`eclipse_crescent_${CRESCENT_STEPS}`, crInit);
+    currentCrescentIdx = CRESCENT_STEPS;
+
+    const dmCv = makeDiamondTexture(); dmCv.src = "eclipse_diamond";
     bbDiamond = eclipseBillboards.add({
-      image: makeDiamondTexture(),
+      image: dmCv,
       width: 135,
       height: 135,
       disableDepthTestDistance: 0,
@@ -1148,10 +1164,11 @@
     });
 
     // Subtle ghost indicator shown only when the sun is blocked behind a ridge or below horizon
+    const ghCv = makeGhostRingTexture(); ghCv.src = "eclipse_ghost";
     skyGhostEntity = viewer.entities.add({
       show: false,
       billboard: {
-        image: makeGhostRingTexture(),
+        image: ghCv,
         width: 56,
         height: 56,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -1219,7 +1236,10 @@
     bbCrescent.show = !e.isTotal && e.sunAlt > -0.4;
     if (bbCrescent.show) {
       const idx = Math.max(0, Math.min(CRESCENT_STEPS, Math.round((Cesium.Math.clamp(e.sepR, 0, 2.08) / 2.08) * CRESCENT_STEPS)));
-      bbCrescent.image = crescentCanvases[idx];
+      if (currentCrescentIdx !== idx) {
+        currentCrescentIdx = idx;
+        bbCrescent.setImage(`eclipse_crescent_${idx}`, crescentCanvases[idx]);
+      }
       bbCrescent.position = posAt(sunDir, SKY_ECLIPSE_DIST);
       bbCrescent.rotation = pa;
       bbCrescent.color = Cesium.Color.WHITE;
@@ -1400,6 +1420,32 @@
 
     viewer.clock.onTick.addEventListener(onTick);
     setupMapClick();
+
+    // Ensure background tab throttling/suspension (especially in Firefox) and WebGL context loss recover cleanly
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden && viewer && !viewer.isDestroyed()) {
+        viewer.resize();
+        if (viewer.clock) onTick(viewer.clock);
+        viewer.scene.requestRender();
+      }
+    });
+
+    const glCanvas = viewer.canvas;
+    if (glCanvas) {
+      glCanvas.addEventListener("webglcontextlost", (event) => {
+        event.preventDefault();
+        console.warn("WebGL context lost; waiting for GPU restore...");
+      }, false);
+
+      glCanvas.addEventListener("webglcontextrestored", () => {
+        console.log("WebGL context restored; refreshing eclipse scene...");
+        if (viewer && !viewer.isDestroyed()) {
+          viewer.resize();
+          if (viewer.clock) onTick(viewer.clock);
+          viewer.scene.requestRender();
+        }
+      }, false);
+    }
 
     // ?lat=&lon=&name= lets the overview map (and any shared link) drop you straight onto a
     // specific spot. Falls back to Dunedin.
