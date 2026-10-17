@@ -104,7 +104,9 @@ POI_SELECTORS = [
 # Preference when the same spot matches more than one selector, and for display ordering.
 POI_PRIORITY = {"viewpoint": 6, "tower": 5, "rest_area": 4, "picnic": 3, "campsite": 2, "peak": 1}
 
-EARTH_R = 6371000.0        # m, mean radius, for curvature drop
+EARTH_R = 6371000.0        # m, mean Earth radius
+REFRACTION_K = 0.13        # standard terrestrial refraction coefficient (effective R = R / (1 - k))
+EFFECTIVE_EARTH_R = EARTH_R / (1.0 - REFRACTION_K)
 EYE_HEIGHT = 1.7           # m
 # Probe ray geometry, deliberately identical to the live check in index.html so the two
 # implementations are directly comparable.
@@ -301,9 +303,10 @@ class EclipseField:
                 if e.peak is None:
                     continue
                 def sun_az(t):
-                    # astronomy-engine reports altitude at contacts but not azimuth.
+                    # astronomy-engine reports altitude at contacts (with Refraction.Normal)
+                    # but not azimuth.
                     eq = A.Equator(A.Body.Sun, t, obs, True, True)
-                    return A.Horizon(t, obs, eq.ra, eq.dec, A.Refraction.Airless).azimuth
+                    return A.Horizon(t, obs, eq.ra, eq.dec, A.Refraction.Normal).azimuth
 
                 self.alt[i, j] = e.peak.altitude
                 self.az[i, j] = sun_az(e.peak.time)
@@ -368,20 +371,35 @@ def probe_distances() -> np.ndarray:
     return np.array(ds, dtype=np.float32)
 
 
+def great_circle_step(lat1_rad: np.ndarray, lon1_rad: np.ndarray,
+                      sin_lat1: np.ndarray, cos_lat1: np.ndarray,
+                      sin_az: np.ndarray, cos_az: np.ndarray, d: float):
+    """Spherical great-circle destination (degrees) at ground distance d (m) along initial bearing."""
+    ang_d = d / EARTH_R
+    cos_d = math.cos(ang_d)
+    sin_d = math.sin(ang_d)
+    sin_lat2 = sin_lat1 * cos_d + cos_lat1 * sin_d * cos_az
+    lat2 = np.arcsin(np.clip(sin_lat2, -1.0, 1.0))
+    lon2 = lon1_rad + np.arctan2(sin_az * sin_d * cos_lat1, cos_d - sin_lat1 * sin_lat2)
+    return np.degrees(lat2), np.degrees(lon2)
+
+
 def horizon_angles(dem: Dem, lat: np.ndarray, lon: np.ndarray, az_deg: np.ndarray,
                    eye: np.ndarray) -> np.ndarray:
     """Max terrain elevation angle along each candidate's sun bearing, in degrees."""
     ds = probe_distances()
+    lat1_rad = np.radians(lat)
+    lon1_rad = np.radians(lon)
+    sin_lat1 = np.sin(lat1_rad)
+    cos_lat1 = np.cos(lat1_rad)
     az = np.radians(az_deg)
-    # Local metres -> degrees, per candidate.
-    dlat_per_m = 1.0 / 111132.0
-    dlon_per_m = 1.0 / (111320.0 * np.cos(np.radians(lat)))
+    sin_az = np.sin(az)
+    cos_az = np.cos(az)
     best = np.full(lat.shape, -90.0, dtype=np.float32)
     for d in ds:
-        plat = lat + (d * np.cos(az)) * dlat_per_m
-        plon = lon + (d * np.sin(az)) * dlon_per_m
+        plat, plon = great_circle_step(lat1_rad, lon1_rad, sin_lat1, cos_lat1, sin_az, cos_az, float(d))
         h = dem.sample(plat, plon)
-        drop = (d * d) / (2 * EARTH_R)
+        drop = (d * d) / (2 * EFFECTIVE_EARTH_R)
         ang = np.degrees(np.arctan2(h - eye - drop, d))
         np.maximum(best, np.nan_to_num(ang, nan=-90.0), out=best)
     return best
@@ -444,11 +462,21 @@ def ray_horizon(near: "Dem", far: "Dem", lat: float, lon: float, eye: float, az_
     rise won -- the app needs that to say "high ground 3 km to the north-west".
     """
     ds = probe_distances()
+    lat1_rad = math.radians(lat)
+    lon1_rad = math.radians(lon)
+    sin_lat1 = math.sin(lat1_rad)
+    cos_lat1 = math.cos(lat1_rad)
     a = math.radians(az_deg)
-    plat = lat + (ds * math.cos(a)) / 111132.0
-    plon = lon + (ds * math.sin(a)) / (111320.0 * math.cos(math.radians(lat)))
+    sin_az = math.sin(a)
+    cos_az = math.cos(a)
+    ang_d = ds / EARTH_R
+    cos_d = np.cos(ang_d)
+    sin_d = np.sin(ang_d)
+    sin_lat2 = sin_lat1 * cos_d + cos_lat1 * sin_d * cos_az
+    plat = np.degrees(np.arcsin(np.clip(sin_lat2, -1.0, 1.0)))
+    plon = np.degrees(lon1_rad + np.arctan2(sin_az * sin_d * cos_lat1, cos_d - sin_lat1 * sin_lat2))
     h = np.where(ds <= PRESET_NEAR_M, near.sample(plat, plon), far.sample(plat, plon))
-    drop = (ds * ds) / (2 * EARTH_R)
+    drop = (ds * ds) / (2 * EFFECTIVE_EARTH_R)
     ang = np.nan_to_num(np.degrees(np.arctan2(h - eye - drop, ds)), nan=-90.0)
     k = int(np.argmax(ang))
     return float(ang[k]), float(ds[k]), float(np.nan_to_num(h[k], nan=0.0))
@@ -474,8 +502,6 @@ def preset_rows(dem: "Dem") -> list:
     pad_lat = PRESET_NEAR_M / 111132.0 * 1.15
     out = []
     for name, la, lo in PRESETS:
-        obs = A.Observer(la, lo, 0.0)
-        e = A.SearchLocalSolarEclipse(t0, obs)
         # Sharp DEM over the near field only, padded past PRESET_NEAR_M so a ray on any
         # diagonal bearing stays inside it rather than falling through to the coarse mosaic.
         pad_lon = PRESET_NEAR_M / (111320.0 * math.cos(math.radians(la))) * 1.15
@@ -486,10 +512,12 @@ def preset_rows(dem: "Dem") -> list:
                   f"z{PRESET_NEAR_ZOOM} tiles — its horizon may read low")
         ground = float(np.nan_to_num(near.sample(np.array([la]), np.array([lo])), nan=0.0)[0])
         eye = ground + EYE_HEIGHT
+        obs = A.Observer(la, lo, eye)
+        e = A.SearchLocalSolarEclipse(t0, obs)
 
         def sun_az(t):
             eq = A.Equator(A.Body.Sun, t, obs, True, True)
-            return A.Horizon(t, obs, eq.ra, eq.dec, A.Refraction.Airless).azimuth
+            return A.Horizon(t, obs, eq.ra, eq.dec, A.Refraction.Normal).azimuth
 
         contacts = [("partialBegin", e.partial_begin), ("totalBegin", e.total_begin),
                     ("peak", e.peak), ("totalEnd", e.total_end), ("partialEnd", e.partial_end)]
@@ -926,9 +954,9 @@ def main():
         reachable = access > 0
         print(f"  {int(reachable.sum())} of {lat_f.size} are within {args.radius:.0f} m "
               f"of a road or track")
-        lat_f, lon_f, ground, alt, az, dur, horizon, clearance, access = (
+        lat_f, lon_f, ground, alt, az, dur, horizon, clearance, clearB, clearE, access = (
             v[reachable] for v in
-            (lat_f, lon_f, ground, alt, az, dur, horizon, clearance, access))
+            (lat_f, lon_f, ground, alt, az, dur, horizon, clearance, clearB, clearE, access))
 
         # POIs keep their access class rather than being filtered out: a lookout with no
         # mapped road is still worth knowing about, it just needs a walk.
@@ -989,6 +1017,12 @@ def main():
     )[:args.top]
     by_access = Counter(p.get("access", "none") for p in poi_out)
     print(f"  {len(poi_out)} named POIs with a clear view  {dict(by_access)}")
+
+    try:
+        from enrich_unnamed_pois import enrich_viewpoints
+        enrich_viewpoints({"pois": poi_out})
+    except Exception as ex:
+        print(f"  warning: could not enrich unnamed POIs: {ex}")
 
     rank_name = {3: "sealed", 2: "track", 1: "foot", 0: "none"}
     spots = [{
