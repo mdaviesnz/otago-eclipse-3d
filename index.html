@@ -2,11 +2,16 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Otago Eclipse 2028 — will you see the total solar eclipse?</title>
   <meta name="description" content="Check whether mountains will block your view of the 22 July 2028 total solar eclipse in Otago, New Zealand. The sun is only ~8° above the horizon at totality, so terrain matters. 3D terrain, per-location timings and a catalogue of the best viewing spots." />
   <meta name="theme-color" content="#0f172a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Otago Eclipse" />
   <link rel="canonical" href="./index.html" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icon.svg" />
 
   <meta property="og:type" content="website" />
   <meta property="og:title" content="Otago Eclipse 2028 — will you see the total solar eclipse?" />
@@ -62,44 +67,61 @@
     @keyframes fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
     .narrate { animation: fade-up 0.5s ease-out; }
 
+    #topBar { padding-top: max(0.5rem, env(safe-area-inset-top)); }
+    #bottomBar { padding-bottom: max(0.625rem, env(safe-area-inset-bottom)); }
+
     /* Desktop side panels: constrain height so they never collide with the bottom timeline bar */
-    @media (min-width: 768px) {
+    @media (min-width: 768px) and (min-height: 521px) {
       #presetPanel { max-height: calc(100vh - 11.25rem); display: flex; flex-direction: column; }
       #presetPanel > .panel { overflow-y: auto; max-height: 100%; }
       #rightStack { max-height: calc(100vh - 11.25rem); overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(100, 116, 139, 0.5) transparent; }
     }
 
     /* ---------------------------------------------------------------------------------
-       Mobile: the side panels are fixed-width overlays that, on a phone, cover the globe
-       and each other. Below 768px they become drawers opened one at a time from the top
-       bar, leaving the 3D view visible by default — which is the thing people came for.
+       Mobile (and phone landscape): the side panels are fixed-width overlays that, on a
+       phone, cover the globe and each other. Below 768px width or 520px height they become
+       drawers opened one at a time from the top bar, leaving the 3D view visible by default.
        --------------------------------------------------------------------------------- */
-    #mobileTabs { display: none; }
+    #mobileTabs, .drawer-header, #mobileVerdictWrap { display: none; }
 
-    @media (max-width: 767px) {
+    @media (max-width: 767px), (max-height: 520px) {
       #mobileTabs { display: flex; }
+      .drawer-header { display: flex; }
+      #mobileVerdictWrap {
+        display: flex;
+        top: var(--top-bar-offset, 4.25rem);
+      }
+      body[data-panel="places"] #mobileVerdictWrap,
+      body[data-panel="info"] #mobileVerdictWrap,
+      body[data-cinematic="1"] #mobileVerdictWrap {
+        display: none !important;
+      }
 
       #presetPanel, #rightStack {
         position: fixed;
         left: 0.5rem;
         right: 0.5rem;
         width: auto;
-        top: 3.75rem;
-        bottom: 7.5rem;
+        top: var(--top-bar-offset, 4.25rem);
+        bottom: var(--bottom-bar-offset, 8.25rem);
         max-height: none;
         overflow-y: auto;
+        overscroll-behavior: contain;
         z-index: 40;
         display: none;
       }
       body[data-panel="places"] #presetPanel { display: block; }
       body[data-panel="info"] #rightStack { display: flex; }
 
+      /* Single unified scroll container in the mobile Places drawer */
+      #topSpots { max-height: none; }
+
       /* Give the scrubber a bigger hit area for thumbs. */
       .scrub { height: 10px; }
       .scrub::-webkit-slider-thumb { width: 24px; height: 24px; }
       .scrub::-moz-range-thumb { width: 24px; height: 24px; }
 
-      #narration { top: 4.5rem; }
+      #narration { top: calc(var(--top-bar-offset, 4.25rem) + 0.25rem); }
     }
   </style>
 </head>
@@ -121,19 +143,19 @@
   </div>
 
   <!-- ============================= TOP STATUS BAR ============================= -->
-  <div id="topBar" class="hidden fixed top-0 inset-x-0 z-30 px-3 py-2 sm:px-4">
-    <div class="panel rounded-xl px-4 py-2 flex flex-wrap items-center gap-x-6 gap-y-1 shadow-lg">
-      <div class="flex items-center gap-2 mr-auto">
+  <div id="topBar" class="hidden fixed top-0 inset-x-0 z-30 px-2.5 py-1.5 sm:px-4 sm:py-2">
+    <div class="panel rounded-xl px-3 py-1.5 sm:px-4 sm:py-2 flex flex-wrap items-center gap-x-2.5 sm:gap-x-5 gap-y-1.5 shadow-lg">
+      <div class="flex items-center gap-1.5 sm:gap-2 mr-auto">
         <i data-lucide="eclipse" class="w-5 h-5 text-amber-400 shrink-0"></i>
         <span class="font-semibold text-sm sm:text-base leading-tight">Otago Eclipse</span>
-        <span class="text-[11px] sm:text-xs font-medium text-amber-300 whitespace-nowrap">22 July 2028</span>
+        <span class="hidden sm:inline text-xs font-medium text-amber-300 whitespace-nowrap">22 July 2028</span>
       </div>
-      <div class="flex items-center gap-2 text-sm">
-        <i data-lucide="clock" class="w-4 h-4 text-slate-400"></i>
-        <span class="text-slate-400">NZST</span>
+      <div class="flex items-center gap-1.5 text-xs sm:text-sm">
+        <i data-lucide="clock" class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400"></i>
+        <span class="hidden sm:inline text-slate-400">NZST</span>
         <span id="clockReadout" class="font-mono font-semibold text-amber-300">--:--:--</span>
       </div>
-      <div class="expert-only flex items-center gap-2 text-sm">
+      <div class="expert-only hidden md:flex items-center gap-2 text-sm">
         <i data-lucide="sun" class="w-4 h-4 text-slate-400"></i>
         <span class="text-slate-400">Alt</span>
         <span id="sunAlt" class="font-mono font-semibold">--&deg;</span>
@@ -146,26 +168,26 @@
       </div>
 
       <!-- Mobile drawer tabs -->
-      <div id="mobileTabs" class="items-center gap-1">
-        <button id="tabPlaces" class="inline-flex items-center gap-1 text-[11px] font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2 py-1 transition">
+      <div id="mobileTabs" class="items-center gap-1.5">
+        <button id="tabPlaces" class="inline-flex items-center gap-1.5 min-h-[34px] text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 py-1.5 transition">
           <i data-lucide="map-pin" class="w-3.5 h-3.5 text-amber-400"></i> Places
         </button>
-        <button id="tabInfo" class="inline-flex items-center gap-1 text-[11px] font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2 py-1 transition">
+        <button id="tabInfo" class="inline-flex items-center gap-1.5 min-h-[34px] text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 py-1.5 transition">
           <i data-lucide="info" class="w-3.5 h-3.5 text-amber-400"></i> Details
         </button>
       </div>
       <button id="modeToggle" title="Switch between simple and detailed views"
-        class="inline-flex items-center gap-1.5 text-[11px] font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 py-1 transition">
+        class="inline-flex items-center gap-1.5 min-h-[34px] text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 py-1.5 transition">
         <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5 text-amber-400"></i>
         <span id="modeLabel">Simple</span>
       </button>
       <a href="astronomy.html" title="How the astronomy and sightline checks work"
-        class="inline-flex items-center gap-1.5 text-[11px] font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 py-1 transition">
+        class="inline-flex items-center gap-1.5 min-h-[34px] text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 py-1.5 transition">
         <i data-lucide="compass" class="w-3.5 h-3.5 text-amber-400"></i>
         <span class="hidden sm:inline">Astronomy</span>
       </a>
       <button id="aboutBtn" title="About this tool"
-        class="inline-flex items-center gap-1.5 text-[11px] font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 py-1 transition">
+        class="inline-flex items-center gap-1.5 min-h-[34px] text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 py-1.5 transition">
         <i data-lucide="info" class="w-3.5 h-3.5 text-amber-400"></i>
         <span class="hidden sm:inline">About</span>
       </button>
@@ -174,6 +196,20 @@
         <span id="totalityText">PARTIAL</span>
       </div>
     </div>
+  </div>
+
+  <!-- ============================= MOBILE COMPACT VERDICT PILL ============================= -->
+  <div id="mobileVerdictWrap" class="hidden fixed inset-x-0 z-30 px-2.5 pointer-events-none justify-center">
+    <button id="mobileVerdictBtn" type="button" title="Tap to view horizon chart and full sightline details"
+      class="pointer-events-auto panel rounded-full px-3.5 py-1.5 shadow-xl flex items-center gap-2 max-w-full text-xs transition hover:bg-slate-800/90">
+      <span id="mobileVerdictLoc" class="font-semibold text-amber-300 truncate max-w-[9rem]">Dunedin</span>
+      <span class="text-slate-600">&middot;</span>
+      <span id="mobileVerdictState" class="inline-flex items-center gap-1 font-medium text-slate-300 truncate">
+        <i data-lucide="scan-eye" class="w-3.5 h-3.5 text-amber-400 shrink-0"></i>
+        <span>Tap to check sightline</span>
+      </span>
+      <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-slate-400 shrink-0"></i>
+    </button>
   </div>
 
   <!-- ============================= ABOUT DIALOG ============================= -->
@@ -279,6 +315,15 @@
   <!-- ============================= LEFT PRESET PANEL ============================= -->
   <div id="presetPanel" class="hidden fixed left-3 top-20 z-30 w-60">
     <div class="panel rounded-xl p-3 shadow-lg">
+      <div class="drawer-header items-center justify-between pb-2 mb-2.5 border-b border-slate-700/60">
+        <span class="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+          <i data-lucide="map-pin" class="w-4 h-4 text-amber-400"></i> Choose a location
+        </span>
+        <button id="closePlacesDrawer" type="button" aria-label="Close places drawer"
+          class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
       <p class="text-[11px] uppercase tracking-wide text-slate-400 mb-1.5 flex items-center gap-1.5">
         <i data-lucide="navigation" class="w-3.5 h-3.5"></i> Fly to
       </p>
@@ -294,16 +339,16 @@
         </p>
         <div class="flex gap-1 mb-1.5">
           <button id="srcPoi"
-            class="src-btn flex-1 text-[11px] font-medium rounded-lg px-2 py-1 transition bg-amber-500 text-slate-900">
+            class="src-btn flex-1 text-[11px] font-medium rounded-lg px-2 py-1.5 transition bg-amber-500 text-slate-900">
             Lookouts
           </button>
           <button id="srcGrid"
-            class="src-btn flex-1 text-[11px] font-medium rounded-lg px-2 py-1 transition bg-slate-800/70 hover:bg-slate-700 text-slate-300">
+            class="src-btn flex-1 text-[11px] font-medium rounded-lg px-2 py-1.5 transition bg-slate-800/70 hover:bg-slate-700 text-slate-300">
             Anywhere
           </button>
         </div>
         <select id="accessFilter"
-          class="w-full text-xs bg-slate-800/80 border border-slate-600 rounded-lg px-2 py-1 mb-1.5 focus:outline-none focus:ring-2 focus:ring-amber-400 cursor-pointer">
+          class="w-full text-base sm:text-xs bg-slate-800/80 border border-slate-600 rounded-lg px-2 py-1.5 sm:py-1 mb-1.5 focus:outline-none focus:ring-2 focus:ring-amber-400 cursor-pointer">
           <option value="any" selected>Any access</option>
           <option value="sealed">Sealed road only</option>
           <option value="track">4WD track only</option>
@@ -311,7 +356,7 @@
           <option value="drive">Drivable (road or track)</option>
         </select>
         <select id="distFilter"
-          class="w-full text-xs bg-slate-800/80 border border-slate-600 rounded-lg px-2 py-1 mb-1.5 focus:outline-none focus:ring-2 focus:ring-amber-400 cursor-pointer">
+          class="w-full text-base sm:text-xs bg-slate-800/80 border border-slate-600 rounded-lg px-2 py-1.5 sm:py-1 mb-1.5 focus:outline-none focus:ring-2 focus:ring-amber-400 cursor-pointer">
           <option value="0" selected>Anywhere in the path</option>
           <option value="10">Within 10 km of here</option>
           <option value="25">Within 25 km of here</option>
@@ -328,21 +373,21 @@
         </p>
         <div class="relative">
           <input id="customInput" type="text" autocomplete="off" placeholder="Address or lat, lon"
-            class="w-full text-xs bg-slate-800/80 border border-slate-600 rounded-lg px-2 py-1.5 mb-1.5 focus:outline-none focus:ring-2 focus:ring-amber-400" />
+            class="w-full text-base sm:text-xs bg-slate-800/80 border border-slate-600 rounded-lg px-2.5 py-1.5 mb-1.5 focus:outline-none focus:ring-2 focus:ring-amber-400" />
           <div id="suggestions" class="hidden absolute left-0 right-0 top-full -mt-0.5 z-40 panel rounded-lg overflow-hidden max-h-56 overflow-y-auto shadow-xl"></div>
         </div>
         <div class="flex gap-1.5">
           <button id="customGo"
-            class="flex-1 inline-flex items-center justify-center gap-1.5 text-xs font-medium bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg px-2 py-1.5 transition">
+            class="flex-1 inline-flex items-center justify-center gap-1.5 text-xs font-medium bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg px-2 py-2 sm:py-1.5 transition">
             <i data-lucide="search" class="w-3.5 h-3.5"></i> Go
           </button>
           <button id="customGeo" title="Use my current location"
-            class="shrink-0 inline-flex items-center justify-center bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 py-1.5 transition">
-            <i data-lucide="locate-fixed" class="w-3.5 h-3.5 text-amber-400"></i>
+            class="shrink-0 inline-flex items-center justify-center bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-2 sm:px-2.5 sm:py-1.5 transition">
+            <i data-lucide="locate-fixed" class="w-4 h-4 sm:w-3.5 sm:h-3.5 text-amber-400"></i>
           </button>
         </div>
         <button id="pinToggle" title="Toggle, then click the map to set the location"
-          class="mt-1.5 w-full inline-flex items-center justify-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2 py-1.5 transition">
+          class="mt-1.5 w-full inline-flex items-center justify-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2 py-2 sm:py-1.5 transition">
           <i data-lucide="map-pinned" class="w-3.5 h-3.5 text-amber-400"></i> Pin on map
         </button>
         <p id="customStatus" class="hidden mt-1.5 text-[11px]"></p>
@@ -352,6 +397,17 @@
 
   <!-- ============================= RIGHT-SIDE STACK ============================= -->
   <div id="rightStack" class="hidden fixed right-3 top-20 z-30 w-72 flex flex-col gap-2.5">
+
+    <!-- Mobile drawer header -->
+    <div class="drawer-header panel rounded-xl px-3.5 py-2.5 shadow-lg items-center justify-between shrink-0">
+      <span class="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+        <i data-lucide="info" class="w-4 h-4 text-amber-400"></i> Sightline &amp; eclipse details
+      </span>
+      <button id="closeInfoDrawer" type="button" aria-label="Close details drawer"
+        class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
 
     <!-- Eclipse magnitude / progress card -->
     <div class="panel rounded-xl p-3.5 shadow-lg shrink-0">
@@ -433,9 +489,9 @@
   </div>
 
   <!-- ============================= BOTTOM CONTROL BAR ============================= -->
-  <div id="bottomBar" class="hidden fixed bottom-0 inset-x-0 z-30 px-3 py-2.5 sm:px-4">
-    <div class="panel rounded-xl px-4 py-2.5 shadow-lg">
-      <div class="flex items-center gap-3 mb-2">
+  <div id="bottomBar" class="hidden fixed bottom-0 inset-x-0 z-30 px-2.5 py-2 sm:px-4 sm:py-2.5">
+    <div class="panel rounded-xl px-3 py-2 sm:px-4 sm:py-2.5 shadow-lg">
+      <div class="flex items-center gap-2.5 sm:gap-3 mb-2">
         <button id="playPause" title="Play / Pause"
           class="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-lg bg-slate-700 hover:bg-slate-600 transition">
           <i data-lucide="play" class="w-4 h-4"></i>
@@ -452,31 +508,33 @@
       <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
         <span class="hidden sm:inline text-[10px] uppercase tracking-wide text-slate-500">Jump</span>
         <button id="jumpStart" title="First contact — the eclipse begins"
-          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 py-1.5 transition">
-          <i data-lucide="sunrise" class="w-3.5 h-3.5 text-amber-400"></i> Start<span id="jumpStartT" class="text-slate-400 font-mono"></span>
+          class="inline-flex items-center justify-center gap-1 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2 sm:px-2.5 py-1.5 transition">
+          <i data-lucide="sunrise" class="w-3.5 h-3.5 text-amber-400"></i> Start<span id="jumpStartT" class="hidden sm:inline text-slate-400 font-mono"></span>
         </button>
         <button id="jumpTotality" title="Maximum eclipse"
-          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 py-1.5 transition">
-          <i data-lucide="target" class="w-3.5 h-3.5 text-amber-400"></i> Totality<span id="jumpMaxT" class="text-slate-400 font-mono"></span>
+          class="inline-flex items-center justify-center gap-1 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2 sm:px-2.5 py-1.5 transition">
+          <i data-lucide="target" class="w-3.5 h-3.5 text-amber-400"></i> Totality<span id="jumpMaxT" class="hidden sm:inline text-slate-400 font-mono"></span>
         </button>
         <button id="jumpEnd" title="Last contact — the eclipse ends"
-          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 py-1.5 transition">
-          <i data-lucide="sunset" class="w-3.5 h-3.5 text-amber-400"></i> End<span id="jumpEndT" class="text-slate-400 font-mono"></span>
+          class="inline-flex items-center justify-center gap-1 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2 sm:px-2.5 py-1.5 transition">
+          <i data-lucide="sunset" class="w-3.5 h-3.5 text-amber-400"></i> End<span id="jumpEndT" class="hidden sm:inline text-slate-400 font-mono"></span>
         </button>
         <button id="viewToggle" title="Switch between elevated overview and observer eye-level view"
-          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 py-1.5 transition">
+          class="inline-flex items-center justify-center gap-1 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2 sm:px-2.5 py-1.5 transition ml-auto sm:ml-0">
           <i data-lucide="eye" class="w-3.5 h-3.5 text-amber-400"></i> <span id="viewToggleLabel">Eye level</span>
         </button>
-        <button id="watchIt"
-          class="inline-flex items-center gap-1.5 text-sm font-semibold bg-sky-500 hover:bg-sky-400 text-slate-900 rounded-lg px-3 md:px-4 py-1.5 transition md:ml-auto">
-          <i data-lucide="clapperboard" class="w-4 h-4"></i> <span class="hidden sm:inline">Watch it happen</span><span class="sm:hidden">Watch</span>
-        </button>
-        <button id="runSightline"
-          class="inline-flex items-center gap-1.5 text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg px-3.5 py-1.5 transition">
-          <i data-lucide="scan-eye" class="w-4 h-4"></i> <span class="expert-only">Run Sightline Check</span><span class="simple-only">Can I see it?</span>
-        </button>
+        <div class="w-full sm:w-auto sm:ml-auto flex items-center gap-1.5 sm:gap-2">
+          <button id="watchIt"
+            class="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold bg-sky-500 hover:bg-sky-400 text-slate-900 rounded-lg px-3 md:px-4 py-1.5 transition">
+            <i data-lucide="clapperboard" class="w-4 h-4"></i> <span class="hidden sm:inline">Watch it happen</span><span class="sm:hidden">Watch</span>
+          </button>
+          <button id="runSightline"
+            class="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg px-3 sm:px-3.5 py-1.5 transition">
+            <i data-lucide="scan-eye" class="w-4 h-4"></i> <span class="expert-only">Run Sightline Check</span><span class="simple-only">Can I see it?</span>
+          </button>
+        </div>
       </div>
-      <p id="dataCredit" class="mt-1.5 text-[10px] text-slate-500 leading-tight"></p>
+      <p id="dataCredit" class="hidden sm:block mt-1.5 text-[10px] text-slate-500 leading-tight"></p>
     </div>
   </div>
 
@@ -1386,13 +1444,21 @@
       options.terrain = Cesium.Terrain.fromWorldTerrain({ requestVertexNormals: true });
     } else {
       // Default: token-free Re:Earth Terrain (quantized-mesh) + Esri World Imagery.
-      options.terrainProvider = await Cesium.CesiumTerrainProvider.fromUrl(REEARTH_TERRAIN_URL, {
-        requestVertexNormals: true,
-      });
+      // Fall back to a smooth ellipsoid if offline in the field so the sky simulation, GPS,
+      // and precomputed catalogue verdicts still work without cellular reception.
+      try {
+        options.terrainProvider = await Cesium.CesiumTerrainProvider.fromUrl(REEARTH_TERRAIN_URL, {
+          requestVertexNormals: true,
+        });
+      } catch (err) {
+        console.warn("Terrain provider unreachable (offline); falling back to ellipsoid:", err);
+        options.terrainProvider = new Cesium.EllipsoidTerrainProvider();
+        terrainSource = "offline";
+      }
       options.baseLayer = Cesium.ImageryLayer.fromProviderAsync(
         Cesium.ArcGisMapServerImageryProvider.fromUrl(ESRI_IMAGERY_URL, {
           enablePickFeatures: false,
-        })
+        }).catch(() => new Cesium.GridImageryProvider())
       );
     }
 
@@ -1619,6 +1685,19 @@
     });
   }
 
+  // Update the compact mobile verdict pill below the top status bar so phone users see the
+  // location's sightline status without having to open the full Details drawer over the globe.
+  function updateMobileVerdictPill(state) {
+    const locEl = document.getElementById("mobileVerdictLoc");
+    const stateEl = document.getElementById("mobileVerdictState");
+    if (locEl && activeLoc) locEl.textContent = activeLoc.name;
+    if (!stateEl || !state) return;
+    const spin = state.spin ? " animate-spin" : "";
+    stateEl.className = `inline-flex items-center gap-1 font-medium truncate ${state.tone || "text-slate-300"}`;
+    stateEl.innerHTML = `<i data-lucide="${state.icon || "info"}" class="w-3.5 h-3.5 shrink-0${spin}"></i><span>${state.text}</span>`;
+    lucide.createIcons();
+  }
+
   // Move the observer/checked location WITHOUT moving the camera. Returns ground height.
   async function setObserver(loc) {
     activeLoc = loc;
@@ -1637,6 +1716,9 @@
       ]);
       groundHeight = samples[0].height || 0;
     } catch (e) { groundHeight = 0; }
+    if (!groundHeight && activeCatEntry && Number.isFinite(activeCatEntry.elev)) {
+      groundHeight = activeCatEntry.elev;
+    }
     activeGroundCartesian = Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat, groundHeight + EYE_HEIGHT);
 
     updateLocationMarker(loc, groundHeight);
@@ -1666,9 +1748,11 @@
       // The recalculation itself is deferred until the camera arrives (see refreshSightline).
       document.getElementById("resultBox").innerHTML =
         `<p class="text-slate-400 flex items-center gap-2"><i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Moving to ${loc.name}&hellip;</p>`;
+      updateMobileVerdictPill({ icon: "loader", text: "Checking sightline…", tone: "text-slate-400", spin: true });
       lucide.createIcons();
     } else {
       document.getElementById("resultBox").innerHTML = resultPlaceholder;
+      updateMobileVerdictPill({ icon: "scan-eye", text: "Tap to check sightline", tone: "text-amber-300" });
     }
 
     onTick(viewer.clock); // refresh sun readout and 3D sky for the new observer
@@ -1736,24 +1820,45 @@
     return Cesium.Math.toDegrees(fovV) / 2;
   }
 
+  // Measure the live top and bottom bars so mobile drawers, the verdict pill, and the narration
+  // banner never collide with wrapped controls on narrow screens.
+  function syncBarOffsets() {
+    const H = window.innerHeight || document.documentElement.clientHeight || 1;
+    const tb = document.getElementById("topBar");
+    const bb = document.getElementById("bottomBar");
+    if (tb && !tb.classList.contains("hidden")) {
+      const r = tb.getBoundingClientRect();
+      if (r.height > 0) {
+        document.documentElement.style.setProperty("--top-bar-offset", `${Math.ceil(r.bottom + 6)}px`);
+      }
+    }
+    if (bb && !bb.classList.contains("hidden")) {
+      const r = bb.getBoundingClientRect();
+      if (r.height > 0) {
+        document.documentElement.style.setProperty("--bottom-bar-offset", `${Math.ceil(H - r.top + 6)}px`);
+      }
+    }
+  }
+
   // The visible band is the canvas minus the status bar and the timeline. Those are very
   // different proportions on a phone (bottom bar ~29% of the screen) versus a desktop (~12%),
   // so a fixed percentage budget hides the marker on one or wastes space on the other.
   // Measure the chrome and return both the usable half-angle and how far the usable centre
   // sits above the canvas centre.
   function framingBand() {
+    syncBarOffsets();
     const cv = viewer.scene.canvas;
     const H = cv.clientHeight || 1;
     const halfV = halfVerticalFovDeg();
     const degPerPx = (2 * halfV) / H;
     const rect = (id) => {
       const el = document.getElementById(id);
-      if (!el || el.classList.contains("hidden")) return null;
+      if (!el || el.classList.contains("hidden") || window.getComputedStyle(el).display === "none") return null;
       const b = el.getBoundingClientRect();
       return b.height > 0 ? b : null;
     };
-    const tb = rect("topBar"), bb = rect("bottomBar");
-    const top = tb ? Math.max(0, tb.bottom) : 0;
+    const tb = rect("topBar"), mv = rect("mobileVerdictWrap"), bb = rect("bottomBar");
+    const top = Math.max(tb ? tb.bottom : 0, mv ? mv.bottom : 0);
     const bottom = bb ? Math.max(0, H - bb.top) : 0;
     const usableHalfDeg = Math.max(4, ((H - top - bottom) / 2) * degPerPx);
     const offsetDeg = ((bottom - top) / 2) * degPerPx;
@@ -1835,8 +1940,8 @@
     if (!btn) return;
     const isEye = cameraViewMode === "eye";
     btn.className = isEye
-      ? "inline-flex items-center gap-1.5 text-xs font-semibold bg-amber-500 text-slate-900 rounded-lg px-2.5 py-1.5 transition"
-      : "inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 py-1.5 transition";
+      ? "inline-flex items-center justify-center gap-1 text-xs font-semibold bg-amber-500 text-slate-900 rounded-lg px-2 sm:px-2.5 py-1.5 transition ml-auto sm:ml-0"
+      : "inline-flex items-center justify-center gap-1 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2 sm:px-2.5 py-1.5 transition ml-auto sm:ml-0";
     btn.innerHTML = `<i data-lucide="${isEye ? "compass" : "eye"}" class="w-3.5 h-3.5 ${isEye ? "" : "text-amber-400"}"></i> <span id="viewToggleLabel">${isEye ? "Overview" : "Eye level"}</span>`;
     if (locationMarker) locationMarker.show = !isEye;
     if (sightlinePrimitive && !currentSightlineBlocked) sightlinePrimitive.show = !isEye;
@@ -1856,15 +1961,20 @@
   // happens while the UI is still hidden (so the chrome measures zero), and again whenever the
   // window resizes or a phone rotates and the usable band changes shape.
   async function reframeCurrent() {
+    syncBarOffsets();
     if (!viewer || !activeLoc || !activeGroundCartesian) return;
     const gh = Cesium.Cartographic.fromCartesian(activeGroundCartesian).height - EYE_HEIGHT;
     viewer.camera.setView(await frameForLocation(activeLoc, gh));
   }
 
+  function isMobileDrawerMode() {
+    return window.matchMedia("(max-width: 767px), (max-height: 520px)").matches;
+  }
+
   function closeMobileDrawers() {
     if (document.body.dataset.panel && document.body.dataset.panel !== "none") {
       document.body.dataset.panel = "none";
-      const off = "inline-flex items-center gap-1 text-[11px] font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2 py-1 transition";
+      const off = "inline-flex items-center gap-1.5 min-h-[34px] text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 py-1.5 transition";
       const tp = document.getElementById("tabPlaces"), ti = document.getElementById("tabInfo");
       if (tp) tp.className = off;
       if (ti) ti.className = off;
@@ -1974,11 +2084,16 @@
     locationMarker.show = cameraViewMode !== "eye";
   }
 
-  // ---- Click-to-pin -------------------------------------------------------------------
+  // ---- Click-to-pin & tap-globe-to-close-drawer ---------------------------------------
   function setupMapClick() {
     const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
     handler.setInputAction((evt) => {
-      if (!pinMode) return;
+      if (!pinMode) {
+        if (document.body.dataset.panel && document.body.dataset.panel !== "none") {
+          closeMobileDrawers();
+        }
+        return;
+      }
       const ray = viewer.camera.getPickRay(evt.position);
       let cartesian = ray ? viewer.scene.globe.pick(ray, viewer.scene) : undefined;
       if (!Cesium.defined(cartesian)) {
@@ -2005,11 +2120,11 @@
     viewer.scene.canvas.style.cursor = pinMode ? "crosshair" : "";
     if (pinMode) {
       closeMobileDrawers();
-      btn.className = "mt-1.5 w-full inline-flex items-center justify-center gap-1.5 text-xs font-semibold bg-amber-500 text-slate-900 rounded-lg px-2 py-1.5 transition ring-2 ring-amber-300";
-      btn.innerHTML = '<i data-lucide="map-pinned" class="w-3.5 h-3.5"></i> Click map to pin…';
-      setCustomStatus("Click the map to set the location", "info");
+      btn.className = "mt-1.5 w-full inline-flex items-center justify-center gap-1.5 text-xs font-semibold bg-amber-500 text-slate-900 rounded-lg px-2 py-2 sm:py-1.5 transition ring-2 ring-amber-300";
+      btn.innerHTML = '<i data-lucide="map-pinned" class="w-3.5 h-3.5"></i> Tap map to pin…';
+      setCustomStatus("Tap the map to set the location", "info");
     } else {
-      btn.className = "mt-1.5 w-full inline-flex items-center justify-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2 py-1.5 transition";
+      btn.className = "mt-1.5 w-full inline-flex items-center justify-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2 py-2 sm:py-1.5 transition";
       btn.innerHTML = '<i data-lucide="map-pinned" class="w-3.5 h-3.5 text-amber-400"></i> Pin on map';
       setCustomStatus("", "");
     }
@@ -2103,9 +2218,11 @@
     box.innerHTML = "";
     suggestItems.forEach((it, i) => {
       const el = document.createElement("button");
-      el.className = "suggest-item block w-full text-left text-xs px-2.5 py-2 hover:bg-slate-700/70 border-b border-slate-700/40 last:border-0";
+      el.type = "button";
+      el.className = "suggest-item block w-full text-left text-xs px-2.5 py-2.5 sm:py-2 hover:bg-slate-700/70 border-b border-slate-700/40 last:border-0";
       el.textContent = it.name;
-      el.addEventListener("mousedown", (e) => { e.preventDefault(); chooseSuggestion(i); });
+      el.addEventListener("pointerdown", (e) => { if (e.pointerType === "mouse") e.preventDefault(); });
+      el.addEventListener("click", () => chooseSuggestion(i));
       box.appendChild(el);
     });
     box.classList.remove("hidden");
@@ -2181,6 +2298,12 @@
     // two compare instead of quietly overwriting one number with a slightly different one.
     const catAtStart = activeCatEntry;
 
+    if (terrainSource === "offline" && activeCatEntry) {
+      if (activeCatEntry.profile) runPresetCheck(activeCatEntry);
+      else renderCatalogueVerdict(activeCatEntry);
+      return;
+    }
+
     const c = localCircumstances(activeGroundCartesian);
 
     // Check the three moments that matter for this observer: first contact, maximum, last
@@ -2200,6 +2323,7 @@
     const focus = moments.find((m) => m.label === "Maximum") || moments[0];
 
     box.innerHTML = `<p class="text-slate-400 flex items-center gap-2"><i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Probing terrain at ${moments.length} eclipse times&hellip;</p>`;
+    updateMobileVerdictPill({ icon: "loader", text: "Probing terrain…", tone: "text-slate-300", spin: true });
     lucide.createIcons();
 
     // The terrain horizon does not depend on time — so sample it ONCE and test all three sun
@@ -2233,6 +2357,7 @@
     } catch (e) {
       if (stale()) return;
       box.innerHTML = `<p class="text-red-400">Terrain sampling failed: ${e.message}</p>`;
+      updateMobileVerdictPill({ icon: "alert-triangle", text: "Offline — select a catalogued spot", tone: "text-amber-300" });
       return;
     }
     if (stale()) return;               // the user has moved on; a newer check owns the panel
@@ -2307,6 +2432,7 @@
             icon: "eye-off", text: "Not visible" }
         : { box: "bg-amber-900/40 border-amber-600/40", tone: "text-amber-300",
             icon: "alert-triangle", text: "Partly visible" };
+    updateMobileVerdictPill({ icon: headline.icon, text: headline.text, tone: headline.tone });
     const plain = focus.below
       ? "At the peak of the eclipse the sun has already set here."
       : focus.blocked
@@ -2784,6 +2910,7 @@
     if (!v) return;
     const box = document.getElementById("resultBox");
     const headline = CAT_HEADLINE[v.level];
+    updateMobileVerdictPill({ icon: headline.icon, text: headline.text, tone: headline.tone });
 
     // Contact times come from this observer's own live circumstances, not the catalogue.
     // They are pure astronomy and cost nothing; only the terrain figures are precomputed.
@@ -2870,8 +2997,8 @@
 
   function setSpotSource(src) {
     spotSource = src;
-    const on = "src-btn flex-1 text-[11px] font-medium rounded-lg px-2 py-1 transition bg-amber-500 text-slate-900";
-    const off = "src-btn flex-1 text-[11px] font-medium rounded-lg px-2 py-1 transition bg-slate-800/70 hover:bg-slate-700 text-slate-300";
+    const on = "src-btn flex-1 text-[11px] font-medium rounded-lg px-2 py-1.5 sm:py-1 transition bg-amber-500 text-slate-900";
+    const off = "src-btn flex-1 text-[11px] font-medium rounded-lg px-2 py-1.5 sm:py-1 transition bg-slate-800/70 hover:bg-slate-700 text-slate-300";
     document.getElementById("srcPoi").className = src === "poi" ? on : off;
     document.getElementById("srcGrid").className = src === "grid" ? on : off;
     renderTopSpots();
@@ -2934,8 +3061,8 @@
           const partial = s.wholeTotality === false || s.totality < 60;
           const isActive = activeLoc && haversineM(activeLoc.lat, activeLoc.lon, s.lat, s.lon) < CAT_MATCH_M;
           const btnCls = isActive
-            ? "spot-btn text-left text-xs bg-amber-500/20 border border-amber-400/60 rounded-lg px-2 py-1.5 transition"
-            : "spot-btn text-left text-xs bg-slate-800/70 hover:bg-slate-700 border border-transparent rounded-lg px-2 py-1.5 transition";
+            ? "spot-btn text-left text-xs bg-amber-500/20 border border-amber-400/60 rounded-lg px-2 py-2 sm:py-1.5 transition"
+            : "spot-btn text-left text-xs bg-slate-800/70 hover:bg-slate-700 border border-transparent rounded-lg px-2 py-2 sm:py-1.5 transition";
           return `
           <button data-src="${usingPoi ? "poi" : "grid"}" data-i="${s._i}"
             class="${btnCls}">
@@ -3008,11 +3135,11 @@
     const btn = document.getElementById("watchIt");
     if (!btn) return;
     if (cinematic) {
-      btn.className = "inline-flex items-center gap-1.5 text-xs font-semibold bg-amber-400 text-slate-900 rounded-lg px-3 py-1.5 transition shadow ring-2 ring-amber-200";
-      btn.innerHTML = '<i data-lucide="square" class="w-3.5 h-3.5"></i> Stop';
+      btn.className = "flex-1 sm:flex-initial justify-center inline-flex items-center gap-1.5 text-xs font-semibold bg-amber-400 text-slate-900 rounded-lg px-2.5 sm:px-3 py-1.5 transition shadow ring-2 ring-amber-200";
+      btn.innerHTML = '<i data-lucide="square" class="w-3.5 h-3.5 shrink-0"></i> <span>Stop</span>';
     } else {
-      btn.className = "inline-flex items-center gap-1.5 text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg px-3 py-1.5 transition shadow";
-      btn.innerHTML = '<i data-lucide="sparkles" class="w-3.5 h-3.5"></i> Watch it happen';
+      btn.className = "flex-1 sm:flex-initial justify-center inline-flex items-center gap-1.5 text-xs font-semibold bg-sky-500 hover:bg-sky-400 text-slate-900 rounded-lg px-2.5 sm:px-3 py-1.5 transition shadow";
+      btn.innerHTML = '<i data-lucide="sparkles" class="w-3.5 h-3.5 shrink-0"></i> <span class="hidden sm:inline">Watch it happen</span><span class="sm:hidden">Watch</span>';
     }
     lucide.createIcons();
   }
@@ -3065,6 +3192,7 @@
     viewer.clock.multiplier = CINE_FAST;
     viewer.clock.shouldAnimate = true;
     cinematic = true;
+    document.body.dataset.cinematic = "1";
     syncPlayIcon();
     syncWatchButton();
     onTick(viewer.clock);
@@ -3073,6 +3201,7 @@
 
   function stopCinematic() {
     cinematic = false;
+    document.body.dataset.cinematic = "0";
     viewer.clock.shouldAnimate = false;
     viewer.clock.multiplier = 30;
     syncPlayIcon();
@@ -3117,7 +3246,7 @@
     LOCATIONS.forEach((loc) => {
       const b = document.createElement("button");
       b.dataset.name = loc.name;
-      b.className = "inline-flex items-center gap-2 text-xs font-medium bg-slate-800/70 hover:bg-slate-700 border border-transparent text-slate-200 rounded-lg px-2.5 py-1.5 transition text-left";
+      b.className = "inline-flex items-center gap-2 text-xs font-medium bg-slate-800/70 hover:bg-slate-700 border border-transparent text-slate-200 rounded-lg px-2.5 py-2 sm:py-1.5 transition text-left";
       b.innerHTML = `<i data-lucide="${loc.icon}" class="w-3.5 h-3.5 text-amber-400 shrink-0"></i> <span class="truncate">${loc.name}</span>`;
       b.addEventListener("click", () => selectLocation(loc, true));
       wrap.appendChild(b);
@@ -3151,10 +3280,11 @@
     // Mobile drawers: one at a time, and tapping the active tab closes it so the globe is
     // never permanently hidden behind a panel.
     const setPanel = (which) => {
+      syncBarOffsets();
       const cur = document.body.dataset.panel || "none";
       document.body.dataset.panel = cur === which ? "none" : which;
-      const on = "inline-flex items-center gap-1 text-[11px] font-medium bg-amber-500 text-slate-900 rounded-lg px-2 py-1 transition";
-      const off = "inline-flex items-center gap-1 text-[11px] font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2 py-1 transition";
+      const on = "inline-flex items-center gap-1.5 min-h-[34px] text-xs font-medium bg-amber-500 text-slate-900 rounded-lg px-2.5 py-1.5 transition";
+      const off = "inline-flex items-center gap-1.5 min-h-[34px] text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 py-1.5 transition";
       const p = document.body.dataset.panel;
       document.getElementById("tabPlaces").className = p === "places" ? on : off;
       document.getElementById("tabInfo").className = p === "info" ? on : off;
@@ -3162,6 +3292,12 @@
     };
     document.getElementById("tabPlaces").addEventListener("click", () => setPanel("places"));
     document.getElementById("tabInfo").addEventListener("click", () => setPanel("info"));
+    document.getElementById("closePlacesDrawer").addEventListener("click", closeMobileDrawers);
+    document.getElementById("closeInfoDrawer").addEventListener("click", closeMobileDrawers);
+    document.getElementById("mobileVerdictBtn").addEventListener("click", () => {
+      if (document.body.dataset.panel !== "info") setPanel("info");
+      if (!activeCatEntry && !sightlineRun) runSightlineCheck();
+    });
 
     // Build the contact address at runtime rather than shipping it in the markup. This stops
     // naive address harvesters that regex the served HTML; it does not stop a scraper that
@@ -3186,6 +3322,7 @@
       if (e.key === "Escape") {
         if (!about.classList.contains("hidden")) showAbout(false);
         else if (pinMode) togglePinMode(false);
+        else if (document.body.dataset.panel && document.body.dataset.panel !== "none") closeMobileDrawers();
       }
     });
     document.getElementById("watchIt").addEventListener("click", () => {
@@ -3209,7 +3346,11 @@
     document.getElementById("jumpEnd").addEventListener("click", jump((c) => c.partialEnd));
 
     document.getElementById("runSightline").addEventListener("click", () => {
-      if (window.innerWidth <= 1024 && document.body.dataset.panel !== "info") {
+      // On tablet portrait where rightStack is not a drawer, or if the user isn't in mobile
+      // drawer mode, run the sightline check directly. In mobile drawer mode, let the user see
+      // the 3D ray and floating verdict pill on the globe without covering the screen, unless
+      // they already have the Details drawer open.
+      if (!isMobileDrawerMode() && window.innerWidth <= 1024 && document.body.dataset.panel !== "info") {
         setPanel("info");
       }
       runSightlineCheck();
@@ -3232,7 +3373,7 @@
         e.preventDefault(); suggestActive = Math.min(suggestActive + 1, suggestItems.length - 1); highlightSuggestion();
       } else if (open && e.key === "ArrowUp") {
         e.preventDefault(); suggestActive = Math.max(suggestActive - 1, 0); highlightSuggestion();
-      } else if (e.key === "Enter") {
+      } else if (open && e.key === "Enter") {
         if (open && suggestActive >= 0) { e.preventDefault(); chooseSuggestion(suggestActive); }
         else goToCustom();
       } else if (e.key === "Escape") {
@@ -3243,9 +3384,10 @@
   }
 
   function revealUI() {
-    ["topBar", "presetPanel", "rightStack", "bottomBar"].forEach((id) =>
+    ["topBar", "mobileVerdictWrap", "presetPanel", "rightStack", "bottomBar"].forEach((id) =>
       document.getElementById(id).classList.remove("hidden")
     );
+    syncBarOffsets();
     lucide.createIcons();
   }
 
@@ -3264,7 +3406,7 @@
     const mode = q.get("terrain") === "ion" && token ? "ion" : "open";
     try {
       await initViewer(mode, token);
-      document.getElementById("dataCredit").innerHTML = CREDITS[mode] || "";
+      document.getElementById("dataCredit").innerHTML = CREDITS[terrainSource] || CREDITS[mode] || "";
       document.getElementById("splash").classList.add("hidden");
       revealUI();
       await reframeCurrent();        // now the status bar and timeline are measurable
@@ -3273,6 +3415,7 @@
       // Keep the framing correct through resizes and phone rotation.
       let resizeTimer = null;
       window.addEventListener("resize", () => {
+        syncBarOffsets();
         clearTimeout(resizeTimer);
         resizeTimer = setTimeout(reframeCurrent, 350);
       });
@@ -3299,6 +3442,9 @@
     wireControls();
     lucide.createIcons();
     start();
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    }
   });
   </script>
 
