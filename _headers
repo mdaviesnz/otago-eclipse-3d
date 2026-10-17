@@ -22,3 +22,10 @@
 
 /map
   Cache-Control: public, max-age=300, must-revalidate
+
+/astronomy
+  Cache-Control: public, max-age=300, must-revalidate
+
+/methods
+  Cache-Control: public, max-age=300, must-revalidate
+

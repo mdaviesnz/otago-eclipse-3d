@@ -93,11 +93,11 @@ server-side code later", before wiring it in.
 Interim alternatives if the address starts attracting spam: point at the repo's GitHub Issues,
 or use a burnable alias.
 
-### Better handling of unnamed lookouts
-96 of the 400 catalogued POIs are `tourism=viewpoint` with no `name` tag, so they show as
-"Unnamed viewpoint" and can only be identified by coordinates. Reverse-geocoding them to a
-nearby road or locality name would make them findable. Photon can do this, but it is one
-request per POI and would need to run in the precompute, not the browser.
+### ~~Better handling of unnamed lookouts~~
+**Implemented 2026-08-17.** 197 of the 400 catalogued POIs lacked an OSM `name` tag.
+They are now enriched in the precompute pipeline (`precompute/enrich_unnamed_pois.py` and `build_viewpoints.py`):
+- Unnamed peaks (`natural=peak`) use the New Zealand topographic spot-height convention: `Pt {osmEle}` (e.g. `Pt 1482`).
+- Unnamed roadside amenities (`tourism=viewpoint`, `highway=rest_area`, `tourism=picnic_site`, `man_made=tower`, `tourism=camp_site`) are reverse-geocoded via Photon in the precompute stage and synthesized into descriptive titles (e.g. `Crown Range Road lookout`, `Mount Cargill lookout`, `Finlayson Road rest area (Waihola)`, `Milton Highway picnic area`). Responses are cached on disk under `precompute/cache/photon/`.
 
 ### Summits are over-represented
 `natural=peak` supplies 192 of 400 POIs. Access tiering already pushes unreachable alpine
@@ -156,21 +156,13 @@ genuinely roadless one. Correctness beats speed here; results are cached so re-r
 
 ---
 
-### Resolve the refraction inconsistency
-**Found 2026-08-12 while writing [ASTRONOMY.md](ASTRONOMY.md).** The app's live sun altitude is
-geometric (`Refraction.Airless`), but the catalogue's `sunAlt` comes from
-`EclipseEvent.altitude`, which measurement shows is **refracted** — 8.3900° against Airless
-8.2852° and Normal 8.3919° at Dunedin. So catalogue clearances are systematically ~0.1° more
-optimistic than the live check for the same point, which explains most of the residual
-cross-validation difference (8.47° vs 8.4°).
-
-Separately, terrestrial refraction is omitted from the horizon geometry (we use a plain
-`d²/2R`), which biases up to ~2.6′ the other way at 45 km. The two omissions partially cancel,
-netting roughly 4′ conservative.
-
-Fixing means picking one convention for both paths and rebuilding the catalogue. Deferred until
-an astronomy reviewer has commented, since the right refraction coefficient for a July Otago
-basin — inversion-prone, late afternoon — is not obviously the textbook k = 0.13.
+### ~~Resolve the refraction inconsistency~~
+**Resolved 2026-08-18.** Both the live simulator (`index.html`) and the offline catalogue
+pipeline (`precompute/build_viewpoints.py`) now use `Astronomy.Refraction.Normal` (Bennett 1982)
+for apparent solar altitude (+0.11° at 8.4°) and standard terrestrial refraction (`k = 0.13`,
+`R_eff = R / (1 - k) ≈ 7,322,989 m`) for terrain horizon drop. In a winter Otago basin
+inversion, anomalous lower-atmosphere bending adds equally to the grazing solar ray and the
+ridge ray and cancels out in the net clearance; see `methods.html` §6.3.
 
 ### DEM resolution is a near-field problem
 **Measured 2026-08-12** against live native-resolution probes, while making the presets good
@@ -212,8 +204,7 @@ bias. Final errors against live, in degrees:
 
 Beyond ~9 km a 27 m pixel subtends under 0.2°, so the coarse mosaic is already fine out there —
 which is exactly why this is affordable for four presets and would not be for 800 catalogue
-entries. Note this makes the presets *more* accurate than the catalogue they sit beside; if the
-refraction question above is ever settled, they are the natural place to apply it first.
+entries. Note this makes the presets *more* accurate than the catalogue they sit beside.
 
 ### Queenstown and Arrowtown cannot see totality from town
 **Measured 2026-08-12** when the presets were precomputed, and cross-checked live.
@@ -236,9 +227,7 @@ the eclipsed sun sits at. Precomputed against live, once the near-field DEM was 
 
 This is the single most useful thing the app can tell a visitor, since Queenstown is the
 obvious base for the event and the answer is counter-intuitive. The preset card says so
-immediately on arrival and points at the catalogue. Note that Cromwell and Dunedin clear by
-under 2.5°, so their verdicts are genuinely marginal — well inside the range where the
-unresolved refraction question above could move them.
+immediately on arrival and points at the catalogue.
 
 ## Known gaps and risks
 
@@ -249,7 +238,5 @@ unresolved refraction question above could move them.
 - **Browser geolocation is untested** — it needs an interactive permission grant, which the
   headless test harness cannot give. The code path is standard `getCurrentPosition` with denial
   and timeout handling.
-- **Refraction is not modelled.** Altitudes are geometric; refraction lifts a low sun by roughly
-  0.1°, so verdicts are marginally conservative.
 - **Access ≠ permission.** Proximity to an OSM way is not a right of way, and land may be
   private. Stated in the UI and the catalogue's own `caveats` field, but worth repeating.

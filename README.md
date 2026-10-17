@@ -5,9 +5,9 @@ Zealand. Because the sun sits only **~8° above the horizon** at totality, local
 topography can physically block the view. This tool lets you stand anywhere in the path and
 check whether terrain will be in the way.
 
-Static site: `index.html`, `map.html`, `app.css`, `viewpoints.json`, `social-card.svg`. The
-only build step is the Tailwind stylesheet, and `app.css` is committed so a fresh clone runs
-with no tooling at all.
+Static site: `index.html`, `map.html`, `astronomy.html`, `methods.html`, `app.css`,
+`viewpoints.json`, `social-card.svg`. The only build step is the Tailwind stylesheet, and
+`app.css` is committed so a fresh clone runs with no tooling at all.
 
 ```bash
 npm run build:css     # only needed after changing classes in the HTML
@@ -55,11 +55,13 @@ is not downgraded merely because the sun had set.
 |---|---|
 | `index.html` | The 3D simulator — stand somewhere, scrub the eclipse, run sightline checks |
 | `map.html` | Overview map of every catalogued viewing spot |
+| `astronomy.html` | Public-facing guide explaining how the eclipse and terrain sightline checks work |
+| `methods.html` | Full technical specification of astronomical & geodetic methods (for astronomers) |
 | `viewpoints.json` | The precomputed catalogue |
 
-See [ASTRONOMY.md](ASTRONOMY.md) for the astronomical methods in review-ready detail,
-[DEPLOYMENT.md](DEPLOYMENT.md) for hosting and CI, and [IDEAS.md](IDEAS.md) for parked ideas and
-the reasoning behind decisions already made.
+See [ASTRONOMY.md](ASTRONOMY.md) (or `methods.html` in the app) for the astronomical and geodetic
+methods in review-ready detail, [DEPLOYMENT.md](DEPLOYMENT.md) for hosting and CI, and
+[IDEAS.md](IDEAS.md) for parked ideas and the reasoning behind decisions already made.
 
 The two pages link to each other. On the map, clicking a spot opens a popup with its clearance,
 sun altitude, totality duration and access, plus **Open in 3D →**, which loads
@@ -138,9 +140,11 @@ render close to black.
 From the selected point (ground level + eye height), the app fans out a set of bearings — the
 sun's own azimuth at full radial resolution, plus a coarser sweep ±20° either side —
 batch-samples terrain via `sampleTerrainMostDetailed`, and reduces each bearing to its horizon
-angle, correcting for earth curvature (`drop = d² / 2R`). If the **terrain angle on the sun's
-bearing ≥ the sun's altitude**, the view is obstructed. The ±20° sweep becomes the horizon
-profile chart.
+angle, correcting for earth curvature and standard terrestrial refraction (`k = 0.13`,
+`drop = d² / 2R_eff`). If the **terrain angle on the sun's bearing ≥ the sun's refracted
+altitude**, the view is obstructed; if clearance is between `0°` and the solar semi-diameter
+(`0.26°`), the app flags that the lower solar limb grazes the ridge. The ±20° sweep becomes the
+horizon profile chart.
 
 **Radial spacing is adaptive** — dense in the near-mid field, geometrically coarser far out. A
 fixed grid is simultaneously too coarse near (it can stride over a sharp ridge) and wasteful
@@ -164,10 +168,9 @@ astronomy-engine reproduces the published Dunedin circumstances independently:
 | **Maximum** | **16:17:11** | **16:17:11** | **0 s** |
 | Totality ends | 16:18:36 | 16:18:39 | +3 s |
 
-For the full method — coordinate frames, ΔT, refraction handling, terrain geometry, validation,
-and every approximation with its estimated magnitude — see **[ASTRONOMY.md](ASTRONOMY.md)**. It
-is written for technical review and lists open questions, including a known ~0.1° refraction
-inconsistency between the live check and the precomputed catalogue.
+For the full method — coordinate frames, ΔT, atmospheric and terrestrial refraction handling,
+terrain geometry, validation, and every approximation with its estimated magnitude — see
+**[ASTRONOMY.md](ASTRONOMY.md)** (and `methods.html`).
 
 ## Precomputed viewpoint catalogue
 
@@ -318,8 +321,9 @@ close-range terrain, prefer ion and treat marginal verdicts as "check on site".
 
 - The sightline model sweeps ±20° of azimuth around the sun, not a full 360° viewshed.
 - Terrain within 100 m of the observer is excluded as ground clutter (see above).
-- Altitudes are geometric (unrefracted). Refraction lifts a low sun by roughly 0.1° at these
-  altitudes, so verdicts are marginally conservative.
+- Solar and terrain altitudes use standard atmospheric refraction (`Refraction.Normal` for the
+  sun; `k = 0.13` effective Earth radius for terrain); winter temperature inversions can shift
+  apparent angles near the horizon by several arcminutes.
 - Eclipse lighting approximates perceived brightness; it is not a radiometric model.
 - Everything else loads from CDNs, so an internet connection is required.
 

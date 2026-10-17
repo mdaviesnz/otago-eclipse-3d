@@ -123,7 +123,7 @@ jobs:
       - name: Assemble dist/
         run: |
           mkdir -p dist
-          cp index.html map.html app.css viewpoints.json social-card.svg _headers dist/
+          cp index.html map.html astronomy.html methods.html app.css viewpoints.json social-card.svg _headers dist/
           echo "Deploying:"; ls -lh dist/
 
       - name: Publish to production

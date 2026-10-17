@@ -21,8 +21,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SITE_FILES = ["index.html", "map.html", "app.css", "viewpoints.json", "social-card.svg",
-              "_headers"]
+SITE_FILES = ["index.html", "map.html", "astronomy.html", "methods.html", "app.css",
+              "viewpoints.json", "social-card.svg", "_headers"]
 
 failures: list[str] = []
 notes: list[str] = []
@@ -69,12 +69,12 @@ def check_analytics_beacon() -> None:
     """Web Analytics lives in the markup, so an edit can lose it.
 
     Cloudflare Pages injected the beacon from a per-project dashboard toggle; Workers has no
-    equivalent, so it is inlined in both pages instead. A dropped beacon is invisible — the
+    equivalent, so it is inlined in all HTML pages instead. A dropped beacon is invisible — the
     site works perfectly and merely stops reporting — which is exactly the kind of silent
     regression this file exists to catch.
     """
     pattern = re.compile(r'data-cf-beacon=[\'"]\{"token":\s*"([0-9a-f]{32})"\}')
-    pages = ("index.html", "map.html")
+    pages = ("index.html", "map.html", "astronomy.html", "methods.html")
     tokens = set()
     bad = False
     for name in pages:
@@ -88,7 +88,7 @@ def check_analytics_beacon() -> None:
             fail(f"{name}: analytics beacon present but carries no valid 32-hex site token")
             bad = True
     if len(tokens) > 1:
-        fail(f"index.html and map.html report to different analytics sites: {sorted(tokens)}")
+        fail(f"HTML pages report to different analytics sites: {sorted(tokens)}")
     elif not bad:
         ok(f"analytics beacon on all {len(pages)} pages, same site token")
 
@@ -110,7 +110,7 @@ def check_cache_not_tracked() -> None:
 def check_local_references() -> None:
     """Every same-origin href/src/fetch target in the HTML must exist."""
     pattern = re.compile(r"""(?:href|src)=["']([^"'#?]+)["']|fetch\(["']([^"'?]+)["']""")
-    for name in ("index.html", "map.html"):
+    for name in ("index.html", "map.html", "astronomy.html", "methods.html"):
         p = ROOT / name
         if not p.exists():
             continue

@@ -3,7 +3,7 @@ module.exports = {
   // Tailwind scans these for class names. Anything assembled at runtime from fragments
   // (`bg-${colour}-900`) is invisible to the scanner and would be stripped — the pages
   // deliberately use whole literal class strings instead. See renderSightlineResults().
-  content: ["./index.html", "./map.html"],
+  content: ["./index.html", "./map.html", "./astronomy.html", "./methods.html"],
 
   // The scanner is greedy: it treats any bare word in the file as a candidate class, including
   // words inside URLs and comments. The Cloudflare Web Analytics beacon is served from

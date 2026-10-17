@@ -5,6 +5,8 @@ precompute/cache/
 # Python
 __pycache__/
 *.py[cod]
+.venv/
+venv/
 
 # Logs and scratch
 *.log

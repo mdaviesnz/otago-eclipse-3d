@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Astronomical &amp; Geodetic Methods — Technical Specification · Otago Eclipse 3D</title>
+  <meta name="description" content="Complete technical specification of solar/lunar ephemeris, coordinate transformations, atmospheric refraction, and terrain horizon ray-marching in Otago Eclipse 3D." />
+  <meta name="theme-color" content="#0f172a" />
+  <link rel="canonical" href="./methods.html" />
+
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="Astronomical &amp; Geodetic Methods — Otago Eclipse 3D" />
+  <meta property="og:description" content="Technical specification for astronomical and geodetic review: ephemeris, Delta T, topocentric geometry, refraction, and DEM horizon ray-marching." />
+  <meta property="og:image" content="./social-card.svg" />
+  <meta name="twitter:card" content="summary_large_image" />
+
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%230f172a'/%3E%3Ccircle cx='16' cy='16' r='9' fill='none' stroke='%23fbbf24' stroke-width='3'/%3E%3Ccircle cx='13' cy='14' r='8' fill='%230f172a'/%3E%3C/svg%3E" />
+
+  <link rel="stylesheet" href="app.css" />
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: #0f172a;
+      color: #f1f5f9;
+    }
+    .panel {
+      backdrop-filter: blur(10px);
+      background: rgba(15, 23, 42, 0.88);
+      border: 1px solid rgba(148, 163, 184, 0.22);
+    }
+    .page-wrap {
+      max-width: 56rem;
+      margin: 0 auto;
+      padding: 5.5rem 1.25rem 4rem;
+    }
+    .spec-section {
+      background: rgba(30, 41, 59, 0.55);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 1rem;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .spec-section h2 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #f8fafc;
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    }
+    .spec-section h3 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #fbbf24;
+      margin-top: 1.1rem;
+      margin-bottom: 0.45rem;
+    }
+    .spec-section p {
+      color: #cbd5e1;
+      font-size: 0.9rem;
+      line-height: 1.7;
+      margin-bottom: 0.75rem;
+    }
+    .spec-section p:last-child { margin-bottom: 0; }
+    .spec-section ul {
+      list-style: disc;
+      padding-left: 1.25rem;
+      color: #cbd5e1;
+      font-size: 0.88rem;
+      line-height: 1.65;
+      margin-bottom: 0.75rem;
+    }
+    .spec-section li { margin-bottom: 0.35rem; }
+    .math-block {
+      background: #0b1220;
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      border-radius: 0.6rem;
+      padding: 0.75rem 1rem;
+      margin: 0.75rem 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.82rem;
+      color: #fde68a;
+      overflow-x: auto;
+      white-space: pre;
+    }
+    .spec-table {
+      width: 100%;
+      font-size: 0.82rem;
+      border-collapse: collapse;
+      margin: 0.75rem 0;
+    }
+    .spec-table th {
+      text-align: left;
+      color: #94a3b8;
+      font-weight: 600;
+      padding: 0.5rem 0.6rem;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.28);
+    }
+    .spec-table td {
+      padding: 0.5rem 0.6rem;
+      color: #cbd5e1;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+      vertical-align: top;
+    }
+    code {
+      background: rgba(15, 23, 42, 0.75);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 0.3rem;
+      padding: 0.1rem 0.35rem;
+      font-size: 0.82em;
+      color: #e2e8f0;
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100">
+
+  <!-- ============================= TOP NAVIGATION ============================= -->
+  <div class="fixed top-0 inset-x-0 z-30 px-3 py-2 sm:px-4">
+    <div class="panel rounded-xl px-4 py-2 flex flex-wrap items-center gap-3 shadow-lg">
+      <a href="index.html" class="flex items-center gap-2 mr-auto hover:text-amber-300 transition">
+        <i data-lucide="eclipse" class="w-5 h-5 text-amber-400 shrink-0"></i>
+        <span class="font-semibold text-sm sm:text-base leading-tight">Otago Eclipse 3D</span>
+        <span class="text-[11px] sm:text-xs font-medium text-amber-300 whitespace-nowrap">Technical specification</span>
+      </a>
+      <div class="flex flex-wrap items-center gap-2">
+        <a href="astronomy.html"
+          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-1.5 transition">
+          <i data-lucide="compass" class="w-3.5 h-3.5 text-amber-400"></i> General overview
+        </a>
+        <a href="map.html"
+          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-1.5 transition">
+          <i data-lucide="map" class="w-3.5 h-3.5 text-amber-400"></i> Spots map
+        </a>
+        <a href="index.html"
+          class="inline-flex items-center gap-1.5 text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg px-3 py-1.5 transition">
+          <i data-lucide="box" class="w-3.5 h-3.5"></i> Open 3D simulator
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================= MAIN CONTENT ============================= -->
+  <main class="page-wrap">
+
+    <div class="mb-6">
+      <p class="text-xs uppercase tracking-wide text-amber-400 font-semibold mb-1">Technical Review Document &middot; Astronomy &amp; Geodesy</p>
+      <h1 class="text-2xl font-bold tracking-tight mb-2">Astronomical &amp; Geodetic Methods</h1>
+      <p class="text-sm text-slate-300 leading-relaxed mb-3">
+        This specification describes how <b>Otago Eclipse 3D</b> computes solar and lunar positions,
+        topocentric eclipse circumstances, atmospheric refraction, and terrain horizon obstruction
+        for the <b>total solar eclipse of 22 July 2028</b> over the South Island of New Zealand. It
+        is written for domain reviewers in astronomy and geodesy and states all physical assumptions,
+        numerical algorithms, and uncertainty budgets explicitly.
+      </p>
+      <div class="flex flex-wrap items-center gap-2 text-xs">
+        <a href="astronomy.html" class="inline-flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-lg px-3 py-1.5 transition border border-slate-700/60">
+          <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> Plain-language overview
+        </a>
+        <a href="https://github.com/mdaviesnz/otago-eclipse-3d/blob/main/ASTRONOMY.md" target="_blank" rel="noopener"
+           class="inline-flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg px-3 py-1.5 transition border border-slate-700/60">
+          <i data-lucide="github" class="w-3.5 h-3.5 text-amber-400"></i> View ASTRONOMY.md on GitHub
+        </a>
+      </div>
+    </div>
+
+    <!-- 1. Physical Context -->
+    <section class="spec-section">
+      <h2>1. Physical Context of the Event</h2>
+      <p>
+        On the afternoon of <b>22 July 2028</b> (Southern Hemisphere winter), the lunar umbra crosses
+        Fiordland, Southland, and Otago from west-north-west to east-south-east before leaving the
+        New Zealand coast just after 16:19 NZST (<code>04:19 UTC</code>):
+      </p>
+      <ul>
+        <li><b>Maximum eclipse in Dunedin (<code>-45.8788&deg;, 170.5028&deg;</code>):</b> <code>04:17:11.8 UTC</code> (<code>16:17:11.8 NZST</code>).</li>
+        <li><b>Apparent solar altitude at maximum:</b> 8.39&deg; (Dunedin, east coast) to 10.0&deg;&ndash;10.8&deg; (Queenstown / Fiordland, inland west).</li>
+        <li><b>Solar azimuth at maximum:</b> 310.6&deg;&ndash;312.9&deg; (north-west).</li>
+        <li><b>Totality duration on the centreline:</b> up to 179 s (2m 59s).</li>
+        <li><b>Sunset during the closing partial phase:</b> Fourth contact (C4) occurs with the Sun below 1.7&deg; altitude across the entire South Island, and slightly below the horizon along the east coast (Dunedin refracted altitude &minus;0.09&deg;, geometric altitude &minus;0.63&deg; at <code>05:19:58 UTC</code>).</li>
+      </ul>
+      <p>
+        Because the Sun sits only 8&deg;&ndash;10&deg; above the north-western horizon at totality across a
+        region of steep glacial valleys and basin-and-range topography, local terrain obstruction is
+        the primary determinant of visibility. At these grazing altitudes, atmospheric refraction and
+        Earth curvature are comparable to the solar angular diameter (~0.52&deg;) and must be modelled
+        consistently.
+      </p>
+    </section>
+
+    <!-- 2. Ephemeris and Coordinate Pipeline -->
+    <section class="spec-section">
+      <h2>2. Ephemeris and Coordinate Pipeline</h2>
+      <h3>2.1 Ephemeris Engine</h3>
+      <p>
+        All solar and lunar positions and eclipse contact times come from
+        <a href="https://github.com/cosinekitty/astronomy" target="_blank" rel="noopener" class="text-amber-300 hover:underline">astronomy-engine</a>
+        (Don Cross, MIT License), used identically across two independent code paths:
+      </p>
+      <table class="spec-table">
+        <thead>
+          <tr><th>Environment</th><th>Package</th><th>Purpose</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Browser (<code>index.html</code>)</td>
+            <td><code>astronomy.browser.min.js</code> (v2)</td>
+            <td>Live topocentric positions, continuous magnitude &amp; obscuration, per-location contact times</td>
+          </tr>
+          <tr>
+            <td>Offline pipeline (<code>precompute/build_viewpoints.py</code>)</td>
+            <td><code>astronomy-engine</code> (PyPI)</td>
+            <td>0.1&deg; regional circumstance grid (<code>EclipseField</code>), POI/grid clearances, preset profiles</td>
+          </tr>
+        </tbody>
+      </table>
+      <ul>
+        <li><b>Solar theory:</b> VSOP87 (Bretagnon &amp; Francou 1988).</li>
+        <li><b>Lunar theory:</b> ELP/MPP02-derived series (Chapront &amp; Francou 2003).</li>
+        <li><b>Precession &amp; nutation:</b> IAU 2000B model (McCarthy &amp; Luzum 2003).</li>
+      </ul>
+      <p>
+        <b>Epoch accuracy vs. multi-century bound:</b> While <code>astronomy-engine</code> documents a
+        conservative worst-case bound of &plusmn;1 arcminute across several centuries, its actual relative
+        Sun&ndash;Moon positional accuracy in the 2028 epoch is ~1&ndash;3 arcseconds. Since the Moon's
+        topocentric synodic motion is ~0.55&Prime;/s, a 1&prime; along-track error would displace contact
+        times by ~110 s; in validation (§9), <code>astronomy-engine</code> matches published Fred Espenak /
+        NASA GSFC predictions at Dunedin to within 0&ndash;3 s.
+      </p>
+      <p>
+        <b>Exclusion of CesiumJS's internal ephemeris:</b> CesiumJS (v1.118) is used strictly as a 3D
+        terrain renderer. Its internal <code>Simon1994PlanetaryPositions</code> lunar approximation is
+        intended for scene lighting only and was measured during development to miss totality at
+        Dunedin (~88% peak obscuration, several minutes late).
+      </p>
+
+      <h3>2.2 Coordinate Transformations</h3>
+      <p>For an observer at WGS84 geodetic coordinates (<var>&phi;</var>, <var>&lambda;</var>, <var>h</var>) at instant <var>t</var>:</p>
+      <div class="math-block">eq = Equator(body, t, observer, ofdate=true, aberration=true)
+hz = Horizon(t, observer, eq.ra, eq.dec, Refraction.Normal)</div>
+      <ul>
+        <li><code>Equator(..., ofdate=true, aberration=true)</code> evaluates J2000.0 state vectors, applies annual aberration and light-time, rotates to the true equator and equinox of date via IAU 2000B precession/nutation, and subtracts the observer's geocentric WGS84 vector (including diurnal aberration) to yield topocentric (<var>&alpha;</var>, <var>&delta;</var>) and topocentric distance <var>d</var> in AU.</li>
+        <li><code>Horizon(..., Refraction.Normal)</code> converts topocentric (<var>&alpha;</var>, <var>&delta;</var>) via local apparent sidereal time (GAST) into local azimuth <var>A</var> (clockwise from true North) and refracted apparent altitude <var>&alpha;</var><sub>app</sub>.</li>
+      </ul>
+    </section>
+
+    <!-- 3. Time Scales and Delta T -->
+    <section class="spec-section">
+      <h2>3. Time Scales and &Delta;T</h2>
+      <ul>
+        <li><b>Internal time:</b> UTC throughout. Displayed wall-clock times are <b>NZST = UTC + 12h</b> (New Zealand winter; NZDT = UTC + 13h does not apply in July).</li>
+        <li><b>UT &rarr; TT conversion:</b> <code>astronomy-engine</code> converts UT to Terrestrial Time (TT = UT + &Delta;<var>T</var>) using the Espenak &amp; Meeus (2006) polynomial <code>DeltaT_EspenakMeeus</code>, which evaluates to &Delta;<var>T</var> &approx; 72.7 s at 2028.55.</li>
+        <li><b>Extrapolation sensitivity:</b> Modern IERS UT1&minus;UTC observations suggest actual 2028 &Delta;<var>T</var> &approx; 69.5&ndash;70.5 s (an extrapolation offset of &delta;(&Delta;<var>T</var>) &approx; 2&ndash;3 s). At <var>&phi;</var> = &minus;45&deg;, Earth's surface rotates eastward at 329 m/s, so each 1 s of &Delta;<var>T</var> shift translates the umbral ground track by ~0.33 km in longitude and shifts local contact times by ~1 s.</li>
+      </ul>
+    </section>
+
+    <!-- 4. Observer Geodesy -->
+    <section class="spec-section">
+      <h2>4. Observer Geodesy and Elevation Sensitivity</h2>
+      <p>
+        The observer is constructed as <code>Observer(latitude, longitude, height)</code> with WGS84
+        latitude/longitude and <var>h</var> = <var>h</var><sub>terrain</sub> + 1.7 m eye height.
+      </p>
+      <ul>
+        <li><b>Ellipsoidal vs. orthometric height datum:</b> Re:Earth Terrain (Copernicus GLO-30 / Mapterhorn) is referenced to the WGS84 ellipsoid, whereas <code>Observer.height</code> is documented as elevation above mean sea level. Over Otago, the NZGeoid2016 separation is <var>N</var> &approx; +5 m to +35 m. For terrain horizon checks (§7), both <var>h</var><sub>obs</sub> and <var>h</var><sub>terrain</sub>(<var>d</var>) come from the same DEM, so the datum offset cancels in <var>h</var><sub>terrain</sub> &minus; <var>h</var><sub>obs</sub>.</li>
+        <li><b>Shadow-axis grazing sensitivity:</b> Because the lunar shadow arrives at <var>&alpha;</var><sub>&#9737;</sub> &approx; 8.4&deg;&ndash;10&deg;, raising an observer by &Delta;<var>h</var> shifts their intercept with the inclined shadow cone down-track by &Delta;<var>x</var> = &Delta;<var>h</var> cot <var>&alpha;</var><sub>&#9737;</sub> &approx; 6.8 &Delta;<var>h</var>.</li>
+      </ul>
+      <table class="spec-table">
+        <thead>
+          <tr><th>Observer height <var>h</var></th><th>Maximum eclipse (UTC)</th><th>Apparent solar altitude at maximum</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>0 m</td><td><code>04:17:11.848</code></td><td>8.3900&deg;</td></tr>
+          <tr><td>500 m</td><td><code>04:17:12.269</code></td><td>8.3891&deg;</td></tr>
+          <tr><td>2000 m</td><td><code>04:17:13.968</code></td><td>8.3854&deg;</td></tr>
+        </tbody>
+      </table>
+      <p>
+        Contact times shift by <b>+1.06 s per km</b> of observer elevation, and peak solar altitude
+        shifts by <b>&minus;0.0023&deg; per km</b> (caused by the Sun sinking at &minus;0.0022&deg;/s during
+        the +1.06 s/km delay in maximum eclipse). A 35 m datum offset therefore alters contact times
+        by &lt;0.04 s.
+      </p>
+    </section>
+
+    <!-- 5. Eclipse Circumstances, Magnitude, and Obscuration -->
+    <section class="spec-section">
+      <h2>5. Eclipse Circumstances, Magnitude, and Obscuration</h2>
+      <h3>5.1 Local Contact Times</h3>
+      <p>
+        Per-observer contact times (C1, C2, maximum, C3, C4) come from
+        <code>SearchLocalSolarEclipse(startTime, observer)</code>. In the offline catalogue pipeline,
+        <code>EclipseField</code> evaluates a 0.1&deg; &times; 0.1&deg; grid (~2,000 searches) and
+        interpolates solar altitude, azimuth, and duration bilinearly. Totality is enforced as a strict
+        4-corner boundary: all four surrounding grid nodes must lie inside totality so edge candidates
+        are never optimistically included.
+      </p>
+
+      <h3>5.2 Continuous Magnitude, Obscuration, and Totality Criterion (<code>eclipseAt</code>)</h3>
+      <p>From topocentric distances <var>d</var><sub>&#9737;</sub>, <var>d</var><sub>&#9790;</sub> (converted from AU via 1 AU = 149,597,870.7 km):</p>
+      <div class="math-block">s_sun  = asin(R_sun / d_sun),    R_sun  = 695 700 km   (IAU nominal photospheric radius)
+s_moon = asin(R_moon / d_moon),  R_moon =   1 737.4 km (IAU mean lunar radius, k0 = 0.2725076)
+sep    = acos(clamp(u_sun · u_moon, -1, 1))
+mag    = max(0, (s_sun + s_moon - sep) / (2 · s_sun))
+obsc   = A_overlap(s_sun, s_moon, sep) / (π · s_sun²)
+isTotal = (s_moon &gt;= s_sun) and (sep &lt;= s_moon - s_sun)</div>
+      <p>
+        <b>Strict totality gating:</b> An uncovered solar crescent of 0.1% area (<code>obsc = 0.999</code>)
+        occurs when the lunar limb is still ~16.6&Prime; short of internal tangency (~33 s before C2 or
+        after C3) and remains blindingly bright. The UI therefore gates the <code>TOTALITY</code>
+        badge, corona diagram, and "safe to look without eclipse glasses" narration strictly on
+        geometric internal tangency (<code>isTotal</code>), and caps displayed partial obscuration at
+        <code>99.9%</code> whenever <code>!isTotal</code>.
+      </p>
+      <p>
+        <b>Smooth-sphere approximation:</b> No Kaguya/LRO lunar limb profile is applied (&plusmn;1&ndash;3 s
+        effect on C2/C3). Standard Besselian predictions (Espenak &amp; Meeus 2006) also adopt a smaller
+        lunar valley radius (<var>k</var> = 0.272281 <var>R</var><sub>&oplus;</sub> &approx; 1,735.95 km, ~0.8&Prime; smaller than
+        the IAU mean radius) for umbral contacts, making <code>astronomy-engine</code>'s smooth-sphere
+        totality duration ~2&ndash;3 s longer.
+      </p>
+    </section>
+
+    <!-- 6. Atmospheric and Terrestrial Refraction -->
+    <section class="spec-section">
+      <h2>6. Atmospheric and Terrestrial Refraction</h2>
+      <p>
+        Both the live simulator and the offline catalogue apply a unified refraction model across
+        solar altitude and terrain curvature:
+      </p>
+      <h3>6.1 Astronomical Refraction of the Sun (<code>Refraction.Normal</code>)</h3>
+      <p>
+        <code>astronomy-engine</code> applies Bennett's (1982) formula for standard conditions
+        (<var>P</var> = 1010 hPa, <var>T</var> = 10&deg;C):
+      </p>
+      <div class="math-block">R_astro (arcmin) = 1.02 / tan(alt_geom + 10.3 / (alt_geom + 5.11))</div>
+      <p>
+        At Dunedin maximum eclipse, this lifts the geometric Sun from 8.2852&deg; to 8.3919&deg;
+        (a lift of <b>+0.1067&deg; &approx; +6.40&prime;</b>).
+      </p>
+
+      <h3>6.2 Terrestrial Refraction of the Horizon (<var>k</var> = 0.13)</h3>
+      <p>
+        Near-horizontal rays from distant mountain ridges are bent downward by the lower atmosphere's
+        vertical density gradient. Adopting standard geodetic refraction coefficient <var>k</var> = 0.13 gives
+        an effective Earth radius:
+      </p>
+      <div class="math-block">R_eff = R_earth / (1 - k) = 6 371 000 / 0.87 ≈ 7 322 989 m
+drop(d) = (1 - k) · d² / (2 · R_earth) = d² / (2 · R_eff)</div>
+      <p>
+        This lifts distant terrain relative to airless geometry by &Delta;<var>&theta;</var><sub>terr</sub> &approx; (<var>k</var> &middot; <var>d</var>) / (2 <var>R</var><sub>&oplus;</sub>)
+        (+0.35&prime; at 10 km, +1.05&prime; at 30 km, +1.58&prime; at 45 km).
+      </p>
+
+      <h3>6.3 Cancellation of Winter Basin Inversion Anomalies</h3>
+      <p>
+        In a July late-afternoon Otago basin, cold-air pooling and temperature inversions (d<var>T</var>/d<var>z</var> &gt; 0)
+        can raise local boundary-layer <var>k</var> above 0.13. However, by Snell's law and optical
+        reversibility, any two rays arriving at the observer at the same apparent elevation angle
+        trace the <b>exact same curved path</b> through the lower atmosphere. A solar ray skimming a
+        ridge at distance <var>d</var> traverses the final segment <var>d</var> through the same basin air mass as light
+        from the ridge itself. Anomalous bending below the ridge height therefore adds equally to
+        <var>&alpha;</var><sub>&#9737;,app</sub> and <var>&theta;</var><sub>terr,app</sub>, cancelling out in the net clearance
+        &Delta;<var>&alpha;</var> = <var>&alpha;</var><sub>&#9737;,app</sub> &minus; <var>&theta;</var><sub>terr,app</sub>.
+      </p>
+    </section>
+
+    <!-- 7. Terrain Horizon Geometry -->
+    <section class="spec-section">
+      <h2>7. Terrain Horizon Ray-Marching</h2>
+      <div class="math-block">d_{n+1} = d_n + max(25 m, 0.03 · d_n),    d ∈ [100 m, 45 000 m]   (161 samples/ray)
+angle(d) = atan2(h_terrain(d) - h_observer - d² / (2 · R_eff), d)
+horizon  = max_d angle(d),    clearance = alt_sun - horizon</div>
+      <ul>
+        <li><b>Inner cutoff (<var>d</var><sub>min</sub> = 100 m):</b> Chosen from the ~30 m DEM vertical uncertainty (<var>&sigma;</var><sub>z</sub> &approx; 5 m), which produces an angular noise floor arctan(<var>&sigma;</var><sub>z</sub> / <var>d</var>) of &plusmn;32&deg; at 8 m, &plusmn;5.7&deg; at 50 m, and &plusmn;2.9&deg; at 100 m (~3.3 pixels).</li>
+        <li><b>Great-circle geodesics:</b> Both code paths trace true great-circle bearings (via the local ENU tangent frame in JS and spherical forward geodesics in Python).</li>
+        <li><b>Solar centre vs. lower limb (<var>s</var><sub>&#9737;</sub> &approx; 0.26&deg;):</b> Because <code>clearance</code> is measured from the solar centre, clearances in (0&deg;, 0.26&deg;) mean the lower limb of the solar/lunar disc intersects the ridge and are explicitly flagged as <i>grazing</i>.</li>
+        <li><b>Dual-resolution preset profiles:</b> The four town presets use zoom 13 (~6.8 m/px) within 9 km and zoom 11 (~27 m/px) out to 45 km across a 1&deg;-stepped azimuth profile, reducing worst-case raster-vs-mesh error across all 12 town/contact bearings to 0.13&deg;.</li>
+      </ul>
+    </section>
+
+    <!-- 8. Validation & Error Budget -->
+    <section class="spec-section">
+      <h2>8. Validation &amp; Summary Error Budget</h2>
+      <h3>8.1 Dunedin Contact-Time Validation</h3>
+      <table class="spec-table">
+        <thead>
+          <tr><th>Phase</th><th>Published (NZST)</th><th><code>astronomy-engine</code></th><th>&Delta;</th><th>Primary source of difference</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>First contact (C1)</td><td><code>15:08:58</code></td><td><code>15:09:01</code></td><td>+3 s</td><td>Smooth sphere + &Delta;<var>T</var> polynomial</td></tr>
+          <tr><td>Second contact (C2)</td><td><code>16:15:45</code></td><td><code>16:15:44</code></td><td>&minus;1 s</td><td>IAU mean lunar radius vs. valley radius + limb profile</td></tr>
+          <tr><td><b>Maximum eclipse</b></td><td><code>16:17:11</code></td><td><code>16:17:11</code></td><td><b>0 s</b></td><td>Exact agreement</td></tr>
+          <tr><td>Third contact (C3)</td><td><code>16:18:36</code></td><td><code>16:18:39</code></td><td>+3 s</td><td>IAU mean lunar radius (1737.4 km) vs. valley radius</td></tr>
+          <tr><td>Fourth contact (C4)</td><td><code>17:17:00</code></td><td><code>17:19:58</code></td><td>+3 m</td><td>Published table clamps partial end at sunset (alt &minus;0.09&deg;)</td></tr>
+        </tbody>
+      </table>
+
+      <h3>8.2 Model Approximation Summary</h3>
+      <table class="spec-table">
+        <thead>
+          <tr><th>Approximation / Component</th><th>Magnitude</th><th>Effect on Verdicts</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Ephemeris (VSOP87 + ELP/MPP02 in 2028)</td><td>~1&ndash;3&Prime;</td><td>&plusmn;1&ndash;3 s on contact times; &lt;0.001&deg; on altitude</td></tr>
+          <tr><td>&Delta;<var>T</var> extrapolation to 2028 (&approx; 72.7 s)</td><td>&delta;(&Delta;<var>T</var>) &approx; 2&ndash;3 s</td><td>~0.7&ndash;1.0 km longitudinal shift of umbral path</td></tr>
+          <tr><td>Smooth spherical Moon (no Kaguya/LRO limb)</td><td>~0.8&Prime; radius + &plusmn;1.5&Prime; limb</td><td>&plusmn;1&ndash;3 s on C2/C3; larger in grazing edge zone</td></tr>
+          <tr><td>Solar refraction (Bennett 1982, 1010 hPa, 10&deg;C)</td><td>+6.4&prime; (+0.107&deg;) at 8.3&deg;</td><td>Unified across both paths; weather scatter ~&plusmn;0.5&prime;</td></tr>
+          <tr><td>Terrestrial refraction (<var>k</var> = 0.13, <var>R</var><sub>eff</sub> = 7323 km)</td><td>+0.35&prime; at 10 km, +1.6&prime; at 45 km</td><td>Unified across both paths; basin inversion cancels with solar ray</td></tr>
+          <tr><td>Solar semi-diameter (<var>s</var><sub>&#9737;</sub> &approx; 0.26&deg;)</td><td>0.26&deg; limb (0.5&deg; inner corona)</td><td>Clearances in (0&deg;, 0.26&deg;) flagged as lower-limb grazing</td></tr>
+          <tr><td>DEM vertical uncertainty (<var>&sigma;</var><sub>z</sub> &approx; 5 m at ~30 m)</td><td>&plusmn;2.9&deg; at 100 m; &plusmn;0.3&deg; at 1 km</td><td>Dominant error source for ridges closer than ~1 km</td></tr>
+          <tr><td>Above-ground clutter (trees, buildings, road cuts)</td><td>15 m trees at 90 m = 9.5&deg;</td><td>Unmodelled; on-site inspection advised</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <div class="panel rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <p class="text-sm font-bold text-slate-100">Feedback or review comments?</p>
+        <p class="text-xs text-slate-400 mt-0.5">
+          Corrections and technical review notes from astronomers and surveyors are very welcome.
+        </p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <a id="contactLink" href="#"
+          class="inline-flex items-center gap-1.5 text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg px-4 py-2 transition">
+          <i data-lucide="mail" class="w-4 h-4"></i> <span id="contactAddr">Email author</span>
+        </a>
+        <a href="astronomy.html"
+          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-2 transition">
+          <i data-lucide="compass" class="w-4 h-4 text-amber-400"></i> General overview
+        </a>
+        <a href="index.html"
+          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-2 transition">
+          <i data-lucide="box" class="w-4 h-4 text-amber-400"></i> 3D simulator
+        </a>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    (() => {
+      const addr = ["michael", "davies.net.nz"].join("@");
+      const link = document.getElementById("contactLink");
+      link.href = `mailto:${addr}?subject=${encodeURIComponent("Otago Eclipse 3D — Technical Review")}`;
+      document.getElementById("contactAddr").textContent = addr;
+    })();
+    lucide.createIcons();
+  </script>
+
+  <!-- Cloudflare Web Analytics — same site token as index.html and map.html. -->
+  <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js"
+          data-cf-beacon='{"token": "355348029404494388c57e7d5afa2655"}'></script>
+</body>
+</html>

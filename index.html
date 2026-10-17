@@ -36,12 +36,22 @@
     body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
     /* Hide Cesium credit clutter but keep attribution accessible */
     .cesium-widget-credits { display: none !important; }
-    .panel { backdrop-filter: blur(10px); background: rgba(15, 23, 42, 0.82); border: 1px solid rgba(148, 163, 184, 0.25); }
+    .panel {
+      backdrop-filter: blur(12px);
+      background: rgba(15, 23, 42, 0.84);
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      scrollbar-width: thin;
+      scrollbar-color: rgba(100, 116, 139, 0.5) transparent;
+    }
+    .panel::-webkit-scrollbar, #topSpots::-webkit-scrollbar, #rightStack::-webkit-scrollbar { width: 5px; height: 5px; }
+    .panel::-webkit-scrollbar-thumb, #topSpots::-webkit-scrollbar-thumb, #rightStack::-webkit-scrollbar-thumb {
+      background: rgba(100, 116, 139, 0.5); border-radius: 9999px;
+    }
     .scrub { -webkit-appearance: none; appearance: none; height: 6px; border-radius: 9999px;
              background: linear-gradient(90deg, #f59e0b 0%, #f59e0b var(--fill,0%), rgba(148,163,184,0.35) var(--fill,0%)); }
     .scrub::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px;
-             border-radius: 9999px; background: #fbbf24; border: 2px solid #fff; cursor: pointer; box-shadow: 0 0 8px rgba(251,191,36,0.8); }
-    .scrub::-moz-range-thumb { width: 18px; height: 18px; border-radius: 9999px; background: #fbbf24; border: 2px solid #fff; cursor: pointer; }
+             border-radius: 9999px; background: #fbbf24; border: 2px solid #fff; cursor: pointer; box-shadow: 0 0 8px rgba(251,191,36,0.8); position: relative; z-index: 2; }
+    .scrub::-moz-range-thumb { width: 18px; height: 18px; border-radius: 9999px; background: #fbbf24; border: 2px solid #fff; cursor: pointer; position: relative; z-index: 2; }
     @keyframes pulse-totality { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
     .totality-on { animation: pulse-totality 1.4s ease-in-out infinite; }
 
@@ -51,6 +61,13 @@
 
     @keyframes fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
     .narrate { animation: fade-up 0.5s ease-out; }
+
+    /* Desktop side panels: constrain height so they never collide with the bottom timeline bar */
+    @media (min-width: 768px) {
+      #presetPanel { max-height: calc(100vh - 11.25rem); display: flex; flex-direction: column; }
+      #presetPanel > .panel { overflow-y: auto; max-height: 100%; }
+      #rightStack { max-height: calc(100vh - 11.25rem); overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(100, 116, 139, 0.5) transparent; }
+    }
 
     /* ---------------------------------------------------------------------------------
        Mobile: the side panels are fixed-width overlays that, on a phone, cover the globe
@@ -142,6 +159,11 @@
         <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5 text-amber-400"></i>
         <span id="modeLabel">Simple</span>
       </button>
+      <a href="astronomy.html" title="How the astronomy and sightline checks work"
+        class="inline-flex items-center gap-1.5 text-[11px] font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 py-1 transition">
+        <i data-lucide="compass" class="w-3.5 h-3.5 text-amber-400"></i>
+        <span class="hidden sm:inline">Astronomy</span>
+      </a>
       <button id="aboutBtn" title="About this tool"
         class="inline-flex items-center gap-1.5 text-[11px] font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 py-1 transition">
         <i data-lucide="info" class="w-3.5 h-3.5 text-amber-400"></i>
@@ -190,6 +212,7 @@
             <li><b class="text-slate-300">Watch it happen</b> &mdash; plays the eclipse through, with the landscape darkening.</li>
             <li><b class="text-slate-300">Best viewing spots</b> &mdash; precomputed places across the path of totality, filterable by how you can get there.</li>
             <li><b class="text-slate-300">Map</b> &mdash; all of those spots on one overview map.</li>
+            <li><a href="astronomy.html" class="text-amber-300 hover:underline font-medium">How the astronomy works &rarr;</a> &mdash; a plain-language guide to the eclipse geometry and calculations (with a link to the full technical specification for astronomers).</li>
           </ul>
         </div>
 
@@ -227,9 +250,17 @@
                class="inline-flex items-center gap-1.5 text-xs font-medium bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg px-3 py-1.5 transition">
               <i data-lucide="mail" class="w-3.5 h-3.5"></i> <span id="contactAddr">Email me</span>
             </a>
+            <a href="astronomy.html"
+               class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-1.5 transition">
+              <i data-lucide="compass" class="w-3.5 h-3.5 text-amber-400"></i> How it works
+            </a>
+            <a href="methods.html"
+               class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-1.5 transition">
+              <i data-lucide="book-open" class="w-3.5 h-3.5 text-amber-400"></i> Technical spec
+            </a>
             <a href="https://github.com/mdaviesnz/otago-eclipse-3d" target="_blank" rel="noopener"
                class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-1.5 transition">
-              <i data-lucide="github" class="w-3.5 h-3.5 text-amber-400"></i> Source &amp; method
+              <i data-lucide="github" class="w-3.5 h-3.5 text-amber-400"></i> GitHub
             </a>
           </div>
         </div>
@@ -246,15 +277,15 @@
   </div>
 
   <!-- ============================= LEFT PRESET PANEL ============================= -->
-  <div id="presetPanel" class="hidden fixed left-3 top-20 z-30 w-52">
+  <div id="presetPanel" class="hidden fixed left-3 top-20 z-30 w-60">
     <div class="panel rounded-xl p-3 shadow-lg">
-      <p class="text-[11px] uppercase tracking-wide text-slate-400 mb-2 flex items-center gap-1.5">
+      <p class="text-[11px] uppercase tracking-wide text-slate-400 mb-1.5 flex items-center gap-1.5">
         <i data-lucide="navigation" class="w-3.5 h-3.5"></i> Fly to
       </p>
-      <div id="presetButtons" class="flex flex-col gap-1.5"></div>
+      <div id="presetButtons" class="flex flex-col gap-1"></div>
 
-      <div id="topSpotsSection" class="hidden mt-3 pt-3 border-t border-slate-700/60">
-        <p class="text-[11px] uppercase tracking-wide text-slate-400 mb-2 flex items-center justify-between gap-1.5">
+      <div id="topSpotsSection" class="hidden mt-2.5 pt-2.5 border-t border-slate-700/60">
+        <p class="text-[11px] uppercase tracking-wide text-slate-400 mb-1.5 flex items-center justify-between gap-1.5">
           <span class="flex items-center gap-1.5"><i data-lucide="award" class="w-3.5 h-3.5"></i> Best viewing spots</span>
           <a href="map.html" title="See all spots on an overview map"
              class="inline-flex items-center gap-1 text-amber-400 hover:text-amber-300 normal-case tracking-normal">
@@ -272,7 +303,7 @@
           </button>
         </div>
         <select id="accessFilter"
-          class="w-full text-xs bg-slate-800/80 border border-slate-600 rounded-lg px-2 py-1.5 mb-1.5 focus:outline-none focus:ring-2 focus:ring-amber-400 cursor-pointer">
+          class="w-full text-xs bg-slate-800/80 border border-slate-600 rounded-lg px-2 py-1 mb-1.5 focus:outline-none focus:ring-2 focus:ring-amber-400 cursor-pointer">
           <option value="any" selected>Any access</option>
           <option value="sealed">Sealed road only</option>
           <option value="track">4WD track only</option>
@@ -280,19 +311,19 @@
           <option value="drive">Drivable (road or track)</option>
         </select>
         <select id="distFilter"
-          class="w-full text-xs bg-slate-800/80 border border-slate-600 rounded-lg px-2 py-1.5 mb-1.5 focus:outline-none focus:ring-2 focus:ring-amber-400 cursor-pointer">
+          class="w-full text-xs bg-slate-800/80 border border-slate-600 rounded-lg px-2 py-1 mb-1.5 focus:outline-none focus:ring-2 focus:ring-amber-400 cursor-pointer">
           <option value="0" selected>Anywhere in the path</option>
           <option value="10">Within 10 km of here</option>
           <option value="25">Within 25 km of here</option>
           <option value="50">Within 50 km of here</option>
           <option value="100">Within 100 km of here</option>
         </select>
-        <div id="topSpots" class="flex flex-col gap-1 max-h-44 overflow-y-auto"></div>
+        <div id="topSpots" class="flex flex-col gap-1 max-h-40 overflow-y-auto pr-0.5"></div>
         <p id="topSpotsNote" class="text-[10px] text-slate-500 mt-1.5 leading-snug"></p>
       </div>
 
-      <div class="mt-3 pt-3 border-t border-slate-700/60">
-        <p class="text-[11px] uppercase tracking-wide text-slate-400 mb-2 flex items-center gap-1.5">
+      <div class="mt-2.5 pt-2.5 border-t border-slate-700/60">
+        <p class="text-[11px] uppercase tracking-wide text-slate-400 mb-1.5 flex items-center gap-1.5">
           <i data-lucide="map-pin" class="w-3.5 h-3.5"></i> Custom location
         </p>
         <div class="relative">
@@ -320,22 +351,43 @@
   </div>
 
   <!-- ============================= RIGHT-SIDE STACK ============================= -->
-  <div id="rightStack" class="hidden fixed right-3 top-20 z-30 w-72 flex flex-col gap-3 max-h-[82vh]">
+  <div id="rightStack" class="hidden fixed right-3 top-20 z-30 w-72 flex flex-col gap-2.5">
 
     <!-- Eclipse magnitude / progress card -->
-    <div class="panel rounded-xl p-4 shadow-lg">
-      <div class="flex items-center justify-between mb-3">
+    <div class="panel rounded-xl p-3.5 shadow-lg shrink-0">
+      <div class="flex items-center justify-between mb-2.5">
         <p class="text-sm font-semibold flex items-center gap-1.5">
           <i data-lucide="eclipse" class="w-4 h-4 text-amber-400"></i> Eclipse progress
         </p>
         <span id="eclipseMag" class="expert-only text-[11px] font-mono text-slate-400">mag 0.00</span>
       </div>
-      <div class="flex items-center gap-4">
+      <div class="flex items-center gap-3.5">
         <svg id="eclipseSvg" viewBox="0 0 120 120" class="w-24 h-24 shrink-0" aria-label="Eclipse diagram">
-          <circle cx="60" cy="60" r="59" fill="#0b1220" />
-          <circle id="eclCorona" cx="60" cy="60" r="32" fill="none" stroke="#fde68a" stroke-width="0" opacity="0" />
-          <circle id="eclSun" cx="60" cy="60" r="30" fill="#fbbf24" />
-          <circle id="eclMoon" cx="60" cy="60" r="30" fill="#111827" stroke="#475569" stroke-width="1" />
+          <defs>
+            <radialGradient id="svgSunGrad" cx="45%" cy="45%" r="55%">
+              <stop offset="0%" stop-color="#fffbeb" />
+              <stop offset="65%" stop-color="#fbbf24" />
+              <stop offset="100%" stop-color="#d97706" />
+            </radialGradient>
+            <radialGradient id="svgCoronaOuter" cx="50%" cy="50%" r="50%">
+              <stop offset="50%" stop-color="#f8fafc" stop-opacity="0.9" />
+              <stop offset="68%" stop-color="#fde68a" stop-opacity="0.45" />
+              <stop offset="86%" stop-color="#93c5fd" stop-opacity="0.16" />
+              <stop offset="100%" stop-color="#0b1220" stop-opacity="0" />
+            </radialGradient>
+            <radialGradient id="svgDiamondGrad" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#ffffff" stop-opacity="1" />
+              <stop offset="35%" stop-color="#fef08a" stop-opacity="0.9" />
+              <stop offset="100%" stop-color="#f59e0b" stop-opacity="0" />
+            </radialGradient>
+          </defs>
+          <circle cx="60" cy="60" r="59" fill="#060b16" stroke="#1e293b" stroke-width="1" />
+          <circle id="eclCoronaHalo" cx="60" cy="60" r="56" fill="url(#svgCoronaOuter)" opacity="0" />
+          <circle id="eclCorona" cx="60" cy="60" r="32" fill="none" stroke="#fef3c7" stroke-width="0" opacity="0" />
+          <circle id="eclChromo" cx="60" cy="60" r="31" fill="none" stroke="#fb7185" stroke-width="0" opacity="0" />
+          <circle id="eclSun" cx="60" cy="60" r="30" fill="url(#svgSunGrad)" />
+          <circle id="eclMoon" cx="60" cy="60" r="30" fill="#090e1a" stroke="#334155" stroke-width="0.8" />
+          <circle id="eclDiamond" cx="60" cy="60" r="10" fill="url(#svgDiamondGrad)" opacity="0" />
         </svg>
         <div class="flex-1 min-w-0">
           <p class="text-[11px] uppercase tracking-wide text-slate-400">Obscuration</p>
@@ -343,18 +395,18 @@
           <p id="eclipsePhaseLabel" class="text-xs text-slate-500 mt-0.5">No eclipse</p>
         </div>
       </div>
-      <div class="mt-3 h-1.5 rounded-full bg-slate-700 overflow-hidden">
+      <div class="mt-2.5 h-1.5 rounded-full bg-slate-700 overflow-hidden">
         <div id="eclipseBar" class="h-full bg-amber-400 transition-all duration-150" style="width:0%"></div>
       </div>
       <p id="eclipseLocalTimes" class="mt-2 text-[11px] text-slate-400 leading-snug"></p>
     </div>
 
     <!-- Horizon profile chart -->
-    <div id="horizonCard" class="hidden panel rounded-xl p-4 shadow-lg">
-      <p class="text-sm font-semibold flex items-center gap-1.5 mb-1">
+    <div id="horizonCard" class="hidden panel rounded-xl p-3.5 shadow-lg shrink-0">
+      <p class="text-sm font-semibold flex items-center gap-1.5 mb-0.5">
         <i data-lucide="mountain" class="w-4 h-4 text-amber-400"></i> Horizon profile
       </p>
-      <p class="text-[11px] text-slate-400 mb-2">Terrain silhouette vs the sun's track</p>
+      <p class="text-[11px] text-slate-400 mb-1.5">Terrain silhouette vs the sun's track</p>
       <svg id="horizonSvg" viewBox="0 0 280 150" class="w-full" aria-label="Horizon profile chart"></svg>
       <div class="flex items-center gap-3 mt-1 text-[10px] text-slate-400">
         <span class="flex items-center gap-1"><span class="inline-block w-3 h-2 rounded-sm bg-slate-500"></span> terrain</span>
@@ -364,12 +416,12 @@
     </div>
 
     <!-- Sightline / educational panel -->
-    <div id="infoPanel" class="panel rounded-xl p-4 shadow-lg overflow-y-auto">
+    <div id="infoPanel" class="panel rounded-xl p-3.5 shadow-lg shrink-0">
       <div class="flex items-center justify-between mb-2">
         <p class="text-sm font-semibold flex items-center gap-1.5">
           <i data-lucide="info" class="w-4 h-4 text-amber-400"></i> Sightline
         </p>
-        <span id="activeLocation" class="text-[11px] text-slate-400">Dunedin</span>
+        <span id="activeLocation" class="text-[11px] text-amber-300/90 font-medium truncate max-w-[10rem]">Dunedin</span>
       </div>
       <div id="resultBox" class="text-sm text-slate-300 leading-relaxed">
         <p class="text-slate-400">
@@ -381,41 +433,50 @@
   </div>
 
   <!-- ============================= BOTTOM CONTROL BAR ============================= -->
-  <div id="bottomBar" class="hidden fixed bottom-0 inset-x-0 z-30 px-3 py-3 sm:px-4">
-    <div class="panel rounded-xl px-4 py-3 shadow-lg">
+  <div id="bottomBar" class="hidden fixed bottom-0 inset-x-0 z-30 px-3 py-2.5 sm:px-4">
+    <div class="panel rounded-xl px-4 py-2.5 shadow-lg">
       <div class="flex items-center gap-3 mb-2">
         <button id="playPause" title="Play / Pause"
           class="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-lg bg-slate-700 hover:bg-slate-600 transition">
           <i data-lucide="play" class="w-4 h-4"></i>
         </button>
         <span class="text-xs text-slate-400 font-mono shrink-0">15:00</span>
-        <input id="timeScrub" type="range" min="0" max="1000" value="0" class="scrub flex-1 cursor-pointer" />
+        <div class="relative flex-1 flex items-center">
+          <div id="scrubTotalityBand" title="Totality window"
+            class="hidden absolute h-2.5 rounded-full bg-red-400/80 ring-2 ring-amber-300/60 pointer-events-none z-[1]"
+            style="left:51%;width:2%"></div>
+          <input id="timeScrub" type="range" min="0" max="1000" value="0" class="scrub w-full cursor-pointer" />
+        </div>
         <span class="text-xs text-slate-400 font-mono shrink-0">17:30</span>
       </div>
-      <div class="flex flex-wrap items-center gap-2">
+      <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
         <span class="hidden sm:inline text-[10px] uppercase tracking-wide text-slate-500">Jump</span>
         <button id="jumpStart" title="First contact — the eclipse begins"
-          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-1.5 transition">
+          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 py-1.5 transition">
           <i data-lucide="sunrise" class="w-3.5 h-3.5 text-amber-400"></i> Start<span id="jumpStartT" class="text-slate-400 font-mono"></span>
         </button>
         <button id="jumpTotality" title="Maximum eclipse"
-          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-1.5 transition">
+          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 py-1.5 transition">
           <i data-lucide="target" class="w-3.5 h-3.5 text-amber-400"></i> Totality<span id="jumpMaxT" class="text-slate-400 font-mono"></span>
         </button>
         <button id="jumpEnd" title="Last contact — the eclipse ends"
-          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-1.5 transition">
+          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 py-1.5 transition">
           <i data-lucide="sunset" class="w-3.5 h-3.5 text-amber-400"></i> End<span id="jumpEndT" class="text-slate-400 font-mono"></span>
+        </button>
+        <button id="viewToggle" title="Switch between elevated overview and observer eye-level view"
+          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 py-1.5 transition">
+          <i data-lucide="eye" class="w-3.5 h-3.5 text-amber-400"></i> <span id="viewToggleLabel">Eye level</span>
         </button>
         <button id="watchIt"
           class="inline-flex items-center gap-1.5 text-sm font-semibold bg-sky-500 hover:bg-sky-400 text-slate-900 rounded-lg px-3 md:px-4 py-1.5 transition md:ml-auto">
           <i data-lucide="clapperboard" class="w-4 h-4"></i> <span class="hidden sm:inline">Watch it happen</span><span class="sm:hidden">Watch</span>
         </button>
         <button id="runSightline"
-          class="inline-flex items-center gap-1.5 text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg px-4 py-1.5 transition">
+          class="inline-flex items-center gap-1.5 text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg px-3.5 py-1.5 transition">
           <i data-lucide="scan-eye" class="w-4 h-4"></i> <span class="expert-only">Run Sightline Check</span><span class="simple-only">Can I see it?</span>
         </button>
       </div>
-      <p id="dataCredit" class="mt-2 text-[10px] text-slate-500 leading-tight"></p>
+      <p id="dataCredit" class="mt-1.5 text-[10px] text-slate-500 leading-tight"></p>
     </div>
   </div>
 
@@ -457,7 +518,10 @@
     { name: "Dunedin",    lon: 170.5028, lat: -45.8788, icon: "waves" },
   ];
 
-  const EARTH_RADIUS = 6371000;        // mean radius, m (for curvature drop)
+  const EARTH_RADIUS = 6371000;        // mean Earth radius, m
+  const REFRACTION_K = 0.13;           // standard terrestrial refraction coefficient (effective R = R / (1 - k))
+  const EFFECTIVE_EARTH_RADIUS = EARTH_RADIUS / (1 - REFRACTION_K);
+  const SUN_RADIUS_DEG = 0.26;         // apparent solar semi-diameter (~15.7 arcmin)
   const SIGHTLINE_RANGE = 45000;       // m, how far out to probe terrain
   const EYE_HEIGHT = 1.7;              // observer eye height, m
   const HORIZON_SPAN = 20;             // deg either side of the sun to sweep for the profile
@@ -548,11 +612,12 @@
   }
 
   // Topocentric alt/az of a body, plus its apparent radius and sky direction vector.
-  // Geometric (unrefracted) altitude: the conservative choice for a visibility tool, and
-  // consistent with the contact-time altitudes reported by SearchLocalSolarEclipse.
+  // Apparent (refracted) altitude via Bennett's formula ("normal"), matching what an
+  // observer actually sees and consistent with EclipseEvent.altitude from
+  // SearchLocalSolarEclipse in the precomputed catalogue.
   function bodyAltAz(body, date, observer, radiusKm) {
     const eq = A.Equator(body, date, observer, true, true);
-    const hz = A.Horizon(date, observer, eq.ra, eq.dec, null);
+    const hz = A.Horizon(date, observer, eq.ra, eq.dec, "normal");
     const ra = eq.ra * 15 * Math.PI / 180, dec = eq.dec * Math.PI / 180;
     return {
       altitude: hz.altitude,
@@ -588,6 +653,7 @@
   // Real eclipse geometry for this observer at this instant, from sun + moon ephemeris.
   //   magnitude   fraction of the sun's DIAMETER covered
   //   obscuration fraction of the sun's AREA covered
+  //   isTotal     true only when the lunar disc completely covers the solar disc
   function eclipseAt(time, originCartesian) {
     const date = toDate(time);
     const obs = observerFor(originCartesian);
@@ -597,9 +663,11 @@
     const sep = Math.acos(Cesium.Math.clamp(dot, -1, 1));
     const mag = Math.max(0, (s.angRadius + m.angRadius - sep) / (2 * s.angRadius));
     const obscuration = Math.min(1, circleOverlapArea(s.angRadius, m.angRadius, sep) / (Math.PI * s.angRadius * s.angRadius));
+    const isTotal = m.angRadius >= s.angRadius && sep <= (m.angRadius - s.angRadius);
     return {
       mag,
       obscuration,
+      isTotal,
       k: m.angRadius / s.angRadius,        // moon/sun apparent size ratio
       sepR: sep / s.angRadius,             // separation in sun-radii
       sunAlt: s.altitude,
@@ -650,11 +718,13 @@
 
   function updateEclipseCard(time, e) {
     document.getElementById("eclipseMag").textContent = "mag " + e.mag.toFixed(2);
-    document.getElementById("eclipseObsc").textContent = Math.round(e.obscuration * 100) + "%";
+    const pct = e.isTotal ? "100%" : (e.obscuration >= 0.995 ? "99.9%" : Math.round(e.obscuration * 100) + "%");
+    document.getElementById("eclipseObsc").textContent = pct;
     document.getElementById("eclipseBar").style.width = Math.min(100, e.obscuration * 100).toFixed(0) + "%";
 
     const lbl = document.getElementById("eclipsePhaseLabel");
-    if (e.obscuration >= 0.999) { lbl.textContent = "Totality"; lbl.className = "text-xs font-bold text-amber-300 mt-0.5"; }
+    if (e.isTotal) { lbl.textContent = "Totality"; lbl.className = "text-xs font-bold text-amber-300 mt-0.5"; }
+    else if (e.obscuration >= 0.985) { lbl.textContent = "Diamond ring / Baily's beads"; lbl.className = "text-xs font-semibold text-amber-200 mt-0.5"; }
     else if (e.mag > 0) { lbl.textContent = "Partial phase"; lbl.className = "text-xs font-semibold text-amber-400/90 mt-0.5"; }
     else { lbl.textContent = "No eclipse"; lbl.className = "text-xs text-slate-500 mt-0.5"; }
 
@@ -675,21 +745,535 @@
     moon.setAttribute("cy", cy.toFixed(1));
 
     const corona = document.getElementById("eclCorona");
-    if (e.obscuration >= 0.999) {
-      corona.setAttribute("r", (moonR + 3).toFixed(1));
+    const coronaHalo = document.getElementById("eclCoronaHalo");
+    const chromo = document.getElementById("eclChromo");
+    const diamond = document.getElementById("eclDiamond");
+    const nearTot = !e.isTotal && e.obscuration >= 0.96;
+
+    if (e.isTotal || nearTot) {
+      const cAlpha = e.isTotal ? 1 : Cesium.Math.clamp((e.obscuration - 0.96) / 0.04, 0, 0.85);
+      corona.setAttribute("r", (moonR + 2.5).toFixed(1));
       corona.setAttribute("cx", cx.toFixed(1));
       corona.setAttribute("cy", cy.toFixed(1));
-      corona.setAttribute("stroke-width", "5");
-      corona.setAttribute("opacity", "0.9");
+      corona.setAttribute("stroke-width", e.isTotal ? "4.5" : "2.5");
+      corona.setAttribute("opacity", (0.92 * cAlpha).toFixed(2));
+      if (coronaHalo) {
+        coronaHalo.setAttribute("cx", cx.toFixed(1));
+        coronaHalo.setAttribute("cy", cy.toFixed(1));
+        coronaHalo.setAttribute("opacity", cAlpha.toFixed(2));
+      }
+      if (chromo) {
+        chromo.setAttribute("r", (moonR + 0.6).toFixed(1));
+        chromo.setAttribute("cx", cx.toFixed(1));
+        chromo.setAttribute("cy", cy.toFixed(1));
+        chromo.setAttribute("stroke-width", "1.4");
+        chromo.setAttribute("opacity", (0.85 * cAlpha).toFixed(2));
+      }
     } else {
       corona.setAttribute("stroke-width", "0");
       corona.setAttribute("opacity", "0");
+      if (coronaHalo) coronaHalo.setAttribute("opacity", "0");
+      if (chromo) { chromo.setAttribute("stroke-width", "0"); chromo.setAttribute("opacity", "0"); }
+    }
+
+    if (diamond) {
+      if (!e.isTotal && e.obscuration >= 0.98) {
+        const dAlpha = Math.sin(Cesium.Math.clamp((e.obscuration - 0.98) / 0.02, 0, 1) * Math.PI * 0.85);
+        const dx = 60 - Rp * Math.cos(pa);
+        const dy = 60 + Rp * Math.sin(pa);
+        diamond.setAttribute("cx", dx.toFixed(1));
+        diamond.setAttribute("cy", dy.toFixed(1));
+        diamond.setAttribute("r", (9 + dAlpha * 5).toFixed(1));
+        diamond.setAttribute("opacity", Math.max(0.35, dAlpha).toFixed(2));
+      } else {
+        diamond.setAttribute("opacity", "0");
+      }
+    }
+  }
+
+  // ====================================================================================
+  //  3D ECLIPSE SKY RENDERER
+  //  Cesium's built-in Sun & Moon use a coarse lunar series (missing totality by ~12% and
+  //  several minutes) and draw an un-occulted yellow sun bloom behind a tiny black polygon.
+  //  We hide both and render a multi-layered, hardware depth-tested 3D eclipse assembly
+  //  (twilight horizon glow, K/F solar corona, chromosphere & prominences, limb-darkened
+  //  solar crescent, dark lunar silhouette, and diamond ring) at exact astronomy-engine
+  //  topocentric coordinates. Because every billboard has disableDepthTestDistance = 0 at
+  //  160 km range, foreground 3D mountain ridges naturally occlude the sun and corona.
+  // ====================================================================================
+  const SKY_ECLIPSE_DIST = 160000;     // 160 km: beyond all South Island terrain, inside frustum
+  const CRESCENT_STEPS = 40;
+  let eclipseBillboards = null;
+  let bbTwilight = null, bbCorona = null, bbMoon = null, bbCrescent = null, bbGlare = null, bbDiamond = null;
+  let skyGhostEntity = null;
+  let currentSightlineBlocked = false;
+  let currentHorizonAtSun = null;
+
+  function makeTwilightTexture() {
+    const cv = document.createElement("canvas");
+    cv.width = 512; cv.height = 320;
+    const ctx = cv.getContext("2d");
+    // Deep coronal indigo halo around the sun centre
+    const halo = ctx.createRadialGradient(256, 160, 10, 256, 160, 240);
+    halo.addColorStop(0, "rgba(148, 163, 184, 0.38)");
+    halo.addColorStop(0.35, "rgba(56, 189, 248, 0.16)");
+    halo.addColorStop(0.7, "rgba(30, 58, 138, 0.10)");
+    halo.addColorStop(1, "rgba(15, 23, 42, 0)");
+    ctx.fillStyle = halo;
+    ctx.fillRect(0, 0, 512, 320);
+
+    // Warm 360-degree twilight horizon glow along the lower sky (backlights mountain silhouettes)
+    const horiz = ctx.createRadialGradient(256, 255, 15, 256, 255, 250);
+    horiz.addColorStop(0, "rgba(251, 146, 60, 0.62)");
+    horiz.addColorStop(0.35, "rgba(245, 158, 11, 0.38)");
+    horiz.addColorStop(0.7, "rgba(217, 119, 6, 0.14)");
+    horiz.addColorStop(1, "rgba(15, 23, 42, 0)");
+    ctx.fillStyle = horiz;
+    ctx.fillRect(0, 0, 512, 320);
+    return cv;
+  }
+
+  function makeGlareTexture() {
+    const cv = document.createElement("canvas");
+    cv.width = 256; cv.height = 256;
+    const ctx = cv.getContext("2d");
+    const g = ctx.createRadialGradient(128, 128, 4, 128, 128, 124);
+    g.addColorStop(0, "rgba(255, 255, 255, 0.95)");
+    g.addColorStop(0.16, "rgba(254, 240, 138, 0.82)");
+    g.addColorStop(0.42, "rgba(251, 191, 36, 0.38)");
+    g.addColorStop(0.72, "rgba(245, 158, 11, 0.12)");
+    g.addColorStop(1, "rgba(245, 158, 11, 0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 256, 256);
+    return cv;
+  }
+
+  function makeCoronaTexture() {
+    const cv = document.createElement("canvas");
+    cv.width = 512; cv.height = 512;
+    const ctx = cv.getContext("2d");
+    const cx = 256, cy = 256, R = 46;
+
+    // 1. Broad F-corona outer diffuse glow
+    const outer = ctx.createRadialGradient(cx, cy, R * 0.95, cx, cy, 248);
+    outer.addColorStop(0, "rgba(248, 250, 252, 0.75)");
+    outer.addColorStop(0.18, "rgba(226, 232, 240, 0.42)");
+    outer.addColorStop(0.45, "rgba(186, 230, 253, 0.16)");
+    outer.addColorStop(0.75, "rgba(148, 163, 184, 0.05)");
+    outer.addColorStop(1, "rgba(15, 23, 42, 0)");
+    ctx.fillStyle = outer;
+    ctx.fillRect(0, 0, 512, 512);
+
+    // 2. Sculpted K-corona helmet streamers and polar plumes
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(-0.38); // natural solar equatorial tilt in the NW winter sky
+    const streamers = [
+      { ang: 0.0, len: 235, w: 0.42, a: 0.55 },
+      { ang: 0.32, len: 195, w: 0.28, a: 0.38 },
+      { ang: -0.28, len: 210, w: 0.32, a: 0.44 },
+      { ang: Math.PI, len: 240, w: 0.44, a: 0.58 },
+      { ang: Math.PI + 0.30, len: 205, w: 0.30, a: 0.40 },
+      { ang: Math.PI - 0.34, len: 190, w: 0.28, a: 0.36 },
+      { ang: 0.78, len: 145, w: 0.22, a: 0.26 },
+      { ang: -0.82, len: 150, w: 0.22, a: 0.26 },
+      { ang: Math.PI + 0.80, len: 155, w: 0.24, a: 0.28 },
+      { ang: Math.PI - 0.76, len: 140, w: 0.20, a: 0.25 },
+    ];
+    for (const s of streamers) {
+      ctx.save();
+      ctx.rotate(s.ang);
+      const sg = ctx.createLinearGradient(R * 0.85, 0, s.len, 0);
+      sg.addColorStop(0, `rgba(255, 251, 235, ${s.a})`);
+      sg.addColorStop(0.35, `rgba(226, 232, 240, ${s.a * 0.55})`);
+      sg.addColorStop(0.75, `rgba(186, 230, 253, ${s.a * 0.18})`);
+      sg.addColorStop(1, "rgba(186, 230, 253, 0)");
+      ctx.fillStyle = sg;
+      ctx.beginPath();
+      const y0 = R * Math.sin(s.w);
+      ctx.moveTo(R * 0.85, -y0);
+      ctx.quadraticCurveTo(s.len * 0.55, -y0 * 0.45, s.len, 0);
+      ctx.quadraticCurveTo(s.len * 0.55, y0 * 0.45, R * 0.85, y0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+    // Fine polar & radial coronal striations
+    for (let i = 0; i < 36; i++) {
+      const a = (i / 36) * Math.PI * 2;
+      const eq = Math.abs(Math.cos(a));
+      const rayLen = R + 68 + eq * 95 + ((i * 17) % 23);
+      ctx.save();
+      ctx.rotate(a);
+      const rg = ctx.createLinearGradient(R, 0, rayLen, 0);
+      rg.addColorStop(0, "rgba(255, 255, 255, 0.28)");
+      rg.addColorStop(0.5, "rgba(226, 232, 240, 0.10)");
+      rg.addColorStop(1, "rgba(226, 232, 240, 0)");
+      ctx.strokeStyle = rg;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(R * 0.95, 0);
+      ctx.lineTo(rayLen, 0);
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore();
+
+    // 3. Intense inner K-corona ring
+    const inner = ctx.createRadialGradient(cx, cy, R - 1, cx, cy, R + 36);
+    inner.addColorStop(0, "rgba(255, 255, 255, 0.98)");
+    inner.addColorStop(0.18, "rgba(254, 243, 199, 0.88)");
+    inner.addColorStop(0.48, "rgba(226, 232, 240, 0.35)");
+    inner.addColorStop(1, "rgba(226, 232, 240, 0)");
+    ctx.fillStyle = inner;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R + 36, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 4. Ruby-pink chromospheric rim and solar prominences
+    ctx.strokeStyle = "rgba(251, 113, 133, 0.92)";
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R + 0.6, 0, Math.PI * 2);
+    ctx.stroke();
+
+    const proms = [0.45, 1.85, 3.25, 4.9, 5.65];
+    ctx.fillStyle = "rgba(244, 63, 94, 0.95)";
+    for (const pa of proms) {
+      const px = cx + Math.cos(pa) * (R + 1.5);
+      const py = cy + Math.sin(pa) * (R + 1.5);
+      ctx.beginPath();
+      ctx.arc(px, py, 2.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 5. Fill the inner lunar silhouette with opaque deep velvet night (alpha = 1.0 so Cesium's
+    // 0.995 opaque-pass threshold writes depth across the entire disc and blocks twilight glow behind it)
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.fillStyle = "#000000";
+    ctx.beginPath();
+    ctx.arc(cx, cy, R - 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalCompositeOperation = "source-over";
+
+    const moonG = ctx.createRadialGradient(cx - 10, cy - 10, 4, cx, cy, R);
+    moonG.addColorStop(0, "rgb(9, 14, 28)");
+    moonG.addColorStop(0.75, "rgb(5, 8, 18)");
+    moonG.addColorStop(1, "rgb(2, 4, 11)");
+    ctx.fillStyle = moonG;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R - 0.2, 0, Math.PI * 2);
+    ctx.fill();
+    return cv;
+  }
+
+  function makeMoonTexture() {
+    const cv = document.createElement("canvas");
+    cv.width = 256; cv.height = 256;
+    const ctx = cv.getContext("2d");
+    const R = 64;
+    const g = ctx.createRadialGradient(122, 122, 6, 128, 128, R);
+    g.addColorStop(0, "rgb(9, 14, 28)");
+    g.addColorStop(0.82, "rgb(5, 8, 18)");
+    g.addColorStop(0.97, "rgb(3, 6, 14)");
+    g.addColorStop(1, "rgba(3, 6, 14, 0)");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(128, 128, R, 0, Math.PI * 2);
+    ctx.fill();
+    return cv;
+  }
+
+  function makeDiamondTexture() {
+    const cv = document.createElement("canvas");
+    cv.width = 256; cv.height = 256;
+    const ctx = cv.getContext("2d");
+    const cx = 128, cy = 128;
+    const g = ctx.createRadialGradient(cx, cy, 1, cx, cy, 78);
+    g.addColorStop(0, "rgba(255, 255, 255, 1)");
+    g.addColorStop(0.14, "rgba(254, 249, 195, 0.95)");
+    g.addColorStop(0.35, "rgba(251, 191, 36, 0.48)");
+    g.addColorStop(0.7, "rgba(245, 158, 11, 0.12)");
+    g.addColorStop(1, "rgba(245, 158, 11, 0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 256, 256);
+
+    // 4-point + diagonal diffraction spikes
+    const drawSpike = (ang, len, w, alpha) => {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(ang);
+      const sg = ctx.createLinearGradient(-len, 0, len, 0);
+      sg.addColorStop(0, "rgba(255, 255, 255, 0)");
+      sg.addColorStop(0.35, `rgba(254, 240, 138, ${alpha * 0.5})`);
+      sg.addColorStop(0.5, `rgba(255, 255, 255, ${alpha})`);
+      sg.addColorStop(0.65, `rgba(254, 240, 138, ${alpha * 0.5})`);
+      sg.addColorStop(1, "rgba(255, 255, 255, 0)");
+      ctx.fillStyle = sg;
+      ctx.beginPath();
+      ctx.moveTo(-len, 0);
+      ctx.quadraticCurveTo(0, -w, len, 0);
+      ctx.quadraticCurveTo(0, w, -len, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    };
+    drawSpike(0.2, 122, 3.2, 0.95);
+    drawSpike(0.2 + Math.PI / 2, 122, 3.2, 0.95);
+    drawSpike(0.2 + Math.PI / 4, 80, 2.0, 0.65);
+    drawSpike(0.2 - Math.PI / 4, 80, 2.0, 0.65);
+    return cv;
+  }
+
+  function makeCrescentTexture(sepR, kRatio = 1.045) {
+    const cv = document.createElement("canvas");
+    cv.width = 160; cv.height = 160;
+    const ctx = cv.getContext("2d");
+    const cx = 80, cy = 80, R = 50;
+
+    // Soft warm rim glow around the uncovered solar limb
+    const rim = ctx.createRadialGradient(cx, cy, R * 0.75, cx, cy, R + 14);
+    rim.addColorStop(0, "rgba(254, 240, 138, 0.9)");
+    rim.addColorStop(0.6, "rgba(251, 191, 36, 0.45)");
+    rim.addColorStop(1, "rgba(245, 158, 11, 0)");
+    ctx.fillStyle = rim;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R + 14, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Solar photosphere with limb darkening
+    const sunG = ctx.createRadialGradient(cx, cy, 4, cx, cy, R);
+    sunG.addColorStop(0, "#ffffff");
+    sunG.addColorStop(0.55, "#fef9c3");
+    sunG.addColorStop(0.85, "#fde047");
+    sunG.addColorStop(0.97, "#f59e0b");
+    sunG.addColorStop(1, "rgba(217, 119, 6, 0)");
+    ctx.fillStyle = sunG;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Carve out the encroaching lunar disc along +X (rotated at render time by position angle `pa`)
+    // and fill the overlapping lunar bite with an opaque dark sky-indigo silhouette (alpha = 1.0)
+    // so it writes to the depth buffer and blocks the daytime glare billboard behind it.
+    if (sepR < 2.05) {
+      const mcx = cx + sepR * R;
+      const moonR = R * kRatio;
+      ctx.globalCompositeOperation = "destination-out";
+      ctx.fillStyle = "#000000";
+      ctx.beginPath();
+      ctx.arc(mcx, cy, moonR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalCompositeOperation = "source-over";
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, R + 0.5, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.beginPath();
+      ctx.arc(mcx, cy, moonR, 0, Math.PI * 2);
+      ctx.fillStyle = "rgb(5, 8, 16)";
+      ctx.fill();
+      ctx.restore();
+    }
+    return cv;
+  }
+
+  function makeGhostRingTexture() {
+    const cv = document.createElement("canvas");
+    cv.width = 128; cv.height = 128;
+    const ctx = cv.getContext("2d");
+    ctx.strokeStyle = "rgba(248, 113, 113, 0.85)";
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([6, 5]);
+    ctx.beginPath();
+    ctx.arc(64, 64, 34, 0, Math.PI * 2);
+    ctx.stroke();
+    return cv;
+  }
+
+  const crescentCanvases = [];
+  function initEclipseSky() {
+    if (!viewer) return;
+    if (viewer.scene.sun) viewer.scene.sun.show = false;
+    if (viewer.scene.moon) viewer.scene.moon.show = false;
+
+    eclipseBillboards = viewer.scene.primitives.add(new Cesium.BillboardCollection());
+    for (let i = 0; i <= CRESCENT_STEPS; i++) {
+      const sepR = (i / CRESCENT_STEPS) * 2.08;
+      crescentCanvases.push(makeCrescentTexture(sepR));
+    }
+
+    bbTwilight = eclipseBillboards.add({
+      image: makeTwilightTexture(),
+      width: 960,
+      height: 600,
+      disableDepthTestDistance: 0,
+      show: false,
+    });
+    bbGlare = eclipseBillboards.add({
+      image: makeGlareTexture(),
+      width: 220,
+      height: 220,
+      disableDepthTestDistance: 0,
+      show: false,
+    });
+    bbCorona = eclipseBillboards.add({
+      image: makeCoronaTexture(),
+      width: 268,
+      height: 268,
+      disableDepthTestDistance: 0,
+      show: false,
+    });
+    bbMoon = eclipseBillboards.add({
+      image: makeMoonTexture(),
+      width: 82,
+      height: 82,
+      disableDepthTestDistance: 0,
+      show: false,
+    });
+    bbCrescent = eclipseBillboards.add({
+      image: crescentCanvases[CRESCENT_STEPS],
+      width: 82,
+      height: 82,
+      disableDepthTestDistance: 0,
+      show: false,
+    });
+    bbDiamond = eclipseBillboards.add({
+      image: makeDiamondTexture(),
+      width: 135,
+      height: 135,
+      disableDepthTestDistance: 0,
+      show: false,
+    });
+
+    // Subtle ghost indicator shown only when the sun is blocked behind a ridge or below horizon
+    skyGhostEntity = viewer.entities.add({
+      show: false,
+      billboard: {
+        image: makeGhostRingTexture(),
+        width: 56,
+        height: 56,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+      label: {
+        text: "Sun behind terrain",
+        font: "11px sans-serif",
+        fillColor: Cesium.Color.fromCssColorString("#fca5a5"),
+        showBackground: true,
+        backgroundColor: Cesium.Color.fromCssColorString("#0f172a").withAlpha(0.82),
+        pixelOffset: new Cesium.Cartesian2(0, 38),
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        scale: 0.9,
+      },
+    });
+  }
+
+  function updateEclipseSky(t, e) {
+    if (!eclipseBillboards || !activeGroundCartesian) return;
+    if (e.sunAlt < -1.5) {
+      bbTwilight.show = bbCorona.show = bbMoon.show = bbCrescent.show = bbGlare.show = bbDiamond.show = false;
+      if (skyGhostEntity) skyGhostEntity.show = false;
+      return;
+    }
+
+    const sunDir = enuDirection(activeGroundCartesian, e.sunAz, Math.max(-0.35, e.sunAlt));
+    const moonDir = enuDirection(activeGroundCartesian, e.moonAz, Math.max(-0.35, e.moonAlt));
+    const posAt = (dir, dist) => Cesium.Cartesian3.add(
+      activeGroundCartesian,
+      Cesium.Cartesian3.multiplyByScalar(dir, dist, new Cesium.Cartesian3()),
+      new Cesium.Cartesian3()
+    );
+
+    let dAz = e.moonAz - e.sunAz;
+    if (dAz > 180) dAz -= 360; else if (dAz < -180) dAz += 360;
+    const pa = Math.atan2(e.moonAlt - e.sunAlt, dAz * Math.cos(Cesium.Math.toRadians(e.sunAlt)));
+
+    // 1. Wide twilight & coronal sky glow behind terrain
+    const twAlpha = e.isTotal ? 0.95 : Math.pow(Cesium.Math.clamp((e.obscuration - 0.55) / 0.45, 0, 1), 2) * 0.85;
+    bbTwilight.show = twAlpha > 0.01;
+    if (bbTwilight.show) {
+      bbTwilight.position = posAt(sunDir, SKY_ECLIPSE_DIST + 8000);
+      bbTwilight.color = new Cesium.Color(1, 1, 1, twAlpha);
+    }
+
+    // 2. Solar corona + chromosphere + dark lunar silhouette (emerges past 92% obscuration)
+    const corAlpha = e.isTotal ? 1.0 : Math.pow(Cesium.Math.clamp((e.obscuration - 0.92) / 0.08, 0, 1), 2.2) * 0.88;
+    bbCorona.show = corAlpha > 0.01;
+    if (bbCorona.show) {
+      bbCorona.position = posAt(e.isTotal ? moonDir : sunDir, SKY_ECLIPSE_DIST + 2000);
+      bbCorona.color = new Cesium.Color(1, 1, 1, corAlpha);
+    }
+
+    // 3. Dark lunar silhouette disc during deep partial (80% - 96% before bbCorona takes over)
+    const moonAlpha = e.isTotal ? 0 : Math.pow(Cesium.Math.clamp((e.obscuration - 0.80) / 0.16, 0, 1), 1.8) * (1 - corAlpha) * 0.92;
+    bbMoon.show = moonAlpha > 0.01;
+    if (bbMoon.show) {
+      const mOffPx = Math.min(48, 24.4 * e.sepR);
+      bbMoon.position = posAt(sunDir, SKY_ECLIPSE_DIST + 1000);
+      bbMoon.pixelOffset = new Cesium.Cartesian2(mOffPx * Math.cos(pa), -mOffPx * Math.sin(pa));
+      bbMoon.color = new Cesium.Color(1, 1, 1, moonAlpha);
+    }
+
+    // 4. Solar photosphere crescent (hidden during totality)
+    bbCrescent.show = !e.isTotal && e.sunAlt > -0.4;
+    if (bbCrescent.show) {
+      const idx = Math.max(0, Math.min(CRESCENT_STEPS, Math.round((Cesium.Math.clamp(e.sepR, 0, 2.08) / 2.08) * CRESCENT_STEPS)));
+      bbCrescent.image = crescentCanvases[idx];
+      bbCrescent.position = posAt(sunDir, SKY_ECLIPSE_DIST);
+      bbCrescent.rotation = pa;
+      bbCrescent.color = Cesium.Color.WHITE;
+    }
+
+    // 5. Dynamic solar atmospheric glare (positioned behind bbCrescent so the lunar bite stays crisp)
+    const lightFrac = e.isTotal ? 0 : Math.max(0, 1 - e.obscuration);
+    const glareAlpha = e.isTotal ? 0 : Cesium.Math.clamp(Math.pow(lightFrac, 0.55) * 0.65, 0, 0.72);
+    bbGlare.show = glareAlpha > 0.02;
+    if (bbGlare.show) {
+      const cShift = e.mag > 0 ? Math.min(18, e.obscuration * 18) : 0;
+      bbGlare.position = posAt(sunDir, SKY_ECLIPSE_DIST + 5000);
+      bbGlare.pixelOffset = new Cesium.Cartesian2(-cShift * Math.cos(pa), cShift * Math.sin(pa));
+      bbGlare.scale = 0.5 + 0.55 * Math.pow(lightFrac, 0.35);
+      bbGlare.color = new Cesium.Color(1, 1, 1, glareAlpha);
+    }
+
+    // 6. Diamond Ring starburst at C2 / C3 (97.8% - 100% partial)
+    const showDiamond = !e.isTotal && e.obscuration >= 0.978;
+    bbDiamond.show = showDiamond;
+    if (showDiamond) {
+      const u = Cesium.Math.clamp((e.obscuration - 0.978) / 0.022, 0, 1);
+      const dAlpha = Math.max(0.35, Math.sin(u * Math.PI * 0.9));
+      const limbPx = 22.0;
+      bbDiamond.position = posAt(sunDir, SKY_ECLIPSE_DIST - 2000);
+      bbDiamond.pixelOffset = new Cesium.Cartesian2(-limbPx * Math.cos(pa), limbPx * Math.sin(pa));
+      bbDiamond.scale = 0.75 + 0.45 * dAlpha;
+      bbDiamond.color = new Cesium.Color(1, 1, 1, dAlpha);
+    }
+
+    // 7. Hide the Totality sun-track point when the sun/moon disc is sitting over it
+    if (totalityMarkerEntity && totalityMarkerEntity.point) {
+      totalityMarkerEntity.point.show = e.obscuration < 0.78;
+    }
+
+    // 8. Ghost indicator when obstructed by terrain in eye-level view (or after sunset)
+    if (skyGhostEntity) {
+      const blockedForObserver = e.sunAlt <= 0 ||
+        (Number.isFinite(currentHorizonAtSun) && e.sunAlt <= currentHorizonAtSun) ||
+        currentSightlineBlocked;
+      const showGhost = (cameraViewMode === "eye" && blockedForObserver) || e.sunAlt <= 0;
+      skyGhostEntity.show = showGhost && e.sunAlt > -1.0;
+      if (skyGhostEntity.show) {
+        skyGhostEntity.position = posAt(sunDir, SKY_ECLIPSE_DIST);
+        skyGhostEntity.label.text = e.sunAlt <= 0
+          ? "Sun below horizon"
+          : `Sun behind ridge (${e.sunAlt.toFixed(1)}°)`;
+      }
     }
   }
 
   // ====================================================================================
   //  ECLIPSE LIGHTING — CesiumJS models sun DIRECTION but has no concept of occultation,
-  //  so we dim the scene ourselves from the live obscuration.
+  //  so we dim and colour-shift the scene ourselves from the live obscuration.
   // ====================================================================================
   let sunLight = null;
   let lastDim = -1;
@@ -699,37 +1283,53 @@
     // Visible sunlight falls as (1 - obscuration), but perceived darkness collapses only in
     // the last few percent — which is exactly why totality feels so sudden. A high exponent
     // reproduces that: barely noticeable at 80%, plunging past 97%.
-    const dim = Math.pow(Cesium.Math.clamp(e.obscuration, 0, 1), 6);
+    const dim = e.isTotal ? 1.0 : Math.pow(Cesium.Math.clamp(e.obscuration, 0, 1), 5.5);
+    const purkinje = Math.pow(Cesium.Math.clamp((e.obscuration - 0.5) / 0.5, 0, 1), 2);
+
+    // Point the directional light from the true astronomy-engine sun position so raking
+    // terrain shadows match the sightline ray.
+    if (!sunLight) {
+      sunLight = new Cesium.DirectionalLight({
+        direction: new Cesium.Cartesian3(0, 0, -1),
+        intensity: 2.0,
+      });
+      viewer.scene.light = sunLight;
+    }
+    if (activeGroundCartesian) {
+      const sDir = enuDirection(activeGroundCartesian, e.sunAz, Math.max(4, e.sunAlt));
+      Cesium.Cartesian3.negate(sDir, sunLight.direction);
+    }
+
     if (Math.abs(dim - lastDim) < 0.002) return;   // skip redundant GPU state changes
     lastDim = dim;
 
-    // Intensity of a DIRECTIONAL light — shading contrast is preserved, so terrain relief
-    // and the raking 8° shadows stay readable as the scene darkens.
-    //
-    // These floors are deliberately conservative. Real totality is orders of magnitude darker
-    // than daylight, but a literal rendering is just a black screen — and the whole point is
-    // to SEE the terrain silhouette that blocks the sun. Light intensity and imagery
-    // brightness multiply, so both floors have to stay well clear of zero.
-    if (!sunLight) { sunLight = new Cesium.SunLight(); viewer.scene.light = sunLight; }
-    sunLight.intensity = lerp(2.0, 0.8, dim);
+    // Transition light colour: warm afternoon gold -> silvery steel Purkinje twilight -> deep umbral indigo
+    const r = lerp(lerp(1.0, 0.82, purkinje), 0.56, dim);
+    const g = lerp(lerp(0.97, 0.88, purkinje), 0.68, dim);
+    const b = lerp(lerp(0.90, 0.98, purkinje), 0.95, dim);
+    sunLight.color = new Cesium.Color(r, g, b, 1.0);
+    sunLight.intensity = lerp(2.0, 0.65, dim);
 
     const layer = viewer.imageryLayers.length ? viewer.imageryLayers.get(0) : null;
     if (layer) {
       // Baseline above 1.0 on purpose: the default view looks along the sun's bearing, so the
       // slopes facing the camera are back-lit and Cesium renders them close to black. Lifting
       // the imagery keeps the landscape readable without flattening the raking shadows.
-      layer.brightness = lerp(1.45, 0.5, dim);
-      layer.saturation = lerp(1.1, 0.55, dim);   // colour drains toward totality
+      layer.brightness = lerp(1.45, 0.36, dim);
+      layer.saturation = lerp(1.1, 0.42, dim);   // colour drains toward totality
     }
 
     const sky = viewer.scene.skyAtmosphere;
     if (sky) {
-      sky.brightnessShift = lerp(0, -0.5, dim);
-      sky.saturationShift = lerp(0, -0.35, dim);
+      // Shift toward deep twilight navy/indigo rather than flat grey cement
+      sky.hueShift = lerp(0, 0.06, dim);
+      sky.brightnessShift = lerp(0, -0.68, dim);
+      sky.saturationShift = lerp(0, -0.15, dim);
     }
     const globe = viewer.scene.globe;
-    globe.atmosphereBrightnessShift = lerp(0, -0.45, dim);
-    globe.atmosphereSaturationShift = lerp(0, -0.3, dim);
+    globe.atmosphereHueShift = lerp(0, 0.05, dim);
+    globe.atmosphereBrightnessShift = lerp(0, -0.58, dim);
+    globe.atmosphereSaturationShift = lerp(0, -0.2, dim);
   }
 
   // ====================================================================================
@@ -781,6 +1381,8 @@
     viewer.scene.globe.depthTestAgainstTerrain = true;
     viewer.scene.highDynamicRange = false;
 
+    initEclipseSky();
+
     // Clock locked to the eclipse window.
     viewer.clock.startTime = startJulian.clone();
     viewer.clock.stopTime = stopJulian.clone();
@@ -822,7 +1424,7 @@
     document.getElementById("clockReadout").textContent = formatNZST(t);
 
     if (activeGroundCartesian) {
-      // One ephemeris evaluation per tick, shared by the readout, card, badge and lighting.
+      // One ephemeris evaluation per tick, shared by the readout, card, badge, sky and lighting.
       const e = eclipseAt(t, activeGroundCartesian);
       document.getElementById("sunAlt").innerHTML = e.sunAlt.toFixed(1) + "&deg;";
       document.getElementById("sunAz").innerHTML = e.sunAz.toFixed(0) + "&deg;";
@@ -833,6 +1435,7 @@
       updateEclipseCard(t, e);
       updateTotalityBadge(e);
       updateEclipseLighting(e);
+      updateEclipseSky(t, e);
       updateNarration(t, e);
     }
 
@@ -850,7 +1453,7 @@
     const text = document.getElementById("totalityText");
     const dot = badge.querySelector("span.rounded-full");
     // Phase comes from the live geometry, so badge and card can never disagree.
-    const phase = e.obscuration >= 0.999 ? "TOTALITY" : e.mag > 0 ? "PARTIAL" : "BEFORE";
+    const phase = e.isTotal ? "TOTALITY" : e.mag > 0 ? "PARTIAL" : "BEFORE";
     if (phase === "TOTALITY") {
       badge.className = "totality-on flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full bg-amber-500 text-slate-900";
       dot.className = "w-2 h-2 rounded-full bg-slate-900";
@@ -869,10 +1472,112 @@
   // ====================================================================================
   //  LOCATION SELECTION & CAMERA
   // ====================================================================================
+  let cameraViewMode = "overview";      // "overview" (elevated behind marker) | "eye" (observer ground level)
+  let sunTrackEntities = [];            // 3D sun path arc and contact labels in the sky
+  let sightlineExtras = [];             // ridge marker and dashed continuation line
+
+  function clearSightlineVisuals() {
+    if (sightlinePrimitive) { viewer.entities.remove(sightlinePrimitive); sightlinePrimitive = null; }
+    for (const ent of sightlineExtras) viewer.entities.remove(ent);
+    sightlineExtras = [];
+    currentSightlineBlocked = false;
+    currentHorizonAtSun = null;
+  }
+
+  function clearSunTrack3D() {
+    for (const ent of sunTrackEntities) viewer.entities.remove(ent);
+    sunTrackEntities = [];
+  }
+
+  let totalityMarkerEntity = null;
+
+  // Draw the sun's path across the sky in 3D so the user can see how the sun descends toward
+  // the NW horizon and how the current clock time relates to the Totality sightline.
+  function drawSunTrack3D() {
+    if (!viewer || !activeGroundCartesian) return;
+    clearSunTrack3D();
+    totalityMarkerEntity = null;
+    const c = localCircumstances(activeGroundCartesian);
+    const trackDist = SKY_ECLIPSE_DIST + 6000;
+    const posAt = (az, alt) => Cesium.Cartesian3.add(
+      activeGroundCartesian,
+      Cesium.Cartesian3.multiplyByScalar(enuDirection(activeGroundCartesian, az, alt), trackDist, new Cesium.Cartesian3()),
+      new Cesium.Cartesian3()
+    );
+
+    // Split the dashed sun path around totality so no line crosses through the dark lunar disc
+    const steps = 80;
+    const beforeSeg = [], afterSeg = [];
+    for (let i = 0; i <= steps; i++) {
+      const t = Cesium.JulianDate.addSeconds(startJulian, (i / steps) * windowSecs, new Cesium.JulianDate());
+      const s = sunAltAz(t, activeGroundCartesian);
+      if (s.altitude < -0.2) continue;
+      if (c && c.peak) {
+        const dt = Cesium.JulianDate.secondsDifference(t, c.peak);
+        if (Math.abs(dt) < 340) continue; // leave a clean gap for the solar disc & inner corona
+        if (dt < 0) beforeSeg.push(posAt(s.azimuth, s.altitude));
+        else afterSeg.push(posAt(s.azimuth, s.altitude));
+      } else {
+        beforeSeg.push(posAt(s.azimuth, s.altitude));
+      }
+    }
+    for (const seg of [beforeSeg, afterSeg]) {
+      if (seg.length > 1) {
+        sunTrackEntities.push(viewer.entities.add({
+          polyline: {
+            positions: seg,
+            width: 1.8,
+            material: new Cesium.PolylineDashMaterialProperty({
+              color: Cesium.Color.fromCssColorString("#fbbf24").withAlpha(0.45),
+              dashLength: 12,
+            }),
+            arcType: Cesium.ArcType.NONE,
+          },
+        }));
+      }
+    }
+
+    if (c && c.peak) {
+      const sp = sunAltAz(c.peak, activeGroundCartesian);
+      totalityMarkerEntity = viewer.entities.add({
+        position: posAt(sp.azimuth, sp.altitude),
+        point: {
+          pixelSize: 6,
+          color: Cesium.Color.fromCssColorString("#f87171"),
+          outlineColor: Cesium.Color.fromCssColorString("#fef08a"),
+          outlineWidth: 1.5,
+          disableDepthTestDistance: 0,
+        },
+        label: {
+          text: `Totality ${formatNZST(c.peak).slice(0, 5)}`,
+          font: "11px sans-serif",
+          fillColor: Cesium.Color.fromCssColorString("#fde68a"),
+          showBackground: true,
+          backgroundColor: Cesium.Color.fromCssColorString("#0f172a").withAlpha(0.78),
+          pixelOffset: new Cesium.Cartesian2(0, -40),
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          disableDepthTestDistance: 0,
+          scale: 0.88,
+        },
+      });
+      sunTrackEntities.push(totalityMarkerEntity);
+    }
+  }
+
+  function highlightActiveButtons() {
+    document.querySelectorAll("#presetButtons button").forEach((btn) => {
+      const active = activeLoc && btn.dataset.name === activeLoc.name;
+      btn.className = active
+        ? "inline-flex items-center gap-2 text-xs font-semibold bg-amber-500/20 border border-amber-400/60 text-amber-200 rounded-lg px-2.5 py-1.5 transition text-left"
+        : "inline-flex items-center gap-2 text-xs font-medium bg-slate-800/70 hover:bg-slate-700 border border-transparent text-slate-200 rounded-lg px-2.5 py-1.5 transition text-left";
+    });
+  }
+
   // Move the observer/checked location WITHOUT moving the camera. Returns ground height.
   async function setObserver(loc) {
     activeLoc = loc;
     document.getElementById("activeLocation").textContent = loc.name;
+    highlightActiveButtons();
 
     // Does this spot already have an answer on disk? A catalogue click passes its own record
     // through; anything else (a shared link, a dropped pin) is matched on coordinates.
@@ -890,11 +1595,11 @@
 
     updateLocationMarker(loc, groundHeight);
     // A moved location invalidates any drawn sightline.
-    if (sightlinePrimitive) { viewer.entities.remove(sightlinePrimitive); sightlinePrimitive = null; }
+    clearSightlineVisuals();
     updateLocalTimes();
+    drawSunTrack3D();
     if (catalogue) renderTopSpots();   // distances are relative to where we now are
     updateShareUrl(loc);
-    onTick(viewer.clock); // refresh sun readout for the new observer
 
     // A sightline result belongs to one spot, so retire the old one the moment we move —
     // otherwise the previous verdict sits on screen describing somewhere the user has left.
@@ -920,6 +1625,7 @@
       document.getElementById("resultBox").innerHTML = resultPlaceholder;
     }
 
+    onTick(viewer.clock); // refresh sun readout and 3D sky for the new observer
     return groundHeight;
   }
 
@@ -1008,7 +1714,26 @@
     return { usableHalfDeg, offsetDeg };
   }
 
+  // Eye-level framing: stand at the observer's location looking toward the totality sun
+  // bearing, pitched slightly upward so the mountain horizon sits on the lower third and the
+  // eclipsed sun & corona sit cleanly in the sky below the top bar.
+  function frameEyeLevel(loc, groundHeight) {
+    const c = localCircumstances(activeGroundCartesian);
+    const s = sunAltAz(c && c.peak ? c.peak : viewer.clock.currentTime, activeGroundCartesian);
+    const { offsetDeg } = framingBand();
+    const pitchDeg = Math.max(2.5, Math.min(8, s.altitude * 0.48)) - offsetDeg;
+    return {
+      destination: Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat, groundHeight + 10),
+      orientation: {
+        heading: Cesium.Math.toRadians(s.azimuth),
+        pitch: Cesium.Math.toRadians(pitchDeg),
+        roll: 0,
+      },
+    };
+  }
+
   async function frameForLocation(loc, groundHeight) {
+    if (cameraViewMode === "eye") return frameEyeLevel(loc, groundHeight);
     const c = localCircumstances(activeGroundCartesian);
     // Heading faces where the sun will be at totality, as that is the moment being framed.
     // Pitch is set from the sun's altitude *now* (arrival, ~50% obscured) — that is its
@@ -1059,6 +1784,28 @@
     };
   }
 
+  function syncViewToggleUI() {
+    const btn = document.getElementById("viewToggle");
+    if (!btn) return;
+    const isEye = cameraViewMode === "eye";
+    btn.className = isEye
+      ? "inline-flex items-center gap-1.5 text-xs font-semibold bg-amber-500 text-slate-900 rounded-lg px-2.5 py-1.5 transition"
+      : "inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 py-1.5 transition";
+    btn.innerHTML = `<i data-lucide="${isEye ? "compass" : "eye"}" class="w-3.5 h-3.5 ${isEye ? "" : "text-amber-400"}"></i> <span id="viewToggleLabel">${isEye ? "Overview" : "Eye level"}</span>`;
+    if (locationMarker) locationMarker.show = !isEye;
+    if (sightlinePrimitive && !currentSightlineBlocked) sightlinePrimitive.show = !isEye;
+    lucide.createIcons();
+  }
+
+  async function toggleCameraViewMode() {
+    cameraViewMode = cameraViewMode === "overview" ? "eye" : "overview";
+    syncViewToggleUI();
+    if (!viewer || !activeLoc || !activeGroundCartesian) return;
+    const gh = Cesium.Cartographic.fromCartesian(activeGroundCartesian).height - EYE_HEIGHT;
+    const view = await frameForLocation(activeLoc, gh);
+    viewer.camera.flyTo({ ...view, duration: 1.4 });
+  }
+
   // Re-apply the arrival framing for wherever we already are. Needed because the first framing
   // happens while the UI is still hidden (so the chrome measures zero), and again whenever the
   // window resizes or a phone rotates and the usable band changes shape.
@@ -1068,7 +1815,18 @@
     viewer.camera.setView(await frameForLocation(activeLoc, gh));
   }
 
+  function closeMobileDrawers() {
+    if (document.body.dataset.panel && document.body.dataset.panel !== "none") {
+      document.body.dataset.panel = "none";
+      const off = "inline-flex items-center gap-1 text-[11px] font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2 py-1 transition";
+      const tp = document.getElementById("tabPlaces"), ti = document.getElementById("tabInfo");
+      if (tp) tp.className = off;
+      if (ti) ti.className = off;
+    }
+  }
+
   async function selectLocation(loc, fly = true) {
+    closeMobileDrawers();
     const groundHeight = await setObserver(loc);
 
     // Arrive part-way through the partial phase rather than at totality: at ~50% obscured
@@ -1110,6 +1868,20 @@
     document.getElementById("jumpStartT").textContent = c ? " " + hm(c.partialBegin) : "";
     document.getElementById("jumpMaxT").textContent = c ? " " + hm(c.peak) : "";
     document.getElementById("jumpEndT").textContent = c ? " " + hm(c.partialEnd) : "";
+
+    // Position the totality highlight band on the timeline scrubber.
+    const band = document.getElementById("scrubTotalityBand");
+    if (band) {
+      if (c && c.totalBegin && c.totalEnd) {
+        const f0 = Cesium.Math.clamp(Cesium.JulianDate.secondsDifference(c.totalBegin, startJulian) / windowSecs, 0, 1);
+        const f1 = Cesium.Math.clamp(Cesium.JulianDate.secondsDifference(c.totalEnd, startJulian) / windowSecs, 0, 1);
+        band.style.left = (f0 * 100).toFixed(2) + "%";
+        band.style.width = Math.max(1.4, (f1 - f0) * 100).toFixed(2) + "%";
+        band.classList.remove("hidden");
+      } else {
+        band.classList.add("hidden");
+      }
+    }
 
     if (!c || !c.totalBegin) {
       el.innerHTML = c
@@ -1153,6 +1925,7 @@
       locationMarker.position = pos;
       locationMarker.label.text = loc.name;
     }
+    locationMarker.show = cameraViewMode !== "eye";
   }
 
   // ---- Click-to-pin -------------------------------------------------------------------
@@ -1172,6 +1945,7 @@
       const carto = Cesium.Cartographic.fromCartesian(cartesian);
       const lat = Cesium.Math.toDegrees(carto.latitude);
       const lon = Cesium.Math.toDegrees(carto.longitude);
+      togglePinMode(false);
       // Pinning does not move the camera, so there is nothing to wait for.
       setObserver({ name: `${lat.toFixed(4)}, ${lon.toFixed(4)}`, lat, lon })
         .then(refreshSightlineIfRun);
@@ -1179,11 +1953,12 @@
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
   }
 
-  function togglePinMode() {
-    pinMode = !pinMode;
+  function togglePinMode(forceState) {
+    pinMode = typeof forceState === "boolean" ? forceState : !pinMode;
     const btn = document.getElementById("pinToggle");
     viewer.scene.canvas.style.cursor = pinMode ? "crosshair" : "";
     if (pinMode) {
+      closeMobileDrawers();
       btn.className = "mt-1.5 w-full inline-flex items-center justify-center gap-1.5 text-xs font-semibold bg-amber-500 text-slate-900 rounded-lg px-2 py-1.5 transition ring-2 ring-amber-300";
       btn.innerHTML = '<i data-lucide="map-pinned" class="w-3.5 h-3.5"></i> Click map to pin…';
       setCustomStatus("Click the map to set the location", "info");
@@ -1432,7 +2207,7 @@
         const h = sampled[k++].height;
         total++;
         if (!Number.isFinite(h)) { missing++; continue; }
-        const drop = (d * d) / (2 * EARTH_RADIUS);           // earth curvature drop
+        const drop = (d * d) / (2 * EFFECTIVE_EARTH_RADIUS); // earth curvature + terrestrial refraction
         const angle = Cesium.Math.toDegrees(Math.atan2(h - observerHeight - drop, d));
         if (angle > rayMax) { rayMax = angle; rayDist = d; rayHeight = h; }
       }
@@ -1443,11 +2218,17 @@
         ray.moment.ridgeHeight = rayHeight;
         ray.moment.below = ray.moment.alt <= 0;
         ray.moment.blocked = !ray.moment.below && rayMax >= ray.moment.alt;
+        ray.moment.grazing = !ray.moment.below && !ray.moment.blocked && (ray.moment.alt - rayMax) < SUN_RADIUS_DEG;
       }
     }
     profile.sort((a, b) => a.az - b.az);
 
-    drawSightline(focus.dir, !focus.blocked && !focus.below);
+    drawSightline(focus.dir, !focus.blocked && !focus.below, {
+      horizon: focus.horizon,
+      ridgeDist: focus.ridgeDist,
+      ridgeHeight: focus.ridgeHeight,
+      az: focus.az,
+    });
     renderHorizonChart(profile, moments, azLo, azHi);
     renderSightlineResults(moments, focus, missing / Math.max(1, total), catAtStart);
   }
@@ -1484,6 +2265,8 @@
       ? "At the peak of the eclipse the sun has already set here."
       : focus.blocked
       ? `At the peak of the eclipse, high ground about ${(focus.ridgeDist / 1000).toFixed(1)} km to the ${compassName(focus.az)} will be in the way. You would need to move to somewhere more open, or higher up, to see it.`
+      : focus.grazing
+      ? `At the peak of the eclipse, the centre of the sun clears the skyline by ${(focus.alt - focus.horizon).toFixed(1)}&deg;, but because the sun's disc spans ~0.5&deg; its lower edge grazes the ridge. Moving slightly higher will clear the whole disc.`
       : `You should have a clear view at the peak of the eclipse. Look ${heightPhrase(focus.alt)}, to the ${compassName(focus.az)} — the sun clears the skyline by about ${(focus.alt - focus.horizon).toFixed(1)}&deg;.`;
     // Refining a catalogue spot: reconcile the two rather than silently replacing one verdict
     // with another. There are two ways they can differ and they are not the same thing.
@@ -1661,21 +2444,103 @@
     document.getElementById("horizonCard").classList.remove("hidden");
   }
 
-  function drawSightline(sunDir, clear) {
-    if (sightlinePrimitive) { viewer.entities.remove(sightlinePrimitive); sightlinePrimitive = null; }
-    const end = Cesium.Cartesian3.add(
+  function drawSightline(sunDir, clear, opts = {}) {
+    clearSightlineVisuals();
+    currentSightlineBlocked = !clear;
+    currentHorizonAtSun = Number.isFinite(opts.horizon) ? opts.horizon : null;
+
+    const c = localCircumstances(activeGroundCartesian);
+    const sp = c && c.peak ? sunAltAz(c.peak, activeGroundCartesian) : null;
+    const az = Number.isFinite(opts.az) ? opts.az : (sp ? sp.azimuth : 311);
+    const alt = sp ? sp.altitude : 9;
+    // Aim just below the inner corona when clear so the ray leads the eye from the observer
+    // marker to the eclipse without crossing over the dark lunar disc.
+    const aimDir = clear
+      ? enuDirection(activeGroundCartesian, az, Math.max(0.2, alt - 0.85))
+      : sunDir;
+    const skyEnd = Cesium.Cartesian3.add(
       activeGroundCartesian,
-      Cesium.Cartesian3.multiplyByScalar(sunDir, SIGHTLINE_RANGE, new Cesium.Cartesian3()),
+      Cesium.Cartesian3.multiplyByScalar(aimDir, SKY_ECLIPSE_DIST + 4000, new Cesium.Cartesian3()),
       new Cesium.Cartesian3()
     );
-    sightlinePrimitive = viewer.entities.add({
-      polyline: {
-        positions: [activeGroundCartesian, end],
-        width: 3,
-        material: clear ? Cesium.Color.LIMEGREEN.withAlpha(0.9) : Cesium.Color.RED.withAlpha(0.9),
-        arcType: Cesium.ArcType.NONE,
-      },
-    });
+
+    if (!clear && opts.ridgeDist > 0 && Number.isFinite(opts.az)) {
+      const enuToFixed = Cesium.Transforms.eastNorthUpToFixedFrame(activeGroundCartesian);
+      const azRad = Cesium.Math.toRadians(opts.az);
+      const obsH = Cesium.Cartographic.fromCartesian(activeGroundCartesian).height;
+      const dz = Number.isFinite(opts.ridgeHeight) ? (opts.ridgeHeight - obsH) : 0;
+      const ridgeOffset = new Cesium.Cartesian3(
+        opts.ridgeDist * Math.sin(azRad),
+        opts.ridgeDist * Math.cos(azRad),
+        dz
+      );
+      const ridgePos = Cesium.Matrix4.multiplyByPoint(enuToFixed, ridgeOffset, new Cesium.Cartesian3());
+
+      sightlinePrimitive = viewer.entities.add({
+        polyline: {
+          positions: [activeGroundCartesian, ridgePos],
+          width: 4.5,
+          material: new Cesium.PolylineGlowMaterialProperty({
+            glowPower: 0.25,
+            color: Cesium.Color.fromCssColorString("#f87171").withAlpha(0.95),
+          }),
+          arcType: Cesium.ArcType.NONE,
+        },
+      });
+      sightlineExtras.push(viewer.entities.add({
+        polyline: {
+          positions: [ridgePos, skyEnd],
+          width: 1.8,
+          material: new Cesium.PolylineDashMaterialProperty({
+            color: Cesium.Color.fromCssColorString("#f87171").withAlpha(0.42),
+            dashLength: 14,
+          }),
+          arcType: Cesium.ArcType.NONE,
+        },
+      }));
+      const km = (opts.ridgeDist / 1000).toFixed(1);
+      const hStr = Number.isFinite(opts.horizon) ? `, ${opts.horizon.toFixed(1)}°` : "";
+      sightlineExtras.push(viewer.entities.add({
+        position: ridgePos,
+        point: {
+          pixelSize: 8,
+          color: Cesium.Color.fromCssColorString("#ef4444"),
+          outlineColor: Cesium.Color.WHITE,
+          outlineWidth: 1.5,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        label: {
+          text: `Blocking ridge (${km} km${hStr})`,
+          font: "11px sans-serif",
+          fillColor: Cesium.Color.fromCssColorString("#fecaca"),
+          showBackground: true,
+          backgroundColor: Cesium.Color.fromCssColorString("#450a0a").withAlpha(0.85),
+          pixelOffset: new Cesium.Cartesian2(0, -14),
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          scale: 0.88,
+        },
+      }));
+    } else {
+      const col = clear
+        ? Cesium.Color.fromCssColorString("#34d399").withAlpha(0.82)
+        : Cesium.Color.fromCssColorString("#f87171").withAlpha(0.85);
+      sightlinePrimitive = viewer.entities.add({
+        show: !clear || cameraViewMode !== "eye",
+        polyline: {
+          positions: [activeGroundCartesian, skyEnd],
+          width: 3.5,
+          material: new Cesium.PolylineGlowMaterialProperty({
+            glowPower: 0.22,
+            color: col,
+          }),
+          arcType: Cesium.ArcType.NONE,
+        },
+      });
+    }
+    if (viewer && activeGroundCartesian) {
+      updateEclipseSky(viewer.clock.currentTime, eclipseAt(viewer.clock.currentTime, activeGroundCartesian));
+    }
   }
 
   // ====================================================================================
@@ -1843,6 +2708,7 @@
       m.horizon = h.angle; m.ridgeDist = h.ridgeDist; m.ridgeHeight = h.ridgeHeight;
       m.below = m.alt <= 0;
       m.blocked = !m.below && m.horizon >= m.alt;
+      m.grazing = !m.below && !m.blocked && (m.alt - m.horizon) < SUN_RADIUS_DEG;
     }
     const focus = moments.find((m) => m.label === "Maximum") || moments[0];
 
@@ -1857,7 +2723,12 @@
       if (az >= azLo && az <= azHi) profile.push({ az, angle: p.profile.angles[k] });
     }
 
-    drawSightline(focus.dir, !focus.blocked && !focus.below);
+    drawSightline(focus.dir, !focus.blocked && !focus.below, {
+      horizon: focus.horizon,
+      ridgeDist: focus.ridgeDist,
+      ridgeHeight: focus.ridgeHeight,
+      az: focus.az,
+    });
     renderHorizonChart(profile, moments, azLo, azHi);
     renderSightlineResults(moments, focus, 0, null, p);
   }
@@ -1935,7 +2806,10 @@
     // The ray is a visual cue, so take its direction from live astronomy rather than the
     // catalogue's own azimuth — the two agree to a tenth of a degree, which is invisible here.
     if (c && c.peak && activeGroundCartesian) {
-      drawSightline(sunAltAz(c.peak, activeGroundCartesian).dir, v.level !== "blocked");
+      drawSightline(sunAltAz(c.peak, activeGroundCartesian).dir, v.level !== "blocked", {
+        horizon: s.horizon,
+        az: s.sunAz,
+      });
     }
   }
 
@@ -2004,25 +2878,33 @@
             ? (s.name || `Unnamed ${POI_LABEL[s.kind] || "spot"}`)
             : `${s.lat.toFixed(4)}, ${s.lon.toFixed(4)}`;
           const away = s._km == null ? ""
-            : ` · ${s._km < 1 ? "here" : s._km.toFixed(s._km < 10 ? 1 : 0) + " km " + s._bearing}`;
-          const sub = (usingPoi
+            : `${s._km < 1 ? "here" : s._km.toFixed(s._km < 10 ? 1 : 0) + " km " + s._bearing}`;
+          const subLeft = usingPoi
             ? `${POI_LABEL[s.kind] || s.kind} · ${s.elev} m · ${ACCESS_TIP[acc]}`
-            : `${s.elev} m · ${ACCESS_TIP[acc]}`) + away;
+            : `${s.elev} m · ${ACCESS_TIP[acc]}`;
+          const subRight = [away, dur].filter(Boolean).join(" · ");
           // A spot can clear the skyline at maximum yet be blocked at second or third
           // contact — worth flagging, since you'd lose part of totality.
           const partial = s.wholeTotality === false || s.totality < 60;
+          const isActive = activeLoc && haversineM(activeLoc.lat, activeLoc.lon, s.lat, s.lon) < CAT_MATCH_M;
+          const btnCls = isActive
+            ? "spot-btn text-left text-xs bg-amber-500/20 border border-amber-400/60 rounded-lg px-2 py-1.5 transition"
+            : "spot-btn text-left text-xs bg-slate-800/70 hover:bg-slate-700 border border-transparent rounded-lg px-2 py-1.5 transition";
           return `
           <button data-src="${usingPoi ? "poi" : "grid"}" data-i="${s._i}"
-            class="spot-btn text-left text-xs bg-slate-800/70 hover:bg-slate-700 rounded-lg px-2 py-1.5 transition">
+            class="${btnCls}">
             <span class="flex items-center gap-1.5">
               <i data-lucide="${usingPoi ? (POI_ICON[s.kind] || "map-pin") : ACCESS_ICON[acc]}" class="w-3 h-3 text-amber-400 shrink-0"></i>
-              <span class="text-slate-200 truncate">${title}</span>
+              <span class="text-slate-200 font-medium truncate">${title}</span>
               ${partial ? `<i data-lucide="alert-triangle" class="w-3 h-3 text-amber-400 shrink-0" title="Blocked for part of totality"></i>` : ""}
-              <span class="text-emerald-300 ml-auto shrink-0">+${s.clearance.toFixed(1)}&deg;</span>
+              <span class="text-emerald-300 font-mono text-[11px] ml-auto shrink-0">+${s.clearance.toFixed(1)}&deg;</span>
             </span>
-            <span class="block text-[10px] text-slate-500 mt-0.5 truncate">${sub} · ${dur}${
-              s.totality < 60 ? " · near path edge"
-              : s.wholeTotality === false ? " · part of totality blocked" : ""}</span>
+            <span class="flex items-center justify-between gap-2 text-[10px] text-slate-400 mt-0.5">
+              <span class="truncate text-slate-500">${subLeft}${
+                s.totality < 60 ? " · near edge"
+                : s.wholeTotality === false ? " · partial" : ""}</span>
+              <span class="shrink-0 font-mono text-slate-400">${subRight}</span>
+            </span>
           </button>`;
         }).join("")
       : `<p class="text-[11px] text-slate-500">No ${usingPoi ? "lookouts" : "spots"} match${
@@ -2076,6 +2958,19 @@
   const CINE_FAST = 60;    // through the long partial phases
   const CINE_SLOW = 12;    // through totality itself
 
+  function syncWatchButton() {
+    const btn = document.getElementById("watchIt");
+    if (!btn) return;
+    if (cinematic) {
+      btn.className = "inline-flex items-center gap-1.5 text-xs font-semibold bg-amber-400 text-slate-900 rounded-lg px-3 py-1.5 transition shadow ring-2 ring-amber-200";
+      btn.innerHTML = '<i data-lucide="square" class="w-3.5 h-3.5"></i> Stop';
+    } else {
+      btn.className = "inline-flex items-center gap-1.5 text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg px-3 py-1.5 transition shadow";
+      btn.innerHTML = '<i data-lucide="sparkles" class="w-3.5 h-3.5"></i> Watch it happen';
+    }
+    lucide.createIcons();
+  }
+
   function narrate(text, sub) {
     const box = document.getElementById("narration");
     const el = document.getElementById("narrationText");
@@ -2090,29 +2985,43 @@
   }
 
   async function startCinematic() {
+    closeMobileDrawers();
     const c = localCircumstances(activeGroundCartesian);
     if (!c || !c.peak) { narrate("No eclipse is visible from this spot.", ""); return; }
-
-    // Frame the low sun from just above the ground before the clock starts moving.
-    const s = sunAltAz(c.peak, activeGroundCartesian);
-    const ground = Cesium.Cartographic.fromCartesian(activeGroundCartesian);
-    viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromRadians(ground.longitude, ground.latitude, ground.height + 60),
-      orientation: {
-        heading: Cesium.Math.toRadians(s.azimuth),
-        pitch: Cesium.Math.toRadians(-3),
-        roll: 0,
-      },
-      duration: 2.2,
-    });
 
     const begin = c.totalBegin || c.peak;
     viewer.clock.currentTime = Cesium.JulianDate.addSeconds(begin, -480, new Cesium.JulianDate());
     cinematicEnd = Cesium.JulianDate.addSeconds(c.totalEnd || c.peak, 120, new Cesium.JulianDate());
+
+    // Frame the sun cleanly below the narration banner. If this spot has a clear sightline,
+    // swoop down near ground level looking across the horizon; if the ground point is blocked
+    // by a nearby hill (like Queenstown town centre), frame from the overview vantage so the
+    // eclipse remains visible above the ridge while showing the blocked sightline below.
+    const s = sunAltAz(c.peak, activeGroundCartesian);
+    const ground = Cesium.Cartographic.fromCartesian(activeGroundCartesian);
+    if (!currentSightlineBlocked) {
+      const { offsetDeg } = framingBand();
+      const pitchDeg = Math.max(2.5, Math.min(7.5, s.altitude * 0.45)) - offsetDeg;
+      viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromRadians(ground.longitude, ground.latitude, ground.height + 25),
+        orientation: {
+          heading: Cesium.Math.toRadians(s.azimuth),
+          pitch: Cesium.Math.toRadians(pitchDeg),
+          roll: 0,
+        },
+        duration: 2.0,
+      });
+    } else if (activeLoc) {
+      const view = await frameForLocation(activeLoc, ground.height - EYE_HEIGHT);
+      viewer.camera.flyTo({ ...view, duration: 2.0 });
+    }
+
     viewer.clock.multiplier = CINE_FAST;
     viewer.clock.shouldAnimate = true;
     cinematic = true;
     syncPlayIcon();
+    syncWatchButton();
+    onTick(viewer.clock);
     narrate("Keep your eyes on the north-western sky…", "The eclipse is already under way");
   }
 
@@ -2121,6 +3030,7 @@
     viewer.clock.shouldAnimate = false;
     viewer.clock.multiplier = 30;
     syncPlayIcon();
+    syncWatchButton();
     document.getElementById("narration").classList.add("hidden");
   }
 
@@ -2137,7 +3047,7 @@
     const c = localCircumstances(activeGroundCartesian);
     const past = c && c.peak ? Cesium.JulianDate.greaterThan(t, c.peak) : false;
 
-    if (o >= 0.999) {
+    if (e.isTotal) {
       narrate("Totality — the sun is completely hidden.",
         "The only time it is safe to look without eclipse glasses.");
     } else if (!past) {
@@ -2160,11 +3070,13 @@
     const wrap = document.getElementById("presetButtons");
     LOCATIONS.forEach((loc) => {
       const b = document.createElement("button");
-      b.className = "inline-flex items-center gap-2 text-sm bg-slate-800/70 hover:bg-slate-700 rounded-lg px-3 py-2 transition text-left";
-      b.innerHTML = `<i data-lucide="${loc.icon}" class="w-4 h-4 text-amber-400"></i> ${loc.name}`;
+      b.dataset.name = loc.name;
+      b.className = "inline-flex items-center gap-2 text-xs font-medium bg-slate-800/70 hover:bg-slate-700 border border-transparent text-slate-200 rounded-lg px-2.5 py-1.5 transition text-left";
+      b.innerHTML = `<i data-lucide="${loc.icon}" class="w-3.5 h-3.5 text-amber-400 shrink-0"></i> <span class="truncate">${loc.name}</span>`;
       b.addEventListener("click", () => selectLocation(loc, true));
       wrap.appendChild(b);
     });
+    highlightActiveButtons();
   }
 
   function wireControls() {
@@ -2187,6 +3099,8 @@
     document.getElementById("modeToggle").addEventListener("click", () => {
       setMode(document.body.dataset.mode === "simple" ? "expert" : "simple");
     });
+
+    document.getElementById("viewToggle").addEventListener("click", toggleCameraViewMode);
 
     // Mobile drawers: one at a time, and tapping the active tab closes it so the globe is
     // never permanently hidden behind a panel.
@@ -2223,7 +3137,10 @@
     document.getElementById("aboutClose").addEventListener("click", () => showAbout(false));
     about.addEventListener("click", (e) => { if (e.target === about) showAbout(false); });
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && !about.classList.contains("hidden")) showAbout(false);
+      if (e.key === "Escape") {
+        if (!about.classList.contains("hidden")) showAbout(false);
+        else if (pinMode) togglePinMode(false);
+      }
     });
     document.getElementById("watchIt").addEventListener("click", () => {
       if (cinematic) stopCinematic(); else startCinematic();
@@ -2245,11 +3162,16 @@
     document.getElementById("jumpTotality").addEventListener("click", jump((c) => c.peak));
     document.getElementById("jumpEnd").addEventListener("click", jump((c) => c.partialEnd));
 
-    document.getElementById("runSightline").addEventListener("click", runSightlineCheck);
+    document.getElementById("runSightline").addEventListener("click", () => {
+      if (window.innerWidth <= 1024 && document.body.dataset.panel !== "info") {
+        setPanel("info");
+      }
+      runSightlineCheck();
+    });
 
     document.getElementById("customGo").addEventListener("click", goToCustom);
     document.getElementById("customGeo").addEventListener("click", useMyLocation);
-    document.getElementById("pinToggle").addEventListener("click", togglePinMode);
+    document.getElementById("pinToggle").addEventListener("click", () => togglePinMode());
 
     const inp = document.getElementById("customInput");
     inp.addEventListener("input", () => {
