@@ -203,3 +203,49 @@ test("simulator loads without JS errors and wires up its controls", async ({ pag
 
   expect(errs, "no JS errors on the simulator page").toEqual([]);
 });
+
+test("PWA manifest, icon, and service worker are served and valid", async ({ request }) => {
+  const mRes = await request.get("/manifest.webmanifest");
+  expect(mRes.ok()).toBeTruthy();
+  const manifest = await mRes.json();
+  expect(manifest.display).toBe("standalone");
+  expect(manifest.icons.length).toBeGreaterThan(0);
+
+  const iRes = await request.get("/icon.svg");
+  expect(iRes.ok()).toBeTruthy();
+
+  const swRes = await request.get("/sw.js");
+  expect(swRes.ok()).toBeTruthy();
+  const swText = await swRes.text();
+  expect(swText).toContain("viewpoints.json");
+});
+
+test("mobile viewport UX: drawers, floating verdict pill, and map filter collapse", async ({ page }) => {
+  const errs = errors(page);
+  await page.setViewportSize({ width: 375, height: 667 });
+
+  // 1. Overview map collapses filters by default on mobile and toggles cleanly
+  await page.goto("/map.html");
+  await expect(page.locator("#mapFiltersBody")).toBeHidden();
+  await page.locator("#toggleMapFilters").click();
+  await expect(page.locator("#mapFiltersBody")).toBeVisible();
+  await page.locator("#toggleMapFilters").click();
+  await expect(page.locator("#mapFiltersBody")).toBeHidden();
+
+  // 2. Simulator mobile drawers open/close via tabs and close buttons
+  await page.goto("/index.html");
+  await expect(page.locator("body")).toHaveAttribute("data-panel", "none");
+  await page.evaluate(() => revealUI());
+  await page.locator("#tabPlaces").click();
+  await expect(page.locator("body")).toHaveAttribute("data-panel", "places");
+  await page.locator("#closePlacesDrawer").click();
+  await expect(page.locator("body")).toHaveAttribute("data-panel", "none");
+
+  await page.locator("#mobileVerdictBtn").click();
+  await expect(page.locator("body")).toHaveAttribute("data-panel", "info");
+  await page.locator("#closeInfoDrawer").click();
+  await expect(page.locator("body")).toHaveAttribute("data-panel", "none");
+
+  expect(errs, "no JS errors during mobile UX interactions").toEqual([]);
+});
+

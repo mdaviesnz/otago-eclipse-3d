@@ -2,10 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>How It Works — The Astronomy Behind Otago Eclipse 3D</title>
   <meta name="description" content="How Otago Eclipse 3D predicts the 22 July 2028 total solar eclipse and checks whether mountains will block your view." />
   <meta name="theme-color" content="#0f172a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Eclipse 2028" />
   <link rel="canonical" href="./astronomy.html" />
 
   <meta property="og:type" content="article" />
@@ -14,7 +17,9 @@
   <meta property="og:image" content="./social-card.svg" />
   <meta name="twitter:card" content="summary_large_image" />
 
+  <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%230f172a'/%3E%3Ccircle cx='16' cy='16' r='9' fill='none' stroke='%23fbbf24' stroke-width='3'/%3E%3Ccircle cx='13' cy='14' r='8' fill='%230f172a'/%3E%3C/svg%3E" />
+  <link rel="apple-touch-icon" href="icon.svg" />
 
   <link rel="stylesheet" href="app.css" />
   <script src="https://unpkg.com/lucide@latest"></script>
@@ -33,14 +38,22 @@
     .page-wrap {
       max-width: 52rem;
       margin: 0 auto;
-      padding: 5.5rem 1.25rem 4rem;
+      padding: calc(7rem + env(safe-area-inset-top, 0px)) 1rem calc(4rem + env(safe-area-inset-bottom, 0px));
+    }
+    @media (min-width: 640px) {
+      .page-wrap {
+        padding: calc(5.5rem + env(safe-area-inset-top, 0px)) 1.25rem 4rem;
+      }
     }
     .prose-card {
       background: rgba(30, 41, 59, 0.55);
       border: 1px solid rgba(148, 163, 184, 0.2);
       border-radius: 1rem;
-      padding: 1.5rem;
+      padding: 1.25rem;
       margin-bottom: 1.5rem;
+    }
+    @media (min-width: 640px) {
+      .prose-card { padding: 1.5rem; }
     }
     .prose-card h2 {
       font-size: 1.2rem;
@@ -74,11 +87,15 @@
       background: #0b1220;
       border: 1px solid rgba(148, 163, 184, 0.2);
       border-radius: 0.75rem;
-      padding: 1rem;
+      padding: 0.75rem 0.5rem;
       margin: 1rem 0;
+    }
+    @media (min-width: 640px) {
+      .diagram-box { padding: 1rem; }
     }
     .data-table {
       width: 100%;
+      min-width: 30rem;
       font-size: 0.825rem;
       border-collapse: collapse;
       margin-top: 0.5rem;
@@ -129,25 +146,25 @@
 <body class="bg-slate-900 text-slate-100">
 
   <!-- ============================= TOP NAVIGATION ============================= -->
-  <div class="fixed top-0 inset-x-0 z-30 px-3 py-2 sm:px-4">
-    <div class="panel rounded-xl px-4 py-2 flex flex-wrap items-center gap-3 shadow-lg">
+  <div class="fixed top-0 inset-x-0 z-30 px-2.5 py-2 sm:px-4" style="padding-top: max(0.5rem, env(safe-area-inset-top, 0px));">
+    <div class="panel rounded-xl px-3 sm:px-4 py-2 flex flex-wrap items-center gap-2 sm:gap-3 shadow-lg">
       <a href="index.html" class="flex items-center gap-2 mr-auto hover:text-amber-300 transition">
         <i data-lucide="eclipse" class="w-5 h-5 text-amber-400 shrink-0"></i>
         <span class="font-semibold text-sm sm:text-base leading-tight">Otago Eclipse 3D</span>
         <span class="text-[11px] sm:text-xs font-medium text-amber-300 whitespace-nowrap">How it works</span>
       </a>
-      <div class="flex flex-wrap items-center gap-2">
+      <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
         <a href="methods.html"
-          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-1.5 transition">
-          <i data-lucide="book-open" class="w-3.5 h-3.5 text-amber-400"></i> Technical spec
+          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 sm:px-3 py-1.5 transition">
+          <i data-lucide="book-open" class="w-3.5 h-3.5 text-amber-400"></i> <span class="hidden sm:inline">Technical</span> spec
         </a>
         <a href="map.html"
-          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-1.5 transition">
+          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 sm:px-3 py-1.5 transition">
           <i data-lucide="map" class="w-3.5 h-3.5 text-amber-400"></i> Spots map
         </a>
         <a href="index.html"
-          class="inline-flex items-center gap-1.5 text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg px-3 py-1.5 transition">
-          <i data-lucide="box" class="w-3.5 h-3.5"></i> Open 3D simulator
+          class="inline-flex items-center gap-1.5 text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg px-2.5 sm:px-3 py-1.5 transition">
+          <i data-lucide="box" class="w-3.5 h-3.5"></i> <span class="hidden sm:inline">Open 3D</span> simulator
         </a>
       </div>
     </div>
@@ -213,34 +230,34 @@
       </div>
 
       <div class="diagram-box">
-        <svg viewBox="0 0 600 185" class="w-full" aria-label="Diagram showing a low 8 degree sun blocked by a nearby ridge vs clear from higher ground">
+        <svg viewBox="0 0 600 190" class="w-full" aria-label="Diagram showing a low 8 degree sun blocked by a nearby ridge vs clear from higher ground">
           <!-- Sky background -->
-          <rect x="0" y="0" width="600" height="185" fill="#0b1220" rx="6" />
+          <rect x="0" y="0" width="600" height="190" fill="#0b1220" rx="6" />
           <!-- Ground / Horizon baseline -->
           <line x1="20" y1="155" x2="580" y2="155" stroke="#334155" stroke-width="1" stroke-dasharray="4 4" />
-          <text x="575" y="148" fill="#64748b" font-size="10" text-anchor="end">True horizontal (0°)</text>
+          <text x="575" y="147" fill="#94a3b8" font-size="12" text-anchor="end">True horizontal (0°)</text>
 
           <!-- Eclipsed Sun in NW -->
-          <circle cx="75" cy="48" r="16" fill="none" stroke="#fde68a" stroke-width="3" opacity="0.85" />
-          <circle cx="75" cy="48" r="13" fill="#0f172a" stroke="#fbbf24" stroke-width="1.5" />
-          <text x="75" y="22" fill="#fbbf24" font-size="11" font-weight="600" text-anchor="middle">Eclipsed Sun (~8.5°)</text>
+          <circle cx="85" cy="48" r="16" fill="none" stroke="#fde68a" stroke-width="3" opacity="0.85" />
+          <circle cx="85" cy="48" r="13" fill="#0f172a" stroke="#fbbf24" stroke-width="1.5" />
+          <text x="85" y="22" fill="#fbbf24" font-size="13" font-weight="600" text-anchor="middle">Eclipsed Sun (~8.5°)</text>
 
           <!-- Clear sightline from hilltop / open valley -->
-          <line x1="75" y1="48" x2="510" y2="132" stroke="#34d399" stroke-width="2" />
+          <line x1="85" y1="48" x2="505" y2="132" stroke="#34d399" stroke-width="2" />
           <!-- Blocked sightline into valley floor -->
-          <line x1="75" y1="48" x2="230" y2="95" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="4 3" />
-          <line x1="230" y1="95" x2="355" y2="148" stroke="#f87171" stroke-width="2" stroke-dasharray="4 3" />
+          <line x1="85" y1="48" x2="230" y2="95" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="4 3" />
+          <line x1="230" y1="95" x2="345" y2="148" stroke="#f87171" stroke-width="2" stroke-dasharray="4 3" />
 
           <!-- Mountain ridge silhouette -->
-          <path d="M 20 155 L 150 155 L 230 95 L 295 148 L 430 152 L 510 132 L 565 155 Z" fill="#1e293b" stroke="#64748b" stroke-width="1.5" />
+          <path d="M 20 155 L 150 155 L 230 95 L 295 148 L 430 152 L 505 132 L 565 155 Z" fill="#1e293b" stroke="#64748b" stroke-width="1.5" />
 
           <!-- Valley observer (blocked) -->
-          <circle cx="355" cy="148" r="5" fill="#f87171" />
-          <text x="355" y="172" fill="#fca5a5" font-size="11" font-weight="600" text-anchor="middle">Town in valley (Blocked)</text>
+          <circle cx="345" cy="148" r="5" fill="#f87171" />
+          <text x="335" y="176" fill="#fca5a5" font-size="12.5" font-weight="600" text-anchor="middle">Town in valley (Blocked)</text>
 
           <!-- Open observer (clear) -->
-          <circle cx="510" cy="132" r="5" fill="#34d399" />
-          <text x="510" y="172" fill="#6ee7b7" font-size="11" font-weight="600" text-anchor="middle">Open sightline (Clear)</text>
+          <circle cx="505" cy="132" r="5" fill="#34d399" />
+          <text x="505" y="176" fill="#6ee7b7" font-size="12.5" font-weight="600" text-anchor="middle">Open sightline (Clear)</text>
         </svg>
       </div>
 
@@ -317,37 +334,39 @@
         The sightline check accounts for four real-world effects:
       </p>
 
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>Effect</th>
-            <th>What happens physically</th>
-            <th>How the app handles it</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td class="font-semibold text-slate-200">Earth's curvature</td>
-            <td>The Earth curves away beneath distant mountains, making a peak 30 km away sit about 70 metres lower than on a flat plane.</td>
-            <td>Applies Earth curvature drop along great-circle bearings out to 45 km.</td>
-          </tr>
-          <tr>
-            <td class="font-semibold text-slate-200">Atmospheric refraction</td>
-            <td>Air is denser near the ground and bends light downward. This lifts the apparent position of an 8&deg; sun by ~0.11&deg; (about a fifth of the sun's width) and also slightly lifts distant mountain ridges.</td>
-            <td>Applies standard astronomical refraction to the sun and terrestrial refraction (<var>k</var> = 0.13) to distant terrain.</td>
-          </tr>
-          <tr>
-            <td class="font-semibold text-slate-200">Width of the Sun's disc</td>
-            <td>The sun isn't a single point of light—its disc spans ~0.52&deg; (radius ~0.26&deg;). If the sun's centre barely clears a ridge by 0.1&deg;, its bottom edge is still behind the hill.</td>
-            <td>Flags clearances under 0.26&deg; as <i>grazing</i> so you know to move slightly higher for the full disc.</td>
-          </tr>
-          <tr>
-            <td class="font-semibold text-slate-200">Sun movement during the eclipse</td>
-            <td>Between the start of the eclipse (3:09 PM) and sunset, the sun moves ~26&deg; sideways across the sky while sinking lower.</td>
-            <td>Tests the start, peak, and end of the eclipse—and checks whether a spot stays clear for the <i>entire</i> duration of totality.</td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="overflow-x-auto -mx-2 px-2">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Effect</th>
+              <th>What happens physically</th>
+              <th>How the app handles it</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="font-semibold text-slate-200">Earth's curvature</td>
+              <td>The Earth curves away beneath distant mountains, making a peak 30 km away sit about 70 metres lower than on a flat plane.</td>
+              <td>Applies Earth curvature drop along great-circle bearings out to 45 km.</td>
+            </tr>
+            <tr>
+              <td class="font-semibold text-slate-200">Atmospheric refraction</td>
+              <td>Air is denser near the ground and bends light downward. This lifts the apparent position of an 8&deg; sun by ~0.11&deg; (about a fifth of the sun's width) and also slightly lifts distant mountain ridges.</td>
+              <td>Applies standard astronomical refraction to the sun and terrestrial refraction (<var>k</var> = 0.13) to distant terrain.</td>
+            </tr>
+            <tr>
+              <td class="font-semibold text-slate-200">Width of the Sun's disc</td>
+              <td>The sun isn't a single point of light—its disc spans ~0.52&deg; (radius ~0.26&deg;). If the sun's centre barely clears a ridge by 0.1&deg;, its bottom edge is still behind the hill.</td>
+              <td>Flags clearances under 0.26&deg; as <i>grazing</i> so you know to move slightly higher for the full disc.</td>
+            </tr>
+            <tr>
+              <td class="font-semibold text-slate-200">Sun movement during the eclipse</td>
+              <td>Between the start of the eclipse (3:09 PM) and sunset, the sun moves ~26&deg; sideways across the sky while sinking lower.</td>
+              <td>Tests the start, peak, and end of the eclipse—and checks whether a spot stays clear for the <i>entire</i> duration of totality.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <!-- 4. Why Darkness Arrives Suddenly & Eye Safety -->
@@ -413,6 +432,9 @@
 
   <script>
     lucide.createIcons();
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    }
   </script>
 
   <!-- Cloudflare Web Analytics — same site token as index.html and map.html. -->

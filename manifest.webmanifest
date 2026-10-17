@@ -1,0 +1,43 @@
+{
+  "name": "Otago Eclipse 2028 — 3D Sightline Simulator",
+  "short_name": "Otago Eclipse",
+  "description": "Check whether mountains will block your view of the 22 July 2028 total solar eclipse in Otago, New Zealand, with 3D terrain, local contact times, and 800+ precomputed viewing spots.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "categories": ["education", "navigation", "weather"],
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any 192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "3D Simulator",
+      "short_name": "3D View",
+      "description": "Check terrain sightlines and watch the eclipse in 3D",
+      "url": "./index.html",
+      "icons": [{ "src": "./icon.svg", "sizes": "192x192", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Best Viewing Spots Map",
+      "short_name": "Spots Map",
+      "description": "Browse all precomputed viewing spots across Otago",
+      "url": "./map.html",
+      "icons": [{ "src": "./icon.svg", "sizes": "192x192", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "How It Works",
+      "short_name": "Astronomy",
+      "description": "Plain-language guide to the eclipse geometry and sightlines",
+      "url": "./astronomy.html",
+      "icons": [{ "src": "./icon.svg", "sizes": "192x192", "type": "image/svg+xml" }]
+    }
+  ]
+}

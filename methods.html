@@ -2,10 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Astronomical &amp; Geodetic Methods — Technical Specification · Otago Eclipse 3D</title>
   <meta name="description" content="Complete technical specification of solar/lunar ephemeris, coordinate transformations, atmospheric refraction, and terrain horizon ray-marching in Otago Eclipse 3D." />
   <meta name="theme-color" content="#0f172a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Eclipse 2028" />
   <link rel="canonical" href="./methods.html" />
 
   <meta property="og:type" content="article" />
@@ -14,7 +17,9 @@
   <meta property="og:image" content="./social-card.svg" />
   <meta name="twitter:card" content="summary_large_image" />
 
+  <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%230f172a'/%3E%3Ccircle cx='16' cy='16' r='9' fill='none' stroke='%23fbbf24' stroke-width='3'/%3E%3Ccircle cx='13' cy='14' r='8' fill='%230f172a'/%3E%3C/svg%3E" />
+  <link rel="apple-touch-icon" href="icon.svg" />
 
   <link rel="stylesheet" href="app.css" />
   <script src="https://unpkg.com/lucide@latest"></script>
@@ -33,14 +38,22 @@
     .page-wrap {
       max-width: 56rem;
       margin: 0 auto;
-      padding: 5.5rem 1.25rem 4rem;
+      padding: calc(7rem + env(safe-area-inset-top, 0px)) 1rem calc(4rem + env(safe-area-inset-bottom, 0px));
+    }
+    @media (min-width: 640px) {
+      .page-wrap {
+        padding: calc(5.5rem + env(safe-area-inset-top, 0px)) 1.25rem 4rem;
+      }
     }
     .spec-section {
       background: rgba(30, 41, 59, 0.55);
       border: 1px solid rgba(148, 163, 184, 0.2);
       border-radius: 1rem;
-      padding: 1.5rem;
+      padding: 1.25rem;
       margin-bottom: 1.5rem;
+    }
+    @media (min-width: 640px) {
+      .spec-section { padding: 1.5rem; }
     }
     .spec-section h2 {
       font-size: 1.15rem;
@@ -87,6 +100,7 @@
     }
     .spec-table {
       width: 100%;
+      min-width: 28rem;
       font-size: 0.82rem;
       border-collapse: collapse;
       margin: 0.75rem 0;
@@ -117,25 +131,25 @@
 <body class="bg-slate-900 text-slate-100">
 
   <!-- ============================= TOP NAVIGATION ============================= -->
-  <div class="fixed top-0 inset-x-0 z-30 px-3 py-2 sm:px-4">
-    <div class="panel rounded-xl px-4 py-2 flex flex-wrap items-center gap-3 shadow-lg">
+  <div class="fixed top-0 inset-x-0 z-30 px-2.5 py-2 sm:px-4" style="padding-top: max(0.5rem, env(safe-area-inset-top, 0px));">
+    <div class="panel rounded-xl px-3 sm:px-4 py-2 flex flex-wrap items-center gap-2 sm:gap-3 shadow-lg">
       <a href="index.html" class="flex items-center gap-2 mr-auto hover:text-amber-300 transition">
         <i data-lucide="eclipse" class="w-5 h-5 text-amber-400 shrink-0"></i>
         <span class="font-semibold text-sm sm:text-base leading-tight">Otago Eclipse 3D</span>
-        <span class="text-[11px] sm:text-xs font-medium text-amber-300 whitespace-nowrap">Technical specification</span>
+        <span class="text-[11px] sm:text-xs font-medium text-amber-300 whitespace-nowrap">Technical spec</span>
       </a>
-      <div class="flex flex-wrap items-center gap-2">
+      <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
         <a href="astronomy.html"
-          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-1.5 transition">
-          <i data-lucide="compass" class="w-3.5 h-3.5 text-amber-400"></i> General overview
+          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 sm:px-3 py-1.5 transition">
+          <i data-lucide="compass" class="w-3.5 h-3.5 text-amber-400"></i> <span class="hidden sm:inline">General</span> overview
         </a>
         <a href="map.html"
-          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-1.5 transition">
+          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 sm:px-3 py-1.5 transition">
           <i data-lucide="map" class="w-3.5 h-3.5 text-amber-400"></i> Spots map
         </a>
         <a href="index.html"
-          class="inline-flex items-center gap-1.5 text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg px-3 py-1.5 transition">
-          <i data-lucide="box" class="w-3.5 h-3.5"></i> Open 3D simulator
+          class="inline-flex items-center gap-1.5 text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg px-2.5 sm:px-3 py-1.5 transition">
+          <i data-lucide="box" class="w-3.5 h-3.5"></i> <span class="hidden sm:inline">Open 3D</span> simulator
         </a>
       </div>
     </div>
@@ -198,23 +212,25 @@
         <a href="https://github.com/cosinekitty/astronomy" target="_blank" rel="noopener" class="text-amber-300 hover:underline">astronomy-engine</a>
         (Don Cross, MIT License), used identically across two independent code paths:
       </p>
-      <table class="spec-table">
-        <thead>
-          <tr><th>Environment</th><th>Package</th><th>Purpose</th></tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>Browser (<code>index.html</code>)</td>
-            <td><code>astronomy.browser.min.js</code> (v2)</td>
-            <td>Live topocentric positions, continuous magnitude &amp; obscuration, per-location contact times</td>
-          </tr>
-          <tr>
-            <td>Offline pipeline (<code>precompute/build_viewpoints.py</code>)</td>
-            <td><code>astronomy-engine</code> (PyPI)</td>
-            <td>0.1&deg; regional circumstance grid (<code>EclipseField</code>), POI/grid clearances, preset profiles</td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="overflow-x-auto -mx-2 px-2">
+        <table class="spec-table">
+          <thead>
+            <tr><th>Environment</th><th>Package</th><th>Purpose</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Browser (<code>index.html</code>)</td>
+              <td><code>astronomy.browser.min.js</code> (v2)</td>
+              <td>Live topocentric positions, continuous magnitude &amp; obscuration, per-location contact times</td>
+            </tr>
+            <tr>
+              <td>Offline pipeline (<code>precompute/build_viewpoints.py</code>)</td>
+              <td><code>astronomy-engine</code> (PyPI)</td>
+              <td>0.1&deg; regional circumstance grid (<code>EclipseField</code>), POI/grid clearances, preset profiles</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
       <ul>
         <li><b>Solar theory:</b> VSOP87 (Bretagnon &amp; Francou 1988).</li>
         <li><b>Lunar theory:</b> ELP/MPP02-derived series (Chapront &amp; Francou 2003).</li>
@@ -266,16 +282,18 @@ hz = Horizon(t, observer, eq.ra, eq.dec, Refraction.Normal)</div>
         <li><b>Ellipsoidal vs. orthometric height datum:</b> Re:Earth Terrain (Copernicus GLO-30 / Mapterhorn) is referenced to the WGS84 ellipsoid, whereas <code>Observer.height</code> is documented as elevation above mean sea level. Over Otago, the NZGeoid2016 separation is <var>N</var> &approx; +5 m to +35 m. For terrain horizon checks (§7), both <var>h</var><sub>obs</sub> and <var>h</var><sub>terrain</sub>(<var>d</var>) come from the same DEM, so the datum offset cancels in <var>h</var><sub>terrain</sub> &minus; <var>h</var><sub>obs</sub>.</li>
         <li><b>Shadow-axis grazing sensitivity:</b> Because the lunar shadow arrives at <var>&alpha;</var><sub>&#9737;</sub> &approx; 8.4&deg;&ndash;10&deg;, raising an observer by &Delta;<var>h</var> shifts their intercept with the inclined shadow cone down-track by &Delta;<var>x</var> = &Delta;<var>h</var> cot <var>&alpha;</var><sub>&#9737;</sub> &approx; 6.8 &Delta;<var>h</var>.</li>
       </ul>
-      <table class="spec-table">
-        <thead>
-          <tr><th>Observer height <var>h</var></th><th>Maximum eclipse (UTC)</th><th>Apparent solar altitude at maximum</th></tr>
-        </thead>
-        <tbody>
-          <tr><td>0 m</td><td><code>04:17:11.848</code></td><td>8.3900&deg;</td></tr>
-          <tr><td>500 m</td><td><code>04:17:12.269</code></td><td>8.3891&deg;</td></tr>
-          <tr><td>2000 m</td><td><code>04:17:13.968</code></td><td>8.3854&deg;</td></tr>
-        </tbody>
-      </table>
+      <div class="overflow-x-auto -mx-2 px-2">
+        <table class="spec-table">
+          <thead>
+            <tr><th>Observer height <var>h</var></th><th>Maximum eclipse (UTC)</th><th>Apparent solar altitude at maximum</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>0 m</td><td><code>04:17:11.848</code></td><td>8.3900&deg;</td></tr>
+            <tr><td>500 m</td><td><code>04:17:12.269</code></td><td>8.3891&deg;</td></tr>
+            <tr><td>2000 m</td><td><code>04:17:13.968</code></td><td>8.3854&deg;</td></tr>
+          </tbody>
+        </table>
+      </div>
       <p>
         Contact times shift by <b>+1.06 s per km</b> of observer elevation, and peak solar altitude
         shifts by <b>&minus;0.0023&deg; per km</b> (caused by the Sun sinking at &minus;0.0022&deg;/s during
@@ -384,35 +402,39 @@ horizon  = max_d angle(d),    clearance = alt_sun - horizon</div>
     <section class="spec-section">
       <h2>8. Validation &amp; Summary Error Budget</h2>
       <h3>8.1 Dunedin Contact-Time Validation</h3>
-      <table class="spec-table">
-        <thead>
-          <tr><th>Phase</th><th>Published (NZST)</th><th><code>astronomy-engine</code></th><th>&Delta;</th><th>Primary source of difference</th></tr>
-        </thead>
-        <tbody>
-          <tr><td>First contact (C1)</td><td><code>15:08:58</code></td><td><code>15:09:01</code></td><td>+3 s</td><td>Smooth sphere + &Delta;<var>T</var> polynomial</td></tr>
-          <tr><td>Second contact (C2)</td><td><code>16:15:45</code></td><td><code>16:15:44</code></td><td>&minus;1 s</td><td>IAU mean lunar radius vs. valley radius + limb profile</td></tr>
-          <tr><td><b>Maximum eclipse</b></td><td><code>16:17:11</code></td><td><code>16:17:11</code></td><td><b>0 s</b></td><td>Exact agreement</td></tr>
-          <tr><td>Third contact (C3)</td><td><code>16:18:36</code></td><td><code>16:18:39</code></td><td>+3 s</td><td>IAU mean lunar radius (1737.4 km) vs. valley radius</td></tr>
-          <tr><td>Fourth contact (C4)</td><td><code>17:17:00</code></td><td><code>17:19:58</code></td><td>+3 m</td><td>Published table clamps partial end at sunset (alt &minus;0.09&deg;)</td></tr>
-        </tbody>
-      </table>
+      <div class="overflow-x-auto -mx-2 px-2">
+        <table class="spec-table">
+          <thead>
+            <tr><th>Phase</th><th>Published (NZST)</th><th><code>astronomy-engine</code></th><th>&Delta;</th><th>Primary source of difference</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>First contact (C1)</td><td><code>15:08:58</code></td><td><code>15:09:01</code></td><td>+3 s</td><td>Smooth sphere + &Delta;<var>T</var> polynomial</td></tr>
+            <tr><td>Second contact (C2)</td><td><code>16:15:45</code></td><td><code>16:15:44</code></td><td>&minus;1 s</td><td>IAU mean lunar radius vs. valley radius + limb profile</td></tr>
+            <tr><td><b>Maximum eclipse</b></td><td><code>16:17:11</code></td><td><code>16:17:11</code></td><td><b>0 s</b></td><td>Exact agreement</td></tr>
+            <tr><td>Third contact (C3)</td><td><code>16:18:36</code></td><td><code>16:18:39</code></td><td>+3 s</td><td>IAU mean lunar radius (1737.4 km) vs. valley radius</td></tr>
+            <tr><td>Fourth contact (C4)</td><td><code>17:17:00</code></td><td><code>17:19:58</code></td><td>+3 m</td><td>Published table clamps partial end at sunset (alt &minus;0.09&deg;)</td></tr>
+          </tbody>
+        </table>
+      </div>
 
       <h3>8.2 Model Approximation Summary</h3>
-      <table class="spec-table">
-        <thead>
-          <tr><th>Approximation / Component</th><th>Magnitude</th><th>Effect on Verdicts</th></tr>
-        </thead>
-        <tbody>
-          <tr><td>Ephemeris (VSOP87 + ELP/MPP02 in 2028)</td><td>~1&ndash;3&Prime;</td><td>&plusmn;1&ndash;3 s on contact times; &lt;0.001&deg; on altitude</td></tr>
-          <tr><td>&Delta;<var>T</var> extrapolation to 2028 (&approx; 72.7 s)</td><td>&delta;(&Delta;<var>T</var>) &approx; 2&ndash;3 s</td><td>~0.7&ndash;1.0 km longitudinal shift of umbral path</td></tr>
-          <tr><td>Smooth spherical Moon (no Kaguya/LRO limb)</td><td>~0.8&Prime; radius + &plusmn;1.5&Prime; limb</td><td>&plusmn;1&ndash;3 s on C2/C3; larger in grazing edge zone</td></tr>
-          <tr><td>Solar refraction (Bennett 1982, 1010 hPa, 10&deg;C)</td><td>+6.4&prime; (+0.107&deg;) at 8.3&deg;</td><td>Unified across both paths; weather scatter ~&plusmn;0.5&prime;</td></tr>
-          <tr><td>Terrestrial refraction (<var>k</var> = 0.13, <var>R</var><sub>eff</sub> = 7323 km)</td><td>+0.35&prime; at 10 km, +1.6&prime; at 45 km</td><td>Unified across both paths; basin inversion cancels with solar ray</td></tr>
-          <tr><td>Solar semi-diameter (<var>s</var><sub>&#9737;</sub> &approx; 0.26&deg;)</td><td>0.26&deg; limb (0.5&deg; inner corona)</td><td>Clearances in (0&deg;, 0.26&deg;) flagged as lower-limb grazing</td></tr>
-          <tr><td>DEM vertical uncertainty (<var>&sigma;</var><sub>z</sub> &approx; 5 m at ~30 m)</td><td>&plusmn;2.9&deg; at 100 m; &plusmn;0.3&deg; at 1 km</td><td>Dominant error source for ridges closer than ~1 km</td></tr>
-          <tr><td>Above-ground clutter (trees, buildings, road cuts)</td><td>15 m trees at 90 m = 9.5&deg;</td><td>Unmodelled; on-site inspection advised</td></tr>
-        </tbody>
-      </table>
+      <div class="overflow-x-auto -mx-2 px-2">
+        <table class="spec-table">
+          <thead>
+            <tr><th>Approximation / Component</th><th>Magnitude</th><th>Effect on Verdicts</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Ephemeris (VSOP87 + ELP/MPP02 in 2028)</td><td>~1&ndash;3&Prime;</td><td>&plusmn;1&ndash;3 s on contact times; &lt;0.001&deg; on altitude</td></tr>
+            <tr><td>&Delta;<var>T</var> extrapolation to 2028 (&approx; 72.7 s)</td><td>&delta;(&Delta;<var>T</var>) &approx; 2&ndash;3 s</td><td>~0.7&ndash;1.0 km longitudinal shift of umbral path</td></tr>
+            <tr><td>Smooth spherical Moon (no Kaguya/LRO limb)</td><td>~0.8&Prime; radius + &plusmn;1.5&Prime; limb</td><td>&plusmn;1&ndash;3 s on C2/C3; larger in grazing edge zone</td></tr>
+            <tr><td>Solar refraction (Bennett 1982, 1010 hPa, 10&deg;C)</td><td>+6.4&prime; (+0.107&deg;) at 8.3&deg;</td><td>Unified across both paths; weather scatter ~&plusmn;0.5&prime;</td></tr>
+            <tr><td>Terrestrial refraction (<var>k</var> = 0.13, <var>R</var><sub>eff</sub> = 7323 km)</td><td>+0.35&prime; at 10 km, +1.6&prime; at 45 km</td><td>Unified across both paths; basin inversion cancels with solar ray</td></tr>
+            <tr><td>Solar semi-diameter (<var>s</var><sub>&#9737;</sub> &approx; 0.26&deg;)</td><td>0.26&deg; limb (0.5&deg; inner corona)</td><td>Clearances in (0&deg;, 0.26&deg;) flagged as lower-limb grazing</td></tr>
+            <tr><td>DEM vertical uncertainty (<var>&sigma;</var><sub>z</sub> &approx; 5 m at ~30 m)</td><td>&plusmn;2.9&deg; at 100 m; &plusmn;0.3&deg; at 1 km</td><td>Dominant error source for ridges closer than ~1 km</td></tr>
+            <tr><td>Above-ground clutter (trees, buildings, road cuts)</td><td>15 m trees at 90 m = 9.5&deg;</td><td>Unmodelled; on-site inspection advised</td></tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <div class="panel rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4">
@@ -448,6 +470,9 @@ horizon  = max_d angle(d),    clearance = alt_sun - horizon</div>
       document.getElementById("contactAddr").textContent = addr;
     })();
     lucide.createIcons();
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    }
   </script>
 
   <!-- Cloudflare Web Analytics — same site token as index.html and map.html. -->

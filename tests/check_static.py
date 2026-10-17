@@ -22,7 +22,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SITE_FILES = ["index.html", "map.html", "astronomy.html", "methods.html", "app.css",
-              "viewpoints.json", "social-card.svg", "_headers"]
+              "viewpoints.json", "social-card.svg", "icon.svg", "manifest.webmanifest",
+              "sw.js", "_headers"]
 
 failures: list[str] = []
 notes: list[str] = []
