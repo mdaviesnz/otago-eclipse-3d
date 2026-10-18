@@ -17,12 +17,14 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Cancel superseded runs on PR branches, but never abort an in-flight production deploy on main.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   check:
     name: Static checks
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -36,6 +38,7 @@ jobs:
   test:
     name: Browser smoke tests
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       # Node 24 matches the runner's action runtime and the current LTS, so CI and a local
@@ -44,7 +47,7 @@ jobs:
         with:
           node-version: "24"
           cache: npm
-      - run: npm ci || npm install
+      - run: npm ci
 
       # app.css is committed so a fresh clone works without a build. Rebuild it here and fail
       # if the result differs — that means someone changed classes in the HTML and forgot to
@@ -53,25 +56,38 @@ jobs:
         run: |
           cp app.css /tmp/app.css.committed
           npm run build:css
-          if ! diff -q /tmp/app.css.committed app.css; then
+          if ! git diff --quiet -- app.css; then
             echo "::error::app.css is stale — run 'npm run build:css' and commit the result"
             diff <(tr ',' '\n' < /tmp/app.css.committed) <(tr ',' '\n' < app.css) | head -40
             exit 1
           fi
           echo "app.css matches the markup"
 
+      # Assemble dist/ from the canonical SITE_FILES list in tests/check_static.py and run
+      # Playwright against dist/ so the smoke tests exercise the exact artifact we deploy.
+      - name: Assemble dist/
+        run: |
+          mkdir -p dist
+          python3 -c 'import shutil, tests.check_static as c; [shutil.copy2(f, "dist/") for f in c.SITE_FILES]'
+
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test
+        env:
+          SERVE_DIR: dist
+
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
-          name: playwright-report
-          path: playwright-report/
+          name: playwright-diagnostics
+          path: |
+            playwright-report/
+            test-results/
           retention-days: 7
 
   deploy:
     name: Deploy to Cloudflare Workers
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: [check, test]
     # Skip for PRs raised from forks, which cannot read repository secrets.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
@@ -100,6 +116,7 @@ jobs:
           fi
 
           code=$(curl -s -o /tmp/cf.json -w '%{http_code}' \
+            --max-time 15 --retry 2 --retry-connrefused \
             -H "Authorization: Bearer $TOKEN" \
             "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT/workers/scripts")
 
@@ -118,33 +135,36 @@ jobs:
               head -c 400 /tmp/cf.json || true ;;
           esac
 
-      # Assemble exactly what should be public. The precompute pipeline, tests and CI config
+      # Assemble exactly what should be public from the single source of truth in
+      # tests/check_static.py (SITE_FILES). The precompute pipeline, tests and CI config
       # stay out of the deployed artifact. wrangler.jsonc points `assets.directory` here.
       - name: Assemble dist/
         run: |
           mkdir -p dist
-          cp index.html map.html astronomy.html methods.html app.css viewpoints.json social-card.svg icon.svg manifest.webmanifest sw.js _headers dist/
+          python3 -c 'import shutil, tests.check_static as c; [shutil.copy2(f, "dist/") for f in c.SITE_FILES]'
           echo "Deploying:"; ls -lh dist/
 
       - name: Publish to production
-        if: github.event_name != 'pull_request'
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         id: prod
         uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4"
           command: deploy
 
       # Pages gave every branch its own preview deployment. The Workers equivalent is uploading
       # a *version*: it gets its own preview URL and takes no production traffic until promoted,
       # which it never is here — merging to main redeploys from scratch.
       - name: Upload preview version
-        if: github.event_name == 'pull_request'
+        if: github.ref != 'refs/heads/main' || github.event_name == 'pull_request'
         id: preview
         uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4"
           command: versions upload
 
       # Preview URLs are not surfaced automatically the way Pages' were, so put the URL
