@@ -98,7 +98,19 @@ secret**:
 | `CLOUDFLARE_API_TOKEN` | the token from step 2 |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare dashboard sidebar, or the URL after `/accounts/` |
 
-### 4. Merge to `main` once before opening a PR
+### 4. Enable Workers Analytics Engine (one-time per account)
+
+Cloudflare requires a one-time click in the dashboard before any Worker on the account can bind an
+`analytics_engine_datasets` dataset:
+
+1. In the Cloudflare dashboard sidebar, go to **Compute (Workers) → Analytics Engine** (or open
+   `https://dash.cloudflare.com/?to=/:account/workers/analytics-engine`).
+2. Click **Enable Analytics Engine** (free tier includes 100,000 writes/day and 10,000 queries/day).
+
+Once enabled on the account, individual datasets (like `otago_eclipse_usage`) are created
+automatically on first write.
+
+### 5. Merge to `main` once before opening a PR
 
 `versions upload` — how PR previews are built — needs the Worker to already exist. The first
 run must therefore be a production deploy from `main`. A PR raised before that will fail its
@@ -118,7 +130,8 @@ so neither a missing secret nor a Pages-scoped token surfaces as an opaque wrang
 |---|---|
 | `Missing repository secret(s)` | Steps 2–3 not done |
 | `Cloudflare rejected the API token for Workers` | Token lacks **Account → Workers Scripts → Edit** (common right after the Pages migration), or belongs to a different account than `CLOUDFLARE_ACCOUNT_ID` |
-| `workers.script.not_found` on a PR | No production deploy has happened yet — see step 4 |
+| `You need to enable Analytics Engine [code: 10089]` | Analytics Engine has not been toggled on for this Cloudflare account yet — see step 4 |
+| `workers.script.not_found` on a PR | No production deploy has happened yet — see step 5 |
 | `assets.directory ... does not exist: /opt/buildhome/repo/dist` | Not this workflow — Workers Builds is deploying from the repo. Disconnect it; see step 2 |
 | Deploy skipped entirely | PR from a fork — forks cannot read secrets, by design |
 
