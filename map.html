@@ -409,11 +409,27 @@
     }
   }
 
-  function trackMetric(event, detail = "") {
+  function getMetricSessionId() {
+    try {
+      let sid = sessionStorage.getItem("eclipseMetricSid");
+      if (!sid || !/^[0-9a-f]{8}$/.test(sid)) {
+        const arr = new Uint32Array(1);
+        crypto.getRandomValues(arr);
+        sid = arr[0].toString(16).padStart(8, "0");
+        sessionStorage.setItem("eclipseMetricSid", sid);
+      }
+      return sid;
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function trackMetric(event, detail = "", spot = "") {
     try {
       if ((location.hostname === "localhost" || location.hostname === "127.0.0.1") && !window.__TEST_METRICS) return;
       if (navigator.sendBeacon) {
-        navigator.sendBeacon("/api/metric", JSON.stringify({ event, detail }));
+        const sid = getMetricSessionId();
+        navigator.sendBeacon("/api/metric", JSON.stringify({ event, detail, spot, sid }));
       }
     } catch (e) {}
   }
@@ -425,7 +441,13 @@
   document.getElementById("srcBoth").addEventListener("click", () => { trackMetric("map_filter", "both"); setSource("both"); });
   document.getElementById("map").addEventListener("click", (e) => {
     const a = e.target.closest && e.target.closest('a[href^="index.html"]');
-    if (a) trackMetric("map_filter", "open_3d");
+    if (a) {
+      let spotName = "";
+      try {
+        spotName = new URL(a.getAttribute("href"), location.origin).searchParams.get("name") || "";
+      } catch (err) {}
+      trackMetric("map_filter", "open_3d", spotName);
+    }
   });
 
   const setMapFiltersOpen = (open) => {

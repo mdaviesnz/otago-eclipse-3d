@@ -3113,7 +3113,7 @@
         const label = btn.dataset.src === "poi"
           ? (s.name || `Unnamed ${POI_LABEL[s.kind] || "spot"}`)
           : `${s.lat.toFixed(4)}, ${s.lon.toFixed(4)}`;
-        trackMetric("catalogue_select", btn.dataset.src === "poi" ? "poi" : "grid");
+        trackMetric("catalogue_select", btn.dataset.src === "poi" ? "poi" : "grid", label);
         // Pass the record itself, so the precomputed verdict is used without a lookup.
         selectLocation({ name: label, lat: s.lat, lon: s.lon, cat: s }, true);
       });
@@ -3263,7 +3263,7 @@
       b.className = "inline-flex items-center gap-2 text-xs font-medium bg-slate-800/70 hover:bg-slate-700 border border-transparent text-slate-200 rounded-lg px-2.5 py-2 sm:py-1.5 transition text-left";
       b.innerHTML = `<i data-lucide="${loc.icon}" class="w-3.5 h-3.5 text-amber-400 shrink-0"></i> <span class="truncate">${loc.name}</span>`;
       b.addEventListener("click", () => {
-        trackMetric("preset_select", loc.name);
+        trackMetric("preset_select", loc.name, loc.name);
         selectLocation(loc, true);
       });
       wrap.appendChild(b);
@@ -3446,14 +3446,31 @@
 
   // ====================================================================================
   //  ANONYMOUS USAGE METRICS (/api/metric -> Cloudflare Workers Analytics Engine)
-  //  Records coarse feature-usage counts (which controls are used, whether searches or
-  //  sightline probes are run) without ever sending addresses, coordinates, or user IDs.
+  //  Records coarse feature-usage counts, public catalogue/preset spot names, and an
+  //  ephemeral per-tab session token (sessionStorage, wiped when the tab closes) without
+  //  ever sending private addresses, custom coordinates, cookies, or persistent user IDs.
   // ====================================================================================
-  function trackMetric(event, detail = "") {
+  function getMetricSessionId() {
+    try {
+      let sid = sessionStorage.getItem("eclipseMetricSid");
+      if (!sid || !/^[0-9a-f]{8}$/.test(sid)) {
+        const arr = new Uint32Array(1);
+        crypto.getRandomValues(arr);
+        sid = arr[0].toString(16).padStart(8, "0");
+        sessionStorage.setItem("eclipseMetricSid", sid);
+      }
+      return sid;
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function trackMetric(event, detail = "", spot = "") {
     try {
       if ((location.hostname === "localhost" || location.hostname === "127.0.0.1") && !window.__TEST_METRICS) return;
       if (navigator.sendBeacon) {
-        navigator.sendBeacon("/api/metric", JSON.stringify({ event, detail }));
+        const sid = getMetricSessionId();
+        navigator.sendBeacon("/api/metric", JSON.stringify({ event, detail, spot, sid }));
       }
     } catch (e) {}
   }

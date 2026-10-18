@@ -276,38 +276,55 @@ unmetered. Only `/api/*` requests invoke the Worker.
 
 ### Privacy by construction
 
-`src/worker.js` enforces a closed allowlist (`ALLOWED_METRICS`) on both `event` and `detail`:
-- **No PII or location data**: IP addresses, User-Agent strings, cookies, search queries, and
-  coordinates are never read or written. Even if a client sends a street address or lat/lon in
-  `detail`, the Worker strips any value not in the static allowlist to `""`.
-- **Events recorded**:
-  - `page_view` (`simulator`, `map`, `astronomy`, `methods`)
-  - `preset_select` (`Queenstown`, `Arrowtown`, `Cromwell`, `Dunedin`)
-  - `catalogue_select` (`poi`, `grid`)
-  - `custom_search` (`address`, `coords` — never the query or coordinates)
-  - `geolocation_use` (count only)
-  - `map_pin` (count only)
-  - `sightline_check` (`clear`, `partial`, `blocked`, `below`)
-  - `watch_playback` (count only)
-  - `view_mode` (`eye`, `overview`)
-  - `map_filter` (`poi`, `grid`, `both`, `open_3d`)
+`src/worker.js` enforces strict rules on every field written to `otago_eclipse_usage`:
+- **`blob1` (`event`) & `blob2` (`detail`)**: Validated against `ALLOWED_METRICS`. Any unrecognised
+  `detail` is stripped to `""`.
+- **`blob3` (`spot`)**: Only recorded for public catalogued places (`preset_select`,
+  `catalogue_select`, and `map_filter` with `open_3d`). On `custom_search`, `map_pin`, and
+  `geolocation_use`, `spot` is unconditionally forced to `""` so private addresses or user
+  coordinates can never be stored.
+- **`blob4` (`sid`)**: An ephemeral 8-character hex token stored in `sessionStorage` (`eclipseMetricSid`).
+  It lives only in the current browser tab, is wiped as soon as the tab closes, uses no cookies or
+  IP addresses, and lets you measure how many spots a visitor explores in a single session.
 
 ### Querying usage in Cloudflare
 
-Analytics Engine datasets are created automatically on first event write. You can query them via
- the Cloudflare API (`https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/analytics_engine/sql`)
-or Grafana/dashboard with SQL:
+Analytics Engine datasets can be queried via the Cloudflare SQL API
+(`https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/analytics_engine/sql`) or dashboard:
 
 ```sql
--- Event breakdown over the last 7 days
+-- 1. Event breakdown over the last 7 days
 SELECT
   blob1 AS event,
   blob2 AS detail,
-  SUM(_sample_interval) AS count
+  COUNT(DISTINCT blob4) AS unique_sessions,
+  SUM(_sample_interval) AS total_events
 FROM otago_eclipse_usage
 WHERE timestamp > NOW() - INTERVAL '7' DAY
 GROUP BY event, detail
-ORDER BY count DESC
+ORDER BY total_events DESC;
+
+-- 2. Most popular presets and catalogued POIs
+SELECT
+  blob1 AS source_event,
+  blob3 AS spot,
+  COUNT(DISTINCT blob4) AS unique_sessions,
+  SUM(_sample_interval) AS clicks
+FROM otago_eclipse_usage
+WHERE blob1 IN ('preset_select', 'catalogue_select') AND blob3 != ''
+GROUP BY source_event, spot
+ORDER BY clicks DESC
+LIMIT 25;
+
+-- 3. How many locations each session explores
+SELECT
+  blob4 AS session_id,
+  SUM(_sample_interval) AS locations_checked
+FROM otago_eclipse_usage
+WHERE blob1 IN ('preset_select', 'catalogue_select', 'custom_search', 'map_pin', 'geolocation_use')
+  AND blob4 != ''
+GROUP BY session_id
+ORDER BY locations_checked DESC;
 ```
 
 ---

@@ -9,9 +9,14 @@
 //
 // Privacy by construction:
 //   * No IP addresses, User-Agent strings, cookies, or referrer headers are read or stored.
-//   * Both `event` and `detail` are validated against a closed allowlist below. Free-form
-//     strings (such as searched street addresses or pinned lat/lon coordinates) can never be
-//     written to the dataset even if a client sends them.
+//   * `event` and `detail` are validated against a closed allowlist (`ALLOWED_METRICS`).
+//   * `spot` (blob3) is only permitted on public catalogue/preset events (`preset_select`,
+//     `catalogue_select`, and `map_filter` with `open_3d`). On custom searches, map pins, and
+//     geolocation events, `spot` is unconditionally forced to `""` so private addresses or
+//     user coordinates can never be persisted.
+//   * `sid` (blob4) accepts only an ephemeral 8-16 char lowercase hex token from
+//     `sessionStorage` (wiped when the tab closes) so per-visit engagement can be measured
+//     without cross-session tracking or cookies.
 
 export const ALLOWED_METRICS = {
   page_view: new Set(["simulator", "map", "astronomy", "methods"]),
@@ -25,6 +30,21 @@ export const ALLOWED_METRICS = {
   view_mode: new Set(["eye", "overview"]),
   map_filter: new Set(["poi", "grid", "both", "open_3d"]),
 };
+
+const SPOT_ALLOWED_EVENTS = new Set(["preset_select", "catalogue_select"]);
+const HEX_SID_RE = /^[0-9a-f]{8,16}$/;
+
+function sanitizeSpot(event, detail, rawSpot) {
+  if (event === "preset_select" && detail) {
+    return detail;
+  }
+  const allowPublicSpot =
+    SPOT_ALLOWED_EVENTS.has(event) || (event === "map_filter" && detail === "open_3d");
+  if (!allowPublicSpot || typeof rawSpot !== "string") {
+    return "";
+  }
+  return rawSpot.replace(/[\r\n\t]/g, " ").trim().slice(0, 80);
+}
 
 export default {
   async fetch(request, env) {
@@ -48,11 +68,14 @@ export default {
         // Coerce any unrecognised detail to empty string so free-form text (addresses,
         // coordinates, URLs) can never be persisted.
         const detail = allowedDetails.has(rawDetail) ? rawDetail : "";
+        const spot = sanitizeSpot(event, detail, body?.spot);
+        const rawSid = typeof body?.sid === "string" ? body.sid : "";
+        const sid = HEX_SID_RE.test(rawSid) ? rawSid : "";
 
         if (env.METRICS && typeof env.METRICS.writeDataPoint === "function") {
           env.METRICS.writeDataPoint({
             indexes: [event],
-            blobs: [event, detail],
+            blobs: [event, detail, spot, sid],
             doubles: [1],
           });
         }
