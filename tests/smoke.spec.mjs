@@ -249,3 +249,59 @@ test("mobile viewport UX: drawers, floating verdict pill, and map filter collaps
   expect(errs, "no JS errors during mobile UX interactions").toEqual([]);
 });
 
+test("astronomy and methods pages load without JS errors and render diagrams/tables", async ({ page }) => {
+  const errs = errors(page);
+
+  await page.goto("/astronomy.html");
+  await expect(page.locator("h1")).toContainText(/Astronomy.*Sightline/i);
+  await expect(page.locator("svg").first()).toBeVisible();
+  await expect(page.locator("table.data-table")).toHaveCount(1);
+  await expect(page.locator('a[href="methods.html"]').first()).toBeVisible();
+
+  await page.goto("/methods.html");
+  await expect(page.locator("h1")).toContainText(/Astronomical|Geodetic|Specification/i);
+  expect(await page.locator(".spec-section").count()).toBeGreaterThanOrEqual(5);
+  expect(await page.locator("table.spec-table").count()).toBeGreaterThanOrEqual(2);
+  await expect(page.locator('a[href="astronomy.html"]').first()).toBeVisible();
+
+  expect(errs, "no JS errors on astronomy.html or methods.html").toEqual([]);
+});
+
+test("service worker precaches the app shell and serves pages + catalogue offline", async ({ page, context }) => {
+  const errs = errors(page);
+  await page.goto("/astronomy.html");
+
+  // Wait for the Service Worker to finish installing and precaching the shell.
+  await page.evaluate(async () => {
+    const reg = await navigator.serviceWorker.ready;
+    if (!navigator.serviceWorker.controller && reg.active) {
+      await new Promise((resolve) => {
+        navigator.serviceWorker.addEventListener("controllerchange", resolve, { once: true });
+        setTimeout(resolve, 1500);
+      });
+    }
+  });
+
+  await context.setOffline(true);
+  try {
+    await page.goto("/map.html");
+    await expect(page.locator("#accessFilter")).toHaveCount(1);
+
+    // Catalogue JSON must also be served from the Service Worker cache while offline.
+    const catCount = await page.evaluate(async () => {
+      const res = await fetch("/viewpoints.json");
+      if (!res.ok) return 0;
+      const d = await res.json();
+      return (d.spots?.length || 0) + (d.pois?.length || 0);
+    });
+    expect(catCount).toBeGreaterThan(200);
+
+    await page.goto("/methods.html");
+    await expect(page.locator("h1")).toBeVisible();
+  } finally {
+    await context.setOffline(false);
+  }
+
+  expect(errs, "no JS errors during offline service worker navigation").toEqual([]);
+});
+

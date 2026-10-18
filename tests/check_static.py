@@ -109,8 +109,9 @@ def check_cache_not_tracked() -> None:
 
 
 def check_local_references() -> None:
-    """Every same-origin href/src/fetch target in the HTML must exist."""
+    """Every same-origin href/src/fetch target in the HTML must exist and be in SITE_FILES."""
     pattern = re.compile(r"""(?:href|src)=["']([^"'#?]+)["']|fetch\(["']([^"'?]+)["']""")
+    site_set = set(SITE_FILES)
     for name in ("index.html", "map.html", "astronomy.html", "methods.html"):
         p = ROOT / name
         if not p.exists():
@@ -126,7 +127,15 @@ def check_local_references() -> None:
             target = (ROOT / ref.lstrip("./")).resolve()
             if not target.exists():
                 fail(f"{name}: references missing local file '{ref}'")
-    ok("local asset references resolve")
+                continue
+            try:
+                rel = target.relative_to(ROOT).as_posix()
+            except ValueError:
+                fail(f"{name}: references file outside repo root '{ref}'")
+                continue
+            if rel not in site_set:
+                fail(f"{name}: references '{rel}', which exists on disk but is missing from SITE_FILES")
+    ok("local asset references resolve and are included in SITE_FILES")
 
 
 def check_catalogue() -> None:
@@ -263,6 +272,77 @@ def check_presets(d: dict, region: dict) -> None:
         ok(f"presets: {len(presets)} entries, fields OK, coordinates match index.html")
 
 
+def check_pwa_and_headers() -> None:
+    """Ensure manifest.webmanifest, sw.js, and _headers stay in sync with SITE_FILES."""
+    site_set = set(SITE_FILES)
+    html_pages = [f for f in SITE_FILES if f.endswith(".html")]
+
+    # 1. manifest.webmanifest
+    mp = ROOT / "manifest.webmanifest"
+    if mp.exists():
+        try:
+            manifest = json.loads(mp.read_text(encoding="utf-8"))
+            refs: list[str] = []
+            if "start_url" in manifest:
+                refs.append(manifest["start_url"])
+            for icon in manifest.get("icons") or []:
+                if "src" in icon:
+                    refs.append(icon["src"])
+            for sc in manifest.get("shortcuts") or []:
+                if "url" in sc:
+                    refs.append(sc["url"])
+                for icon in sc.get("icons") or []:
+                    if "src" in icon:
+                        refs.append(icon["src"])
+            bad_m = [r for r in refs if r.lstrip("./") not in site_set]
+            if bad_m:
+                fail(f"manifest.webmanifest references file(s) not in SITE_FILES: {bad_m}")
+            else:
+                ok(f"manifest.webmanifest: all {len(refs)} asset/shortcut references in SITE_FILES")
+        except json.JSONDecodeError as ex:
+            fail(f"manifest.webmanifest is not valid JSON: {ex}")
+
+    # 2. sw.js PRECACHE_SHELL and canonicalHtmlPath
+    swp = ROOT / "sw.js"
+    if swp.exists():
+        sw_text = swp.read_text(encoding="utf-8")
+        m = re.search(r"const\s+PRECACHE_SHELL\s*=\s*\[(.*?)\];", sw_text, re.S)
+        if not m:
+            fail("sw.js: could not find PRECACHE_SHELL array")
+        else:
+            entries = re.findall(r'["\']([^"\']+)["\']', m.group(1))
+            normalized = {e.lstrip("./") for e in entries if e != "./"}
+            missing_in_site = sorted(normalized - site_set)
+            missing_html = [h for h in html_pages if h not in normalized]
+            if missing_in_site:
+                fail(f"sw.js PRECACHE_SHELL lists file(s) not in SITE_FILES: {missing_in_site}")
+            elif missing_html:
+                fail(f"sw.js PRECACHE_SHELL is missing HTML page(s): {missing_html}")
+            else:
+                ok(f"sw.js PRECACHE_SHELL covers all {len(html_pages)} HTML pages and matches SITE_FILES")
+        for h in html_pages:
+            if h not in sw_text:
+                fail(f"sw.js does not reference '{h}' in canonicalHtmlPath")
+
+    # 3. _headers clean-URL rules and sw.js no-cache rule
+    hp = ROOT / "_headers"
+    if hp.exists():
+        h_text = hp.read_text(encoding="utf-8")
+        rule_paths = {
+            line.strip()
+            for line in h_text.splitlines()
+            if line and not line[0].isspace() and not line.lstrip().startswith("#")
+        }
+        for h in html_pages:
+            clean = "/" if h == "index.html" else "/" + h.removesuffix(".html")
+            if clean not in rule_paths:
+                fail(f"_headers: missing Cache-Control rule for clean URL '{clean}' ({h})")
+        if "/sw.js" not in rule_paths or not re.search(r"^/sw\.js\s*\n\s+Cache-Control:.*max-age=0", h_text, re.M):
+            fail("_headers: '/sw.js' must have a Cache-Control rule with max-age=0")
+        else:
+            ok("_headers covers all clean HTML routes and sets max-age=0 on /sw.js")
+
+
 def main() -> int:
     check_required_files()
     check_no_secrets()
@@ -270,6 +350,7 @@ def main() -> int:
     check_cache_not_tracked()
     check_local_references()
     check_catalogue()
+    check_pwa_and_headers()
 
     for n in notes:
         print(f"  ok   {n}")
