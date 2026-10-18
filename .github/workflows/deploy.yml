@@ -23,7 +23,7 @@ concurrency:
 jobs:
   check:
     name: Static checks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
@@ -37,7 +37,7 @@ jobs:
 
   test:
     name: Browser smoke tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -86,7 +86,7 @@ jobs:
 
   deploy:
     name: Deploy to Cloudflare Workers
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     needs: [check, test]
     # Skip for PRs raised from forks, which cannot read repository secrets.
