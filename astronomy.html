@@ -432,6 +432,11 @@
 
   <script>
     lucide.createIcons();
+    try {
+      if ((location.hostname !== "localhost" && location.hostname !== "127.0.0.1") || window.__TEST_METRICS) {
+        navigator.sendBeacon?.("/api/metric", JSON.stringify({ event: "page_view", detail: "astronomy" }));
+      }
+    } catch (e) {}
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("sw.js").catch(() => {});
     }

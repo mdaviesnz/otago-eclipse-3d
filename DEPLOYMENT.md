@@ -248,29 +248,54 @@ off — otherwise the beacon loads twice and every visit is counted twice.
 
 ---
 
-## Adding server-side code later
+## Anonymous Usage Metrics (`src/worker.js` + Analytics Engine)
 
-`wrangler.jsonc` has no `main`, so today there is no Worker script and every request is a free
-static asset hit. Adding a `main` reverses that default: the script runs first on **every**
-request, and every request then bills as a Worker invocation — including the 385 KB of static
-assets that are currently free.
+Beyond basic page views, the app tracks coarse, privacy-preserving interaction counts via
+`POST /api/metric` backed by **Cloudflare Workers Analytics Engine** (dataset:
+`otago_eclipse_usage`, bound as `env.METRICS` in `wrangler.jsonc`).
 
-So when the Photon cache or the contact form arrives, keep the static path free by having the
-handler bail out immediately for anything that is not its own route:
+### Keeping static assets free (`run_worker_first`)
 
-```js
-export default {
-  async fetch(request, env) {
-    const { pathname } = new URL(request.url);
-    if (!pathname.startsWith("/api/")) return env.ASSETS.fetch(request);
-    // ... handler
-  },
-};
+`wrangler.jsonc` sets `"run_worker_first": ["/api/*"]` under `assets`. Static files (`index.html`,
+`map.html`, `app.css`, `viewpoints.json`, icons) continue to be served directly from Cloudflare's
+asset edge **without invoking `src/worker.js`**, so static asset traffic remains free and
+unmetered. Only `/api/*` requests invoke the Worker.
+
+### Privacy by construction
+
+`src/worker.js` enforces a closed allowlist (`ALLOWED_METRICS`) on both `event` and `detail`:
+- **No PII or location data**: IP addresses, User-Agent strings, cookies, search queries, and
+  coordinates are never read or written. Even if a client sends a street address or lat/lon in
+  `detail`, the Worker strips any value not in the static allowlist to `""`.
+- **Events recorded**:
+  - `page_view` (`simulator`, `map`, `astronomy`, `methods`)
+  - `preset_select` (`Queenstown`, `Arrowtown`, `Cromwell`, `Dunedin`)
+  - `catalogue_select` (`poi`, `grid`)
+  - `custom_search` (`address`, `coords` — never the query or coordinates)
+  - `geolocation_use` (count only)
+  - `map_pin` (count only)
+  - `sightline_check` (`clear`, `partial`, `blocked`, `below`)
+  - `watch_playback` (count only)
+  - `view_mode` (`eye`, `overview`)
+  - `map_filter` (`poi`, `grid`, `both`, `open_3d`)
+
+### Querying usage in Cloudflare
+
+Analytics Engine datasets are created automatically on first event write. You can query them via
+ the Cloudflare API (`https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/analytics_engine/sql`)
+or Grafana/dashboard with SQL:
+
+```sql
+-- Event breakdown over the last 7 days
+SELECT
+  blob1 AS event,
+  blob2 AS detail,
+  SUM(_sample_interval) AS count
+FROM otago_eclipse_usage
+WHERE timestamp > NOW() - INTERVAL '7' DAY
+GROUP BY event, detail
+ORDER BY count DESC
 ```
-
-That still costs an invocation per asset request. The cheaper shape, if asset volume ever
-matters, is to put the API on its own Worker and route it by path — leaving this one
-script-free. Worth deciding deliberately rather than by accident.
 
 ---
 

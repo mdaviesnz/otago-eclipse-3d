@@ -6,6 +6,7 @@
 // wiring rather than for rendered pixels.
 
 import { test, expect } from "@playwright/test";
+import worker from "../src/worker.js";
 
 const errors = (page) => {
   const found = [];
@@ -304,4 +305,81 @@ test("service worker precaches the app shell and serves pages + catalogue offlin
 
   expect(errs, "no JS errors during offline service worker navigation").toEqual([]);
 });
+
+test("usage metrics: Worker enforces strict allowlist and strips any address or coordinates", async () => {
+  const handler = worker.default || worker;
+  const points = [];
+  const env = {
+    METRICS: { writeDataPoint: (dp) => points.push(dp) },
+  };
+  const post = (body) =>
+    handler.fetch(
+      new Request("https://eclipse.example/api/metric", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+      env
+    );
+
+  // 1. Valid event + allowed detail
+  const r1 = await post({ event: "preset_select", detail: "Queenstown" });
+  expect(r1.status).toBe(204);
+  expect(points).toHaveLength(1);
+  expect(points[0]).toEqual({
+    indexes: ["preset_select"],
+    blobs: ["preset_select", "Queenstown"],
+    doubles: [1],
+  });
+
+  // 2. Valid event + disallowed free-form detail (e.g. an address or coordinate string)
+  //    must coerce detail to "" rather than persisting PII.
+  await post({ event: "custom_search", detail: "10 George Street, Dunedin -45.874, 170.503" });
+  expect(points).toHaveLength(2);
+  expect(points[1]).toEqual({
+    indexes: ["custom_search"],
+    blobs: ["custom_search", ""],
+    doubles: [1],
+  });
+
+  // 3. Unknown event is dropped completely
+  await post({ event: "unknown_event", detail: "anything" });
+  expect(points).toHaveLength(2);
+
+  // 4. Non-POST on /api/metric returns 405
+  const getRes = await handler.fetch(new Request("https://eclipse.example/api/metric"), env);
+  expect(getRes.status).toBe(405);
+});
+
+test("usage metrics: browser interactions emit anonymous events without leaking coordinates", async ({ page }) => {
+  const events = [];
+  await page.addInitScript(() => {
+    window.__TEST_METRICS = true;
+  });
+  await page.route("**/api/metric", async (route) => {
+    const raw = route.request().postData() || "{}";
+    events.push(JSON.parse(raw));
+    await route.fulfill({ status: 204, body: "" });
+  });
+
+  await page.goto("/map.html");
+  await expect.poll(() => events.some((e) => e.event === "page_view" && e.detail === "map")).toBe(true);
+  await page.locator("#srcGrid").click();
+  await expect.poll(() => events.some((e) => e.event === "map_filter" && e.detail === "grid")).toBe(true);
+
+  await page.goto("/index.html");
+  await expect.poll(() => events.some((e) => e.event === "page_view" && e.detail === "simulator")).toBe(true);
+
+  // Clicking a preset records the preset name
+  await page.locator('#presetButtons button[data-name="Dunedin"]').click();
+  await expect.poll(() => events.some((e) => e.event === "preset_select" && e.detail === "Dunedin")).toBe(true);
+
+  // Entering coordinates records only { event: "custom_search", detail: "coords" } — never the numbers
+  await page.locator("#customInput").fill("-45.0312, 168.6626");
+  await page.locator("#customGo").click();
+  await expect.poll(() => events.some((e) => e.event === "custom_search" && e.detail === "coords")).toBe(true);
+  expect(JSON.stringify(events)).not.toContain("-45.0312");
+  expect(JSON.stringify(events)).not.toContain("168.6626");
+});
+
 

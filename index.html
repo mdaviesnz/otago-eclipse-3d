@@ -1950,6 +1950,7 @@
 
   async function toggleCameraViewMode() {
     cameraViewMode = cameraViewMode === "overview" ? "eye" : "overview";
+    trackMetric("view_mode", cameraViewMode);
     syncViewToggleUI();
     if (!viewer || !activeLoc || !activeGroundCartesian) return;
     const gh = Cesium.Cartographic.fromCartesian(activeGroundCartesian).height - EYE_HEIGHT;
@@ -2107,6 +2108,7 @@
       const lat = Cesium.Math.toDegrees(carto.latitude);
       const lon = Cesium.Math.toDegrees(carto.longitude);
       togglePinMode(false);
+      trackMetric("map_pin");
       // Pinning does not move the camera, so there is nothing to wait for.
       setObserver({ name: `${lat.toFixed(4)}, ${lon.toFixed(4)}`, lat, lon })
         .then(refreshSightlineIfRun);
@@ -2242,6 +2244,7 @@
     if (!it) return;
     document.getElementById("customInput").value = shortName(it.name);
     hideSuggestions();
+    trackMetric("custom_search", "address");
     selectLocation({ name: shortName(it.name), lat: it.lat, lon: it.lon }, true);
     setCustomStatus("", "ok");
   }
@@ -2262,6 +2265,7 @@
       } else {
         loc = await geocodeAddress(raw);
       }
+      trackMetric("custom_search", m ? "coords" : "address");
       await selectLocation(loc, true);
       setCustomStatus("", "ok");
     } catch (e) {
@@ -2275,6 +2279,7 @@
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const { latitude, longitude } = pos.coords;
+        trackMetric("geolocation_use");
         await selectLocation({ name: "My location", lat: latitude, lon: longitude }, true);
         setCustomStatus("", "ok");
       },
@@ -2400,6 +2405,13 @@
       ridgeHeight: focus.ridgeHeight,
       az: focus.az,
     });
+    const upMoments = moments.filter((m) => !m.below);
+    const blockedCount = upMoments.filter((m) => m.blocked).length;
+    const checkLevel = upMoments.length === 0 ? "below"
+      : blockedCount === 0 ? "clear"
+      : blockedCount === upMoments.length ? "blocked"
+      : "partial";
+    trackMetric("sightline_check", checkLevel);
     renderHorizonChart(profile, moments, azLo, azHi);
     renderSightlineResults(moments, focus, missing / Math.max(1, total), catAtStart);
   }
@@ -3101,6 +3113,7 @@
         const label = btn.dataset.src === "poi"
           ? (s.name || `Unnamed ${POI_LABEL[s.kind] || "spot"}`)
           : `${s.lat.toFixed(4)}, ${s.lon.toFixed(4)}`;
+        trackMetric("catalogue_select", btn.dataset.src === "poi" ? "poi" : "grid");
         // Pass the record itself, so the precomputed verdict is used without a lookup.
         selectLocation({ name: label, lat: s.lat, lon: s.lon, cat: s }, true);
       });
@@ -3161,6 +3174,7 @@
     closeMobileDrawers();
     const c = localCircumstances(activeGroundCartesian);
     if (!c || !c.peak) { narrate("No eclipse is visible from this spot.", ""); return; }
+    trackMetric("watch_playback");
 
     const begin = c.totalBegin || c.peak;
     viewer.clock.currentTime = Cesium.JulianDate.addSeconds(begin, -480, new Cesium.JulianDate());
@@ -3248,7 +3262,10 @@
       b.dataset.name = loc.name;
       b.className = "inline-flex items-center gap-2 text-xs font-medium bg-slate-800/70 hover:bg-slate-700 border border-transparent text-slate-200 rounded-lg px-2.5 py-2 sm:py-1.5 transition text-left";
       b.innerHTML = `<i data-lucide="${loc.icon}" class="w-3.5 h-3.5 text-amber-400 shrink-0"></i> <span class="truncate">${loc.name}</span>`;
-      b.addEventListener("click", () => selectLocation(loc, true));
+      b.addEventListener("click", () => {
+        trackMetric("preset_select", loc.name);
+        selectLocation(loc, true);
+      });
       wrap.appendChild(b);
     });
     highlightActiveButtons();
@@ -3373,7 +3390,7 @@
         e.preventDefault(); suggestActive = Math.min(suggestActive + 1, suggestItems.length - 1); highlightSuggestion();
       } else if (open && e.key === "ArrowUp") {
         e.preventDefault(); suggestActive = Math.max(suggestActive - 1, 0); highlightSuggestion();
-      } else if (open && e.key === "Enter") {
+      } else if (e.key === "Enter") {
         if (open && suggestActive >= 0) { e.preventDefault(); chooseSuggestion(suggestActive); }
         else goToCustom();
       } else if (e.key === "Escape") {
@@ -3428,6 +3445,20 @@
   }
 
   // ====================================================================================
+  //  ANONYMOUS USAGE METRICS (/api/metric -> Cloudflare Workers Analytics Engine)
+  //  Records coarse feature-usage counts (which controls are used, whether searches or
+  //  sightline probes are run) without ever sending addresses, coordinates, or user IDs.
+  // ====================================================================================
+  function trackMetric(event, detail = "") {
+    try {
+      if ((location.hostname === "localhost" || location.hostname === "127.0.0.1") && !window.__TEST_METRICS) return;
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon("/api/metric", JSON.stringify({ event, detail }));
+      }
+    } catch (e) {}
+  }
+
+  // ====================================================================================
   //  BOOT
   // ====================================================================================
   window.addEventListener("DOMContentLoaded", () => {
@@ -3441,6 +3472,7 @@
     buildPresetButtons();
     wireControls();
     lucide.createIcons();
+    trackMetric("page_view", "simulator");
     start();
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("sw.js").catch(() => {});
