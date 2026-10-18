@@ -404,5 +404,79 @@ test("usage metrics: browser interactions emit anonymous events, POI names, and 
   expect([...sids][0]).toMatch(/^[0-9a-f]{8}$/);
 });
 
+test("NZ bounds, partial-only eclipse UI (Christchurch), and map eclipse path overlay", async ({ page }) => {
+  const errs = errors(page);
+
+  // 1. Overview map renders the eclipse path and bands by default and toggles via #showPath
+  await page.goto("/map.html");
+  const pathCountOn = await page.evaluate(() => pathLayer.getLayers().length);
+  expect(pathCountOn).toBe(7); // 3 partial bands + totality polygon + 2 limit lines + 1 centreline
+  await expect(page.locator("#pathLegendSection")).toBeVisible();
+
+  await page.locator("#showPath").uncheck();
+  const pathCountOff = await page.evaluate(() => pathLayer.getLayers().length);
+  expect(pathCountOff).toBe(0);
+  await expect(page.locator("#pathLegendSection")).toBeHidden();
+
+  // 2. Partial-only location in NZ (Christchurch: ?lat=-43.53095&lon=172.63643)
+  await page.goto("/index.html?lat=-43.53095&lon=172.63643");
+  await page.waitForFunction(() => typeof inNzBounds === "function" && !!window.Astronomy, null, { timeout: 20000 });
+
+  const state = await page.evaluate(async () => {
+    // Call selectLocation directly so the test passes even if headless CI has no WebGL context
+    await selectLocation({ name: "Christchurch", lat: -43.53095, lon: 172.63643 }, false);
+    const jumpLabel = document.getElementById("jumpMaxLabel")?.textContent;
+    const localTimes = document.getElementById("eclipseLocalTimes")?.textContent;
+    const coronaOpacity = document.getElementById("eclCorona")?.getAttribute("opacity");
+    const phaseLabel = document.getElementById("eclipsePhaseLabel")?.textContent;
+
+    const boundsChecks = {
+      chch: inNzBounds(-43.53095, 172.63643),
+      auckland: inNzBounds(-36.8485, 174.7633),
+      dunedin: inNzBounds(-45.8742, 170.5036),
+      sydney: inNzBounds(-33.8688, 151.2093),
+      london: inNzBounds(51.5074, -0.1278),
+    };
+
+    // Trying to enter Sydney coordinates in #customInput must be rejected by NZ bounds
+    document.getElementById("customInput").value = "-33.8688, 151.2093";
+    await goToCustom();
+    const customStatus = document.getElementById("customStatus")?.textContent;
+
+    // Switching to Dunedin (inside totality) restores "Totality" label
+    await selectLocation({ name: "Dunedin", lat: -45.8742, lon: 170.5036 }, false);
+    const dunedinJumpLabel = document.getElementById("jumpMaxLabel")?.textContent;
+    const dunedinLocalTimes = document.getElementById("eclipseLocalTimes")?.textContent;
+
+    return {
+      jumpLabel,
+      localTimes,
+      coronaOpacity,
+      phaseLabel,
+      boundsChecks,
+      customStatus,
+      dunedinJumpLabel,
+      dunedinLocalTimes,
+    };
+  });
+
+  expect(state.boundsChecks).toEqual({
+    chch: true,
+    auckland: true,
+    dunedin: true,
+    sydney: false,
+    london: false,
+  });
+  expect(state.jumpLabel).toBe("Maximum");
+  expect(state.localTimes).toMatch(/Partial only from here · max 93% at 16:19:\d\d/);
+  expect(state.coronaOpacity).toBe("0");
+  expect(state.phaseLabel).toContain("Partial phase");
+  expect(state.customStatus).toContain("within New Zealand");
+  expect(state.dunedinJumpLabel).toBe("Totality");
+  expect(state.dunedinLocalTimes).toContain("Totality here:");
+
+  expect(errs, "no JS errors during NZ bounds and partial-only UI checks").toEqual([]);
+});
+
 
 

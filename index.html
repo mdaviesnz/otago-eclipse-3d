@@ -467,7 +467,7 @@
       <div class="flex items-center gap-3 mt-1 text-[10px] text-slate-400">
         <span class="flex items-center gap-1"><span class="inline-block w-3 h-2 rounded-sm bg-slate-500"></span> terrain</span>
         <span class="flex items-center gap-1"><span class="inline-block w-3 h-0.5 bg-amber-400"></span> sun track</span>
-        <span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full bg-red-400"></span> totality</span>
+        <span id="horizonTotalityLegend" class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full bg-red-400"></span> totality</span>
       </div>
     </div>
 
@@ -513,7 +513,7 @@
         </button>
         <button id="jumpTotality" title="Maximum eclipse"
           class="inline-flex items-center justify-center gap-1 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2 sm:px-2.5 py-1.5 transition">
-          <i data-lucide="target" class="w-3.5 h-3.5 text-amber-400"></i> Totality<span id="jumpMaxT" class="hidden sm:inline text-slate-400 font-mono"></span>
+          <i data-lucide="target" class="w-3.5 h-3.5 text-amber-400"></i> <span id="jumpMaxLabel">Totality</span><span id="jumpMaxT" class="hidden sm:inline text-slate-400 font-mono"></span>
         </button>
         <button id="jumpEnd" title="Last contact — the eclipse ends"
           class="inline-flex items-center justify-center gap-1 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2 sm:px-2.5 py-1.5 transition">
@@ -575,6 +575,15 @@
     { name: "Cromwell",   lon: 169.2030, lat: -45.0382, icon: "grape" },
     { name: "Dunedin",    lon: 170.5028, lat: -45.8788, icon: "waves" },
   ];
+
+  // Bounding box around mainland New Zealand (North Island, South Island, Stewart Island).
+  // Keeps custom searches, coordinates, URL deep links, and map pins focused on NZ.
+  const NZ_BOUNDS = { latMin: -47.6, latMax: -34.0, lonMin: 166.0, lonMax: 179.0 };
+  function inNzBounds(lat, lon) {
+    return Number.isFinite(lat) && Number.isFinite(lon) &&
+      lat >= NZ_BOUNDS.latMin && lat <= NZ_BOUNDS.latMax &&
+      lon >= NZ_BOUNDS.lonMin && lon <= NZ_BOUNDS.lonMax;
+  }
 
   const EARTH_RADIUS = 6371000;        // mean Earth radius, m
   const REFRACTION_K = 0.13;           // standard terrestrial refraction coefficient (effective R = R / (1 - k))
@@ -775,6 +784,8 @@
   }
 
   function updateEclipseCard(time, e) {
+    const c = activeGroundCartesian ? localCircumstances(activeGroundCartesian) : null;
+    const hasTotality = Boolean(c && c.totalBegin);
     document.getElementById("eclipseMag").textContent = "mag " + e.mag.toFixed(2);
     const pct = e.isTotal ? "100%" : (e.obscuration >= 0.995 ? "99.9%" : Math.round(e.obscuration * 100) + "%");
     document.getElementById("eclipseObsc").textContent = pct;
@@ -782,7 +793,7 @@
 
     const lbl = document.getElementById("eclipsePhaseLabel");
     if (e.isTotal) { lbl.textContent = "Totality"; lbl.className = "text-xs font-bold text-amber-300 mt-0.5"; }
-    else if (e.obscuration >= 0.985) { lbl.textContent = "Diamond ring / Baily's beads"; lbl.className = "text-xs font-semibold text-amber-200 mt-0.5"; }
+    else if (hasTotality && e.obscuration >= 0.985) { lbl.textContent = "Diamond ring / Baily's beads"; lbl.className = "text-xs font-semibold text-amber-200 mt-0.5"; }
     else if (e.mag > 0) { lbl.textContent = "Partial phase"; lbl.className = "text-xs font-semibold text-amber-400/90 mt-0.5"; }
     else { lbl.textContent = "No eclipse"; lbl.className = "text-xs text-slate-500 mt-0.5"; }
 
@@ -806,7 +817,7 @@
     const coronaHalo = document.getElementById("eclCoronaHalo");
     const chromo = document.getElementById("eclChromo");
     const diamond = document.getElementById("eclDiamond");
-    const nearTot = !e.isTotal && e.obscuration >= 0.96;
+    const nearTot = hasTotality && !e.isTotal && e.obscuration >= 0.96;
 
     if (e.isTotal || nearTot) {
       const cAlpha = e.isTotal ? 1 : Cesium.Math.clamp((e.obscuration - 0.96) / 0.04, 0, 0.85);
@@ -835,7 +846,7 @@
     }
 
     if (diamond) {
-      if (!e.isTotal && e.obscuration >= 0.98) {
+      if (hasTotality && !e.isTotal && e.obscuration >= 0.98) {
         const dAlpha = Math.sin(Cesium.Math.clamp((e.obscuration - 0.98) / 0.02, 0, 1) * Math.PI * 0.85);
         const dx = 60 - Rp * Math.cos(pa);
         const dy = 60 + Rp * Math.sin(pa);
@@ -1265,6 +1276,8 @@
     const pa = Math.atan2(e.moonAlt - e.sunAlt, dAz * Math.cos(Cesium.Math.toRadians(e.sunAlt)));
 
     // 1. Wide twilight & coronal sky glow behind terrain
+    const c = localCircumstances(activeGroundCartesian);
+    const hasTotality = Boolean(c && c.totalBegin);
     const twAlpha = e.isTotal ? 0.95 : Math.pow(Cesium.Math.clamp((e.obscuration - 0.55) / 0.45, 0, 1), 2) * 0.85;
     bbTwilight.show = twAlpha > 0.01;
     if (bbTwilight.show) {
@@ -1272,8 +1285,8 @@
       bbTwilight.color = new Cesium.Color(1, 1, 1, twAlpha);
     }
 
-    // 2. Solar corona + chromosphere + dark lunar silhouette (emerges past 92% obscuration)
-    const corAlpha = e.isTotal ? 1.0 : Math.pow(Cesium.Math.clamp((e.obscuration - 0.92) / 0.08, 0, 1), 2.2) * 0.88;
+    // 2. Solar corona + chromosphere + dark lunar silhouette (emerges past 92% obscuration inside totality path)
+    const corAlpha = e.isTotal ? 1.0 : (hasTotality ? Math.pow(Cesium.Math.clamp((e.obscuration - 0.92) / 0.08, 0, 1), 2.2) * 0.88 : 0);
     bbCorona.show = corAlpha > 0.01;
     if (bbCorona.show) {
       bbCorona.position = posAt(e.isTotal ? moonDir : sunDir, SKY_ECLIPSE_DIST + 2000);
@@ -1315,8 +1328,8 @@
       bbGlare.color = new Cesium.Color(1, 1, 1, glareAlpha);
     }
 
-    // 6. Diamond Ring starburst at C2 / C3 (97.8% - 100% partial)
-    const showDiamond = !e.isTotal && e.obscuration >= 0.978;
+    // 6. Diamond Ring starburst at C2 / C3 (97.8% - 100% partial inside totality path)
+    const showDiamond = hasTotality && !e.isTotal && e.obscuration >= 0.978;
     bbDiamond.show = showDiamond;
     if (showDiamond) {
       const u = Cesium.Math.clamp((e.obscuration - 0.978) / 0.022, 0, 1);
@@ -1514,16 +1527,18 @@
     }
 
     // ?lat=&lon=&name= lets the overview map (and any shared link) drop you straight onto a
-    // specific spot. Falls back to Dunedin.
+    // specific spot within New Zealand. Falls back to Dunedin.
     const q = new URLSearchParams(location.search);
     const qLat = parseFloat(q.get("lat")), qLon = parseFloat(q.get("lon"));
-    if (Number.isFinite(qLat) && Number.isFinite(qLon) &&
-        qLat >= -90 && qLat <= 90 && qLon >= -180 && qLon <= 180) {
+    if (inNzBounds(qLat, qLon)) {
       const name = (q.get("name") || "").slice(0, 60) ||
         `${qLat.toFixed(4)}, ${qLon.toFixed(4)}`;
       await selectLocation({ name, lat: qLat, lon: qLon }, false);
     } else {
       await selectLocation(LOCATIONS[3], false);
+      if (Number.isFinite(qLat) && Number.isFinite(qLon)) {
+        setCustomStatus("Location must be within New Zealand — showing Dunedin", "error");
+      }
     }
     onTick(viewer.clock);
   }
@@ -1589,27 +1604,32 @@
   let sightlineExtras = [];             // ridge marker and dashed continuation line
 
   function clearSightlineVisuals() {
-    if (sightlinePrimitive) { viewer.entities.remove(sightlinePrimitive); sightlinePrimitive = null; }
-    for (const ent of sightlineExtras) viewer.entities.remove(ent);
+    if (viewer) {
+      if (sightlinePrimitive) { viewer.entities.remove(sightlinePrimitive); sightlinePrimitive = null; }
+      for (const ent of sightlineExtras) viewer.entities.remove(ent);
+    }
     sightlineExtras = [];
     currentSightlineBlocked = false;
     currentHorizonAtSun = null;
   }
 
   function clearSunTrack3D() {
-    for (const ent of sunTrackEntities) viewer.entities.remove(ent);
+    if (viewer) {
+      for (const ent of sunTrackEntities) viewer.entities.remove(ent);
+    }
     sunTrackEntities = [];
   }
 
   let totalityMarkerEntity = null;
 
   // Draw the sun's path across the sky in 3D so the user can see how the sun descends toward
-  // the NW horizon and how the current clock time relates to the Totality sightline.
+  // the NW horizon and how the current clock time relates to the Totality/Maximum sightline.
   function drawSunTrack3D() {
     if (!viewer || !activeGroundCartesian) return;
     clearSunTrack3D();
     totalityMarkerEntity = null;
     const c = localCircumstances(activeGroundCartesian);
+    const hasTotality = Boolean(c && c.totalBegin);
     const trackDist = SKY_ECLIPSE_DIST + 6000;
     const posAt = (az, alt) => Cesium.Cartesian3.add(
       activeGroundCartesian,
@@ -1617,7 +1637,7 @@
       new Cesium.Cartesian3()
     );
 
-    // Split the dashed sun path around totality so no line crosses through the dark lunar disc
+    // Split the dashed sun path around totality/maximum so no line crosses through the dark lunar disc
     const steps = 80;
     const beforeSeg = [], afterSeg = [];
     for (let i = 0; i <= steps; i++) {
@@ -1661,7 +1681,7 @@
           disableDepthTestDistance: 0,
         },
         label: {
-          text: `Totality ${formatNZST(c.peak).slice(0, 5)}`,
+          text: `${hasTotality ? "Totality" : "Maximum"} ${formatNZST(c.peak).slice(0, 5)}`,
           font: "11px sans-serif",
           fillColor: Cesium.Color.fromCssColorString("#fde68a"),
           showBackground: true,
@@ -1755,7 +1775,7 @@
       updateMobileVerdictPill({ icon: "scan-eye", text: "Tap to check sightline", tone: "text-amber-300" });
     }
 
-    onTick(viewer.clock); // refresh sun readout and 3D sky for the new observer
+    if (viewer && viewer.clock) onTick(viewer.clock); // refresh sun readout and 3D sky for the new observer
     return groundHeight;
   }
 
@@ -1985,12 +2005,19 @@
   async function selectLocation(loc, fly = true) {
     closeMobileDrawers();
     const groundHeight = await setObserver(loc);
+    if (!viewer) {
+      const c = localCircumstances(activeGroundCartesian);
+      const t = (c && c.peak) ? c.peak : Cesium.JulianDate.fromIso8601(TOTALITY_MAX_UTC);
+      updateEclipseCard(t, eclipseAt(t, activeGroundCartesian));
+      return;
+    }
 
     // Arrive part-way through the partial phase rather than at totality: at ~50% obscured
     // there is still enough light to read the terrain, and the user can jump forward to
-    // totality without touching the camera. Leave the clock alone mid-playback.
+    // totality/maximum without touching the camera. Leave the clock alone mid-playback.
     if (!cinematic) {
-      const t50 = timeAtObscuration(0.5, activeGroundCartesian);
+      const c = localCircumstances(activeGroundCartesian);
+      const t50 = timeAtObscuration(0.5, activeGroundCartesian) || (c && c.peak ? c.peak.clone() : null);
       if (t50) {
         viewer.clock.currentTime = t50;
         onTick(viewer.clock);
@@ -2015,21 +2042,27 @@
   }
 
   // Per-location contact times — these genuinely differ across Otago (Queenstown reaches
-  // totality about a minute before Dunedin, with a different duration).
+  // totality about a minute before Dunedin, with a different duration), and outside the
+  // path only a partial eclipse occurs.
   function updateLocalTimes() {
     const el = document.getElementById("eclipseLocalTimes");
     const c = localCircumstances(activeGroundCartesian);
+    const hasTotality = Boolean(c && c.totalBegin && c.totalEnd);
 
-    // Label the jump buttons with this location's own contact times.
+    // Label the jump buttons with this location's own contact times and phase name.
     const hm = (j) => (j ? formatNZST(j).slice(0, 5) : "--:--");
     document.getElementById("jumpStartT").textContent = c ? " " + hm(c.partialBegin) : "";
     document.getElementById("jumpMaxT").textContent = c ? " " + hm(c.peak) : "";
     document.getElementById("jumpEndT").textContent = c ? " " + hm(c.partialEnd) : "";
+    const maxLbl = document.getElementById("jumpMaxLabel");
+    if (maxLbl) maxLbl.textContent = hasTotality ? "Totality" : "Maximum";
+    const jumpBtn = document.getElementById("jumpTotality");
+    if (jumpBtn) jumpBtn.title = hasTotality ? "Totality — maximum eclipse" : "Maximum eclipse";
 
     // Position the totality highlight band on the timeline scrubber.
     const band = document.getElementById("scrubTotalityBand");
     if (band) {
-      if (c && c.totalBegin && c.totalEnd) {
+      if (hasTotality) {
         const f0 = Cesium.Math.clamp(Cesium.JulianDate.secondsDifference(c.totalBegin, startJulian) / windowSecs, 0, 1);
         const f1 = Cesium.Math.clamp(Cesium.JulianDate.secondsDifference(c.totalEnd, startJulian) / windowSecs, 0, 1);
         band.style.left = (f0 * 100).toFixed(2) + "%";
@@ -2040,10 +2073,18 @@
       }
     }
 
-    if (!c || !c.totalBegin) {
-      el.innerHTML = c
-        ? `<span class="text-slate-500">Partial only from here (${c.kind}).</span>`
-        : `<span class="text-slate-500">No solar eclipse visible from this location.</span>`;
+    if (!hasTotality) {
+      if (c && c.peak) {
+        const peakObsc = Number.isFinite(c.peakObscuration)
+          ? c.peakObscuration
+          : eclipseAt(c.peak, activeGroundCartesian).obscuration;
+        const pct = peakObsc >= 0.995 ? "99.9%" : Math.round(peakObsc * 100) + "%";
+        el.innerHTML =
+          `Partial only from here &middot; max <span class="text-amber-300 font-semibold">${pct}</span>` +
+          ` at <span class="text-amber-300 font-semibold">${formatNZST(c.peak)}</span>`;
+      } else {
+        el.innerHTML = `<span class="text-slate-500">No solar eclipse visible from this location.</span>`;
+      }
       return;
     }
     const dur = Cesium.JulianDate.secondsDifference(c.totalEnd, c.totalBegin);
@@ -2055,6 +2096,7 @@
   }
 
   function updateLocationMarker(loc, groundHeight) {
+    if (!viewer) return;
     const pos = Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat, groundHeight);
     if (!locationMarker) {
       locationMarker = viewer.entities.add({
@@ -2108,6 +2150,10 @@
       const lat = Cesium.Math.toDegrees(carto.latitude);
       const lon = Cesium.Math.toDegrees(carto.longitude);
       togglePinMode(false);
+      if (!inNzBounds(lat, lon)) {
+        setCustomStatus("Please pin a location within New Zealand", "error");
+        return;
+      }
       trackMetric("map_pin");
       // Pinning does not move the camera, so there is nothing to wait for.
       setObserver({ name: `${lat.toFixed(4)}, ${lon.toFixed(4)}`, lat, lon })
@@ -2146,13 +2192,15 @@
 
   // Geocoding uses Photon rather than Nominatim. Nominatim's usage policy explicitly forbids
   // autocomplete ("you must not implement such a service") and bans offenders; Photon is
-  // OSM-based and purpose-built for type-ahead. Results are biased toward Otago.
+  // OSM-based and purpose-built for type-ahead. Results are biased toward Otago and bounded
+  // to New Zealand.
   const PHOTON_URL = "https://photon.komoot.io/api/";
   const BIAS = { lat: -45.1, lon: 169.2 };
 
   function photonUrl(query, limit) {
+    const bbox = `${NZ_BOUNDS.lonMin},${NZ_BOUNDS.latMin},${NZ_BOUNDS.lonMax},${NZ_BOUNDS.latMax}`;
     return `${PHOTON_URL}?q=${encodeURIComponent(query)}&limit=${limit}` +
-           `&lat=${BIAS.lat}&lon=${BIAS.lon}&lang=en`;
+           `&lat=${BIAS.lat}&lon=${BIAS.lon}&bbox=${bbox}&lang=en`;
   }
 
   // Build a readable label from Photon's structured properties.
@@ -2175,14 +2223,14 @@
         lon: f.geometry.coordinates[0],
         lat: f.geometry.coordinates[1],
       }))
-      .filter((f) => f.name && Number.isFinite(f.lat) && Number.isFinite(f.lon));
+      .filter((f) => f.name && inNzBounds(f.lat, f.lon));
   }
 
   async function geocodeAddress(query) {
-    const res = await fetch(photonUrl(query, 1), { headers: { Accept: "application/json" } });
+    const res = await fetch(photonUrl(query, 5), { headers: { Accept: "application/json" } });
     if (!res.ok) throw new Error("Geocoding service unavailable");
     const list = photonFeatures(await res.json());
-    if (!list.length) throw new Error("Address not found");
+    if (!list.length) throw new Error("Address not found in New Zealand");
     return { name: shortName(list[0].name), lat: list[0].lat, lon: list[0].lon };
   }
 
@@ -2261,6 +2309,7 @@
       if (m) {
         const lat = parseFloat(m[1]), lon = parseFloat(m[2]);
         if (lat < -90 || lat > 90 || lon < -180 || lon > 180) throw new Error("Coordinates out of range");
+        if (!inNzBounds(lat, lon)) throw new Error("Location must be within New Zealand");
         loc = { name: `${lat.toFixed(4)}, ${lon.toFixed(4)}`, lat, lon };
       } else {
         loc = await geocodeAddress(raw);
@@ -2279,6 +2328,10 @@
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const { latitude, longitude } = pos.coords;
+        if (!inNzBounds(latitude, longitude)) {
+          setCustomStatus("Your location is outside New Zealand", "error");
+          return;
+        }
         trackMetric("geolocation_use");
         await selectLocation({ name: "My location", lat: latitude, lon: longitude }, true);
         setCustomStatus("", "ok");
@@ -2321,7 +2374,15 @@
           { label: "End", j: c.partialEnd },
         ]
       : [{ label: "Now", j: viewer.clock.currentTime.clone() }];
-    for (const m of moments) {
+    // When inside the totality path, also probe second and third contact (start/end of
+    // totality) so we can detect if a sloping ridge cuts into totality near the edge.
+    const totContacts = c && c.totalBegin && c.totalEnd
+      ? [
+          { label: "Totality begins", j: c.totalBegin },
+          { label: "Totality ends", j: c.totalEnd },
+        ]
+      : [];
+    for (const m of [...moments, ...totContacts]) {
       const s = sunAltAz(m.j, activeGroundCartesian);
       m.alt = s.altitude; m.az = s.azimuth; m.dir = s.dir;
     }
@@ -2331,7 +2392,7 @@
     updateMobileVerdictPill({ icon: "loader", text: "Probing terrain…", tone: "text-slate-300", spin: true });
     lucide.createIcons();
 
-    // The terrain horizon does not depend on time — so sample it ONCE and test all three sun
+    // The terrain horizon does not depend on time — so sample it ONCE and test all sun
     // positions against it. Each moment's own bearing gets full radial resolution; a coarser
     // fan spanning them all builds the silhouette for the chart.
     const fine = radialDistances(0.03);
@@ -2339,7 +2400,7 @@
     const azs = moments.map((m) => m.az);
     const azLo = Math.min(...azs) - HORIZON_SPAN / 2;
     const azHi = Math.max(...azs) + HORIZON_SPAN / 2;
-    const rays = moments.map((m) => ({ az: m.az, dists: fine, moment: m }));
+    const rays = [...moments, ...totContacts].map((m) => ({ az: m.az, dists: fine, moment: m }));
     for (let a = azLo; a <= azHi + 1e-9; a += HORIZON_STEP) {
       if (moments.some((m) => Math.abs(m.az - a) < HORIZON_STEP / 2)) continue;
       rays.push({ az: a, dists: coarse, moment: null });
@@ -2387,7 +2448,9 @@
         const angle = Cesium.Math.toDegrees(Math.atan2(h - observerHeight - drop, d));
         if (angle > rayMax) { rayMax = angle; rayDist = d; rayHeight = h; }
       }
-      profile.push({ az: ray.az, angle: rayMax });
+      if (!totContacts.includes(ray.moment)) {
+        profile.push({ az: ray.az, angle: rayMax });
+      }
       if (ray.moment) {
         ray.moment.horizon = rayMax;
         ray.moment.ridgeDist = rayDist;
@@ -2398,6 +2461,7 @@
       }
     }
     profile.sort((a, b) => a.az - b.az);
+    focus.partialTotality = totContacts.some((m) => m.blocked || m.below);
 
     drawSightline(focus.dir, !focus.blocked && !focus.below, {
       horizon: focus.horizon,
@@ -2408,7 +2472,7 @@
     const upMoments = moments.filter((m) => !m.below);
     const blockedCount = upMoments.filter((m) => m.blocked).length;
     const checkLevel = upMoments.length === 0 ? "below"
-      : blockedCount === 0 ? "clear"
+      : blockedCount === 0 && !focus.partialTotality ? "clear"
       : blockedCount === upMoments.length ? "blocked"
       : "partial";
     trackMetric("sightline_check", checkLevel);
@@ -2420,6 +2484,14 @@
   // card is otherwise identical, but it must not claim to be a live terrain reading.
   function renderSightlineResults(moments, focus, missingFraction = 0, cat = null, preset = null) {
     const box = document.getElementById("resultBox");
+    const c = activeGroundCartesian ? localCircumstances(activeGroundCartesian) : null;
+    const hasTotality = Boolean(c && c.totalBegin && c.totalEnd);
+    const totDur = hasTotality ? Cesium.JulianDate.secondsDifference(c.totalEnd, c.totalBegin) : 0;
+    const peakObsc = c && c.peak
+      ? (Number.isFinite(c.peakObscuration) ? c.peakObscuration : eclipseAt(c.peak, activeGroundCartesian).obscuration)
+      : 0;
+    const peakPct = peakObsc >= 0.995 ? "99.9%" : Math.round(peakObsc * 100) + "%";
+
     // Never present a confident verdict built on terrain that failed to download.
     const gapNote = missingFraction > 0.01
       ? `<p class="text-[11px] text-amber-300 mt-2 flex items-start gap-1.5"><i data-lucide="alert-triangle" class="w-3.5 h-3.5 mt-px shrink-0"></i><span>${Math.round(missingFraction * 100)}% of the terrain samples did not load, so this verdict may be unreliable. Run the check again.</span></p>`
@@ -2436,7 +2508,7 @@
       up.length === 0
         ? { box: "bg-slate-900/40 border-slate-600/40", tone: "text-slate-300",
             icon: "moon", text: "Sun below horizon" }
-        : blocked === 0
+        : blocked === 0 && !focus.partialTotality
         ? { box: "bg-emerald-900/40 border-emerald-600/40", tone: "text-emerald-300",
             icon: "check-circle", text: "Clear while sun is up" }
         : blocked === up.length
@@ -2445,13 +2517,14 @@
         : { box: "bg-amber-900/40 border-amber-600/40", tone: "text-amber-300",
             icon: "alert-triangle", text: "Partly visible" };
     updateMobileVerdictPill({ icon: headline.icon, text: headline.text, tone: headline.tone });
+    const peakLabel = hasTotality ? "the peak of the eclipse" : `maximum eclipse (${peakPct} partial)`;
     const plain = focus.below
       ? "At the peak of the eclipse the sun has already set here."
       : focus.blocked
-      ? `At the peak of the eclipse, high ground about ${(focus.ridgeDist / 1000).toFixed(1)} km to the ${compassName(focus.az)} will be in the way. You would need to move to somewhere more open, or higher up, to see it.`
+      ? `At ${peakLabel}, high ground about ${(focus.ridgeDist / 1000).toFixed(1)} km to the ${compassName(focus.az)} will be in the way. You would need to move to somewhere more open, or higher up, to see it.`
       : focus.grazing
-      ? `At the peak of the eclipse, the centre of the sun clears the skyline by ${(focus.alt - focus.horizon).toFixed(1)}&deg;, but because the sun's disc spans ~0.5&deg; its lower edge grazes the ridge. Moving slightly higher will clear the whole disc.`
-      : `You should have a clear view at the peak of the eclipse. Look ${heightPhrase(focus.alt)}, to the ${compassName(focus.az)} — the sun clears the skyline by about ${(focus.alt - focus.horizon).toFixed(1)}&deg;.`;
+      ? `At ${peakLabel}, the centre of the sun clears the skyline by ${(focus.alt - focus.horizon).toFixed(1)}&deg;, but because the sun's disc spans ~0.5&deg; its lower edge grazes the ridge. Moving slightly higher will clear the whole disc.`
+      : `You should have a clear view at ${peakLabel}. Look ${heightPhrase(focus.alt)}, to the ${compassName(focus.az)} — the sun clears the skyline by about ${(focus.alt - focus.horizon).toFixed(1)}&deg;.`;
     // Refining a catalogue spot: reconcile the two rather than silently replacing one verdict
     // with another. There are two ways they can differ and they are not the same thing.
     const catBits = [];
@@ -2484,6 +2557,17 @@
     const town = preset || (cat && cat.isPreset ? cat : null);
     const presetNote = town && (focus.blocked || town.wholeTotality === false)
       ? `<p class="text-[11px] text-slate-400 mt-2 flex items-start gap-1.5"><i data-lucide="info" class="w-3.5 h-3.5 mt-px shrink-0 text-slate-500"></i><span>This is the town centre. <b class="text-slate-300">Best viewing spots</b> lists places with a clear view — set a distance filter to find the closest ones to here.</span></p>`
+      : "";
+    const edgeNote = hasTotality && totDur > 0 && totDur < 60
+      ? `<p class="text-[11px] text-amber-300 mt-2 flex items-start gap-1.5"><i data-lucide="alert-triangle" class="w-3.5 h-3.5 mt-px shrink-0"></i><span>Totality lasts under a minute here (${Math.round(totDur)}s) — this spot is near the edge of the path. A few kilometres towards the centre line buys a lot more.</span></p>`
+      : "";
+    const partialTotNote = hasTotality && !focus.blocked && focus.partialTotality
+      ? `<p class="text-[11px] text-amber-300 mt-2 flex items-start gap-1.5"><i data-lucide="alert-triangle" class="w-3.5 h-3.5 mt-px shrink-0"></i><span>The sun clears the skyline at maximum, but terrain cuts in before totality ends (or at its start), so part of totality is blocked here.</span></p>`
+      : "";
+    const partialOnlyNote = !hasTotality && c && c.peak
+      ? (peakObsc >= 0.95
+          ? `<p class="text-[11px] text-amber-300 mt-2 flex items-start gap-1.5"><i data-lucide="alert-triangle" class="w-3.5 h-3.5 mt-px shrink-0"></i><span>Outside the path of totality — this spot sees a deep partial eclipse (${peakPct} covered at maximum), not totality. The corona will not be visible and eclipse glasses must stay on the entire time.</span></p>`
+          : `<p class="text-[11px] text-slate-400 mt-2 flex items-start gap-1.5"><i data-lucide="info" class="w-3.5 h-3.5 mt-px shrink-0 text-slate-500"></i><span>Outside the path of totality — from here this is a partial solar eclipse (${peakPct} covered at maximum). Proper eclipse glasses are required at all times.</span></p>`)
       : "";
     const setNote = moments.some((m) => m.below)
       ? `<p class="text-[11px] text-slate-400 mt-2 flex items-start gap-1.5"><i data-lucide="info" class="w-3.5 h-3.5 mt-px shrink-0 text-slate-500"></i><span>The sun sets before the eclipse finishes here, so the final phase happens below the horizon.</span></p>`
@@ -2524,6 +2608,9 @@
       <p class="expert-only text-xs text-slate-400 mt-2">At maximum, terrain along bearing
       ${focus.az.toFixed(0)}&deg; rises to <b>${focus.horizon.toFixed(1)}&deg;</b>
       (${focus.ridgeHeight.toFixed(0)} m, ~${(focus.ridgeDist / 1000).toFixed(1)} km away).</p>
+      ${partialOnlyNote}
+      ${partialTotNote}
+      ${edgeNote}
       ${setNote}
       ${catNote}
       ${presetNote}
@@ -2544,6 +2631,8 @@
     const sunAlt = Math.max(...moments.map((m) => m.alt));
 
     const c = localCircumstances(activeGroundCartesian);
+    const totLeg = document.getElementById("horizonTotalityLegend");
+    if (totLeg) totLeg.classList.toggle("hidden", !(c && c.totalBegin));
 
     // Sun track across the clock window (cheap — no terrain involved). The exact contact
     // times are injected so the totality segment is bounded precisely; totality lasts under
@@ -3227,25 +3316,32 @@
     if (!cinematic) return;
     if (cinematicEnd && Cesium.JulianDate.greaterThan(t, cinematicEnd)) { stopCinematic(); return; }
     const o = e.obscuration;
+    const c = localCircumstances(activeGroundCartesian);
+    const hasTotality = Boolean(c && c.totalBegin);
 
     // Slow right down through totality — it is the payoff, and at speed it flashes past.
-    const target = o >= 0.99 ? CINE_SLOW : CINE_FAST;
+    const target = hasTotality && o >= 0.99 ? CINE_SLOW : CINE_FAST;
     if (viewer.clock.multiplier !== target) viewer.clock.multiplier = target;
 
     // Direction matters: the same coverage means something different coming out.
-    const c = localCircumstances(activeGroundCartesian);
     const past = c && c.peak ? Cesium.JulianDate.greaterThan(t, c.peak) : false;
+    const dtPeak = c && c.peak ? Math.abs(Cesium.JulianDate.secondsDifference(t, c.peak)) : Infinity;
 
     if (e.isTotal) {
       narrate("Totality — the sun is completely hidden.",
         "The only time it is safe to look without eclipse glasses.");
+    } else if (!hasTotality && dtPeak <= 45) {
+      const pct = o >= 0.995 ? "99.9%" : Math.round(o * 100) + "%";
+      narrate(`Maximum eclipse — ${pct} of the sun is covered here.`,
+        "Outside the path of totality, eclipse glasses must stay on the whole time.");
     } else if (!past) {
-      if (o >= 0.9) narrate("Almost there — the light is draining away fast.", "Watch the landscape darken.");
+      if (hasTotality && o >= 0.9) narrate("Almost there — the light is draining away fast.", "Watch the landscape darken.");
+      else if (o >= 0.85) narrate("Approaching maximum eclipse — the light is noticeably dimmer.", "Eclipse glasses required throughout a partial eclipse.");
       else if (o >= 0.4) narrate("More than half the sun is covered now.", "The daylight turns oddly flat and silvery.");
       else if (o > 0.005) narrate("The moon has taken a bite out of the sun.", "Eclipse glasses required at this stage.");
       else narrate("Any moment now…", `The sun sits ${heightPhrase(e.sunAlt)}, to the ${compassName(e.sunAz)}.`);
     } else {
-      if (o >= 0.9) narrate("Totality is over — the first sliver of sun is back.", "Glasses back on.");
+      if (hasTotality && o >= 0.9) narrate("Totality is over — the first sliver of sun is back.", "Glasses back on.");
       else if (o >= 0.4) narrate("The sun is climbing back out from behind the moon.", "Daylight returning.");
       else if (o > 0.005) narrate("Just a last bite left.", "The eclipse is nearly finished.");
       else narrate("That's the end of the eclipse.", `The sun is now ${heightPhrase(e.sunAlt)}.`);

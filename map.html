@@ -111,9 +111,14 @@
         <input id="clearFilter" type="range" min="0" max="120" value="0"
           class="w-full accent-amber-400 cursor-pointer mb-2" />
 
-        <label class="flex items-center gap-2 text-xs sm:text-[11px] text-slate-300 sm:text-slate-400 mb-2 py-0.5 cursor-pointer">
+        <label class="flex items-center gap-2 text-xs sm:text-[11px] text-slate-300 sm:text-slate-400 mb-1.5 py-0.5 cursor-pointer">
           <input id="wholeOnly" type="checkbox" class="accent-amber-400 w-4 h-4 sm:w-3.5 sm:h-3.5" />
           Only spots clear for all of totality
+        </label>
+
+        <label class="flex items-center gap-2 text-xs sm:text-[11px] text-slate-300 sm:text-slate-400 mb-2 py-0.5 cursor-pointer">
+          <input id="showPath" type="checkbox" checked class="accent-amber-400 w-4 h-4 sm:w-3.5 sm:h-3.5" />
+          Show eclipse path &amp; bands
         </label>
 
         <p id="count" class="text-[11px] text-slate-400"></p>
@@ -129,6 +134,18 @@
         <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full" style="background:#fbbf24"></span> 4WD track</span>
         <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full" style="background:#60a5fa"></span> Walking track</span>
         <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full border-2 border-amber-400" style="background:#0f172a"></span> Reference town centre</span>
+      </div>
+      <div id="pathLegendSection" class="mt-2.5 pt-2 border-t border-slate-700/60">
+        <p class="text-[10px] uppercase tracking-wide text-slate-400 mb-1.5">Eclipse path &amp; obscuration</p>
+        <div class="flex rounded overflow-hidden text-[10px] font-semibold text-center leading-tight mb-1.5 border border-slate-700/80">
+          <span class="flex-1 py-0.5 text-amber-100" style="background:rgba(245,158,11,0.38)">Total</span>
+          <span class="flex-1 py-0.5 text-slate-100" style="background:rgba(251,146,60,0.26)">&gt;90%</span>
+          <span class="flex-1 py-0.5 text-slate-100" style="background:rgba(251,191,36,0.18)">&gt;75%</span>
+          <span class="flex-1 py-0.5 text-slate-200" style="background:rgba(254,240,138,0.12)">&gt;50%</span>
+        </div>
+        <div class="flex items-center gap-2 text-[10px] text-slate-400">
+          <span class="inline-block w-4 border-t-2 border-dashed" style="border-color:#fde68a"></span> Centreline of totality
+        </div>
       </div>
       <p class="text-[10px] text-slate-500 mt-2 leading-snug">
         Marker size shows how far the sun clears the skyline. Ringed markers are named lookouts.
@@ -256,10 +273,74 @@
     { maxZoom: 17, opacity: 0.9 }
   ).addTo(map);
 
+  const pathLayer = L.layerGroup().addTo(map);
   const layer = L.layerGroup().addTo(map);
   const townLayer = L.layerGroup().addTo(map);
   let catalogue = null;
   let source = "poi";
+
+  // Precomputed 22 July 2028 eclipse path & partial obscuration bands across the Tasman / NZ
+  // (astronomy-engine local solar eclipse circumference + sunset terminus).
+  const ECLIPSE_PATH = {"totalityPoly":[[-28.732,146],[-29.526,147],[-30.312,148],[-31.089,149],[-31.856,150],[-32.612,151],[-33.358,152],[-34.092,153],[-34.815,154],[-35.525,155],[-36.223,156],[-36.909,157],[-37.582,158],[-38.243,159],[-38.891,160],[-39.527,161],[-40.15,162],[-40.762,163],[-41.361,164],[-41.948,165],[-42.524,166],[-43.087,167],[-43.639,168],[-44.18,169],[-44.709,170],[-45.228,171],[-45.736,172],[-46.233,173],[-46.719,174],[-47.196,175],[-47.662,176],[-48.118,177],[-48.565,178],[-49.002,179],[-49.43,180],[-49.848,181],[-50.071,181.542],[-50.294,181.647],[-50.517,181.488],[-50.74,181.327],[-50.963,181.164],[-51.186,181],[-51.199,180],[-50.785,179],[-50.362,178],[-49.93,177],[-49.489,176],[-49.038,175],[-48.577,174],[-48.106,173],[-47.625,172],[-47.134,171],[-46.633,170],[-46.12,169],[-45.597,168],[-45.063,167],[-44.518,166],[-43.961,165],[-43.393,164],[-42.813,163],[-42.222,162],[-41.618,161],[-41.003,160],[-40.376,159],[-39.736,158],[-39.085,157],[-38.421,156],[-37.745,155],[-37.057,154],[-36.357,153],[-35.646,152],[-34.923,151],[-34.189,150],[-33.444,149],[-32.689,148],[-31.925,147],[-31.152,146]],"totalityNorth":[[-28.732,146],[-29.526,147],[-30.312,148],[-31.089,149],[-31.856,150],[-32.612,151],[-33.358,152],[-34.092,153],[-34.815,154],[-35.525,155],[-36.223,156],[-36.909,157],[-37.582,158],[-38.243,159],[-38.891,160],[-39.527,161],[-40.15,162],[-40.762,163],[-41.361,164],[-41.948,165],[-42.524,166],[-43.087,167],[-43.639,168],[-44.18,169],[-44.709,170],[-45.228,171],[-45.736,172],[-46.233,173],[-46.719,174],[-47.196,175],[-47.662,176],[-48.118,177],[-48.565,178],[-49.002,179],[-49.43,180],[-49.848,181]],"totalitySouth":[[-31.152,146],[-31.925,147],[-32.689,148],[-33.444,149],[-34.189,150],[-34.923,151],[-35.646,152],[-36.357,153],[-37.057,154],[-37.745,155],[-38.421,156],[-39.085,157],[-39.736,158],[-40.376,159],[-41.003,160],[-41.618,161],[-42.222,162],[-42.813,163],[-43.393,164],[-43.961,165],[-44.518,166],[-45.063,167],[-45.597,168],[-46.12,169],[-46.633,170],[-47.134,171],[-47.625,172],[-48.106,173],[-48.577,174],[-49.038,175],[-49.489,176],[-49.93,177],[-50.362,178],[-50.785,179],[-51.199,180],[-51.186,181]],"totalityCenter":[[-29.963,146],[-30.702,147],[-31.48,148],[-32.245,149],[-33.004,150],[-33.748,151],[-34.482,152],[-35.207,153],[-35.913,154],[-36.615,155],[-37.299,156],[-37.976,157],[-38.638,158],[-39.328,159],[-39.964,160],[-40.554,161],[-41.164,162],[-41.767,163],[-42.358,164],[-42.934,165],[-43.5,166],[-44.056,167],[-44.598,168],[-45.163,169],[-45.65,170],[-46.198,171],[-46.66,172],[-47.15,173],[-47.661,174],[-48.097,175],[-48.554,176],[-49.004,177],[-49.444,178],[-49.91,179],[-50.293,180],[-50.745,181],[-50.517,181.488]],"bands":{"p90":[[-24.82,146],[-26.43,148],[-28,150],[-29.53,152],[-31.02,154],[-32.46,156],[-33.85,158],[-35.19,160],[-36.48,162],[-37.72,164],[-38.92,166],[-40.06,168],[-41.15,170],[-42.2,172],[-43.21,174],[-44.17,176],[-45.1,178],[-45.98,180],[-46.83,182],[-47.25,183.04],[-47.68,183.4],[-48.1,183.12],[-48.52,182.85],[-48.94,182.57],[-49.37,182.29],[-49.79,182],[-52.49,180],[-54.1,178],[-53.24,176],[-52.35,174],[-51.42,172],[-50.45,170],[-49.43,168],[-48.38,166],[-47.28,164],[-46.13,162],[-44.94,160],[-43.7,158],[-42.41,156],[-41.08,154],[-39.69,152],[-38.27,150],[-36.79,148],[-35.28,146]],"p75":[[-19.78,146],[-21.4,148],[-23.01,150],[-24.58,152],[-26.11,154],[-27.59,156],[-29.02,158],[-30.4,160],[-31.73,162],[-33,164],[-34.24,166],[-35.41,168],[-36.53,170],[-37.61,172],[-38.65,174],[-39.64,176],[-40.58,178],[-41.5,180],[-42.36,182],[-43.19,184],[-43.69,185.25],[-44.2,185.45],[-44.7,185.17],[-45.2,184.88],[-45.7,184.59],[-46.21,184.3],[-46.71,184],[-49.79,182],[-52.49,180],[-54.82,178],[-56.85,176],[-57.98,174],[-57.06,172],[-56.11,170],[-55.12,168],[-54.09,166],[-53.02,164],[-51.89,162],[-50.72,160],[-49.5,158],[-48.23,156],[-46.93,154],[-45.57,152],[-44.17,150],[-42.72,148],[-41.23,146]],"p50":[[-11.46,146],[-13.1,148],[-14.75,150],[-16.37,152],[-17.96,154],[-19.52,156],[-21.02,158],[-22.47,160],[-23.86,162],[-25.21,164],[-26.5,166],[-27.74,168],[-28.92,170],[-30.06,172],[-31.15,174],[-32.19,176],[-33.19,178],[-34.14,180],[-35.05,182],[-35.91,184],[-37.45,187.78],[-39,188],[-40.54,187.39],[-42.08,186.6],[-43.62,185.77],[-45.17,184.9],[-46.71,184],[-49.79,182],[-52.49,180],[-54.82,178],[-56.85,176],[-58.6,174],[-60.13,172],[-61.46,170],[-62.63,168],[-63.67,166],[-64.57,164],[-64.52,162],[-63.35,160],[-62.11,158],[-60.84,156],[-59.5,154],[-58.14,152],[-56.71,150],[-55.23,148],[-53.73,146]]}};
+
+  function renderEclipsePath() {
+    pathLayer.clearLayers();
+    const show = document.getElementById("showPath");
+    const legendSec = document.getElementById("pathLegendSection");
+    if (show && !show.checked) {
+      if (legendSec) legendSec.classList.add("hidden");
+      return;
+    }
+    if (legendSec) legendSec.classList.remove("hidden");
+
+    // Partial obscuration bands (outer to inner; low fillOpacity since nested bands stack)
+    const bandSpecs = [
+      { key: "p50", fill: "#fef08a", fillOpacity: 0.03, stroke: "#fde047", weight: 1, opacity: 0.32 },
+      { key: "p75", fill: "#fbbf24", fillOpacity: 0.04, stroke: "#fbbf24", weight: 1, opacity: 0.42 },
+      { key: "p90", fill: "#fb923c", fillOpacity: 0.05, stroke: "#fb923c", weight: 1.2, opacity: 0.52 },
+    ];
+    for (const b of bandSpecs) {
+      const coords = ECLIPSE_PATH.bands && ECLIPSE_PATH.bands[b.key];
+      if (!coords) continue;
+      L.polygon(coords, {
+        color: b.stroke,
+        weight: b.weight,
+        opacity: b.opacity,
+        fillColor: b.fill,
+        fillOpacity: b.fillOpacity,
+        interactive: false,
+      }).addTo(pathLayer);
+    }
+
+    // Path of totality polygon
+    L.polygon(ECLIPSE_PATH.totalityPoly, {
+      color: "#f59e0b",
+      weight: 1.6,
+      opacity: 0.8,
+      fillColor: "#f59e0b",
+      fillOpacity: 0.10,
+      interactive: false,
+    }).addTo(pathLayer);
+
+    // Northern and southern totality limits
+    for (const lim of [ECLIPSE_PATH.totalityNorth, ECLIPSE_PATH.totalitySouth]) {
+      L.polyline(lim, {
+        color: "#fbbf24",
+        weight: 2,
+        opacity: 0.9,
+        interactive: false,
+      }).addTo(pathLayer);
+    }
+
+    // Centreline (maximum duration)
+    L.polyline(ECLIPSE_PATH.totalityCenter, {
+      color: "#fde68a",
+      weight: 1.6,
+      opacity: 0.85,
+      dashArray: "6 5",
+      interactive: false,
+    }).addTo(pathLayer);
+  }
 
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g,
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -436,6 +517,7 @@
 
   ["accessFilter", "clearFilter", "wholeOnly"].forEach((id) =>
     document.getElementById(id).addEventListener("input", render));
+  document.getElementById("showPath").addEventListener("change", renderEclipsePath);
   document.getElementById("srcPoi").addEventListener("click", () => { trackMetric("map_filter", "poi"); setSource("poi"); });
   document.getElementById("srcGrid").addEventListener("click", () => { trackMetric("map_filter", "grid"); setSource("grid"); });
   document.getElementById("srcBoth").addEventListener("click", () => { trackMetric("map_filter", "both"); setSource("both"); });
@@ -494,6 +576,7 @@
 
   lucide.createIcons();
   trackMetric("page_view", "map");
+  renderEclipsePath();
   load();
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(() => {});
