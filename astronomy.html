@@ -432,6 +432,18 @@
 
   <script>
     lucide.createIcons();
+    try {
+      if ((location.hostname !== "localhost" && location.hostname !== "127.0.0.1") || window.__TEST_METRICS) {
+        let sid = sessionStorage.getItem("eclipseMetricSid");
+        if (!sid || !/^[0-9a-f]{8}$/.test(sid)) {
+          const arr = new Uint32Array(1);
+          crypto.getRandomValues(arr);
+          sid = arr[0].toString(16).padStart(8, "0");
+          sessionStorage.setItem("eclipseMetricSid", sid);
+        }
+        navigator.sendBeacon?.("/api/metric", JSON.stringify({ event: "page_view", detail: "astronomy", spot: "", sid }));
+      }
+    } catch (e) {}
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("sw.js").catch(() => {});
     }

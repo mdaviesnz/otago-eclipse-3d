@@ -1,20 +1,20 @@
 {
-  // Static-asset Worker. There is deliberately no `main`, so no Worker script exists and every
-  // request is served straight from the asset store — those requests are free and unmetered,
-  // exactly as they were on Pages. Nothing about serving the site changes; what the migration
-  // buys is somewhere to put server-side code later (Photon caching, the contact form,
-  // telemetry) without a second hosting product and without Pages Functions.
+  // Static-asset Worker with a narrow `/api/*` script route.
   //
-  // Adding a `main` later makes the Worker script run *before* assets are considered, and every
-  // request then bills as a Worker invocation. Keep the static path free by routing narrowly —
-  // see DEPLOYMENT.md, "Adding server-side code later".
+  // `assets.run_worker_first` is scoped to `["/api/*"]` so every static asset request (HTML,
+  // CSS, viewpoints.json, icons) is served straight from the asset store at the edge without
+  // invoking `src/worker.js` — keeping static traffic free and unmetered. Only `/api/*`
+  // requests invoke the Worker script.
   "name": "otago-eclipse",
+  "main": "src/worker.js",
   "compatibility_date": "2026-08-13",
 
   "assets": {
     // Assembled by the deploy workflow. The file list lives in tests/check_static.py
     // (SITE_FILES) and is mirrored by the workflow's copy step.
     "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"],
 
     // Both of these are the wrangler defaults, stated explicitly because _headers depends on
     // them:
@@ -27,5 +27,14 @@
     //   index.html would serve the app with a broken URL instead of failing honestly.
     "html_handling": "auto-trailing-slash",
     "not_found_handling": "none"
-  }
+  },
+
+  // Cloudflare Workers Analytics Engine dataset for anonymous usage metrics (`/api/metric`).
+  // Created automatically on first write; requires no separate provisioning step.
+  "analytics_engine_datasets": [
+    {
+      "binding": "METRICS",
+      "dataset": "otago_eclipse_usage"
+    }
+  ]
 }

@@ -6,6 +6,7 @@
 // wiring rather than for rendered pixels.
 
 import { test, expect } from "@playwright/test";
+import worker from "../src/worker.js";
 
 const errors = (page) => {
   const found = [];
@@ -304,4 +305,104 @@ test("service worker precaches the app shell and serves pages + catalogue offlin
 
   expect(errs, "no JS errors during offline service worker navigation").toEqual([]);
 });
+
+test("usage metrics: Worker enforces strict allowlist and strips any address or coordinates", async () => {
+  const handler = worker.default || worker;
+  const points = [];
+  const env = {
+    METRICS: { writeDataPoint: (dp) => points.push(dp) },
+  };
+  const post = (body) =>
+    handler.fetch(
+      new Request("https://eclipse.example/api/metric", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+      env
+    );
+
+  // 1. Valid preset + ephemeral hex session ID
+  const r1 = await post({ event: "preset_select", detail: "Queenstown", spot: "Queenstown", sid: "a1b2c3d4" });
+  expect(r1.status).toBe(204);
+  expect(points).toHaveLength(1);
+  expect(points[0]).toEqual({
+    indexes: ["preset_select"],
+    blobs: ["preset_select", "Queenstown", "Queenstown", "a1b2c3d4"],
+    doubles: [1],
+  });
+
+  // 2. Valid catalogue POI records the public POI name in blob3
+  await post({ event: "catalogue_select", detail: "poi", spot: "Crown Range Road lookout", sid: "a1b2c3d4" });
+  expect(points).toHaveLength(2);
+  expect(points[1]).toEqual({
+    indexes: ["catalogue_select"],
+    blobs: ["catalogue_select", "poi", "Crown Range Road lookout", "a1b2c3d4"],
+    doubles: [1],
+  });
+
+  // 3. Valid custom_search + disallowed free-form detail/spot/sid must strip all PII to ""
+  await post({
+    event: "custom_search",
+    detail: "10 George Street, Dunedin -45.874, 170.503",
+    spot: "10 George Street, Dunedin",
+    sid: "not-a-hex-token!",
+  });
+  expect(points).toHaveLength(3);
+  expect(points[2]).toEqual({
+    indexes: ["custom_search"],
+    blobs: ["custom_search", "", "", ""],
+    doubles: [1],
+  });
+
+  // 4. Unknown event is dropped completely
+  await post({ event: "unknown_event", detail: "anything" });
+  expect(points).toHaveLength(3);
+
+  // 5. Non-POST on /api/metric returns 405
+  const getRes = await handler.fetch(new Request("https://eclipse.example/api/metric"), env);
+  expect(getRes.status).toBe(405);
+});
+
+test("usage metrics: browser interactions emit anonymous events, POI names, and ephemeral session ID", async ({ page }) => {
+  const events = [];
+  await page.addInitScript(() => {
+    window.__TEST_METRICS = true;
+  });
+  await page.route("**/api/metric", async (route) => {
+    const raw = route.request().postData() || "{}";
+    events.push(JSON.parse(raw));
+    await route.fulfill({ status: 204, body: "" });
+  });
+
+  await page.goto("/map.html");
+  await expect.poll(() => events.some((e) => e.event === "page_view" && e.detail === "map")).toBe(true);
+  await page.locator("#srcGrid").click();
+  await expect.poll(() => events.some((e) => e.event === "map_filter" && e.detail === "grid")).toBe(true);
+
+  await page.goto("/index.html");
+  await expect.poll(() => events.some((e) => e.event === "page_view" && e.detail === "simulator")).toBe(true);
+
+  // Clicking a preset records the preset name in both detail and spot
+  await page.locator('#presetButtons button[data-name="Dunedin"]').click();
+  await expect.poll(() =>
+    events.some((e) => e.event === "preset_select" && e.detail === "Dunedin" && e.spot === "Dunedin")
+  ).toBe(true);
+
+  // Entering coordinates records only { event: "custom_search", detail: "coords", spot: "" } — never the numbers
+  await page.locator("#customInput").fill("-45.0312, 168.6626");
+  await page.locator("#customGo").click();
+  await expect.poll(() =>
+    events.some((e) => e.event === "custom_search" && e.detail === "coords" && e.spot === "")
+  ).toBe(true);
+  expect(JSON.stringify(events)).not.toContain("-45.0312");
+  expect(JSON.stringify(events)).not.toContain("168.6626");
+
+  // All events in the same tab share one ephemeral 8-hex session ID
+  const sids = new Set(events.map((e) => e.sid));
+  expect(sids.size).toBe(1);
+  expect([...sids][0]).toMatch(/^[0-9a-f]{8}$/);
+});
+
+
 

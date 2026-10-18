@@ -98,7 +98,19 @@ secret**:
 | `CLOUDFLARE_API_TOKEN` | the token from step 2 |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare dashboard sidebar, or the URL after `/accounts/` |
 
-### 4. Merge to `main` once before opening a PR
+### 4. Enable Workers Analytics Engine (one-time per account)
+
+Cloudflare requires a one-time click in the dashboard before any Worker on the account can bind an
+`analytics_engine_datasets` dataset:
+
+1. In the Cloudflare dashboard sidebar, go to **Compute (Workers) → Analytics Engine** (or open
+   `https://dash.cloudflare.com/?to=/:account/workers/analytics-engine`).
+2. Click **Enable Analytics Engine** (free tier includes 100,000 writes/day and 10,000 queries/day).
+
+Once enabled on the account, individual datasets (like `otago_eclipse_usage`) are created
+automatically on first write.
+
+### 5. Merge to `main` once before opening a PR
 
 `versions upload` — how PR previews are built — needs the Worker to already exist. The first
 run must therefore be a production deploy from `main`. A PR raised before that will fail its
@@ -118,7 +130,8 @@ so neither a missing secret nor a Pages-scoped token surfaces as an opaque wrang
 |---|---|
 | `Missing repository secret(s)` | Steps 2–3 not done |
 | `Cloudflare rejected the API token for Workers` | Token lacks **Account → Workers Scripts → Edit** (common right after the Pages migration), or belongs to a different account than `CLOUDFLARE_ACCOUNT_ID` |
-| `workers.script.not_found` on a PR | No production deploy has happened yet — see step 4 |
+| `You need to enable Analytics Engine [code: 10089]` | Analytics Engine has not been toggled on for this Cloudflare account yet — see step 4 |
+| `workers.script.not_found` on a PR | No production deploy has happened yet — see step 5 |
 | `assets.directory ... does not exist: /opt/buildhome/repo/dist` | Not this workflow — Workers Builds is deploying from the repo. Disconnect it; see step 2 |
 | Deploy skipped entirely | PR from a fork — forks cannot read secrets, by design |
 
@@ -248,29 +261,71 @@ off — otherwise the beacon loads twice and every visit is counted twice.
 
 ---
 
-## Adding server-side code later
+## Anonymous Usage Metrics (`src/worker.js` + Analytics Engine)
 
-`wrangler.jsonc` has no `main`, so today there is no Worker script and every request is a free
-static asset hit. Adding a `main` reverses that default: the script runs first on **every**
-request, and every request then bills as a Worker invocation — including the 385 KB of static
-assets that are currently free.
+Beyond basic page views, the app tracks coarse, privacy-preserving interaction counts via
+`POST /api/metric` backed by **Cloudflare Workers Analytics Engine** (dataset:
+`otago_eclipse_usage`, bound as `env.METRICS` in `wrangler.jsonc`).
 
-So when the Photon cache or the contact form arrives, keep the static path free by having the
-handler bail out immediately for anything that is not its own route:
+### Keeping static assets free (`run_worker_first`)
 
-```js
-export default {
-  async fetch(request, env) {
-    const { pathname } = new URL(request.url);
-    if (!pathname.startsWith("/api/")) return env.ASSETS.fetch(request);
-    // ... handler
-  },
-};
+`wrangler.jsonc` sets `"run_worker_first": ["/api/*"]` under `assets`. Static files (`index.html`,
+`map.html`, `app.css`, `viewpoints.json`, icons) continue to be served directly from Cloudflare's
+asset edge **without invoking `src/worker.js`**, so static asset traffic remains free and
+unmetered. Only `/api/*` requests invoke the Worker.
+
+### Privacy by construction
+
+`src/worker.js` enforces strict rules on every field written to `otago_eclipse_usage`:
+- **`blob1` (`event`) & `blob2` (`detail`)**: Validated against `ALLOWED_METRICS`. Any unrecognised
+  `detail` is stripped to `""`.
+- **`blob3` (`spot`)**: Only recorded for public catalogued places (`preset_select`,
+  `catalogue_select`, and `map_filter` with `open_3d`). On `custom_search`, `map_pin`, and
+  `geolocation_use`, `spot` is unconditionally forced to `""` so private addresses or user
+  coordinates can never be stored.
+- **`blob4` (`sid`)**: An ephemeral 8-character hex token stored in `sessionStorage` (`eclipseMetricSid`).
+  It lives only in the current browser tab, is wiped as soon as the tab closes, uses no cookies or
+  IP addresses, and lets you measure how many spots a visitor explores in a single session.
+
+### Querying usage in Cloudflare
+
+Analytics Engine datasets can be queried via the Cloudflare SQL API
+(`https://api.cloudflare.com/client/v4/accounts/<ACCOUNT_ID>/analytics_engine/sql`) or dashboard:
+
+```sql
+-- 1. Event breakdown over the last 7 days
+SELECT
+  blob1 AS event,
+  blob2 AS detail,
+  COUNT(DISTINCT blob4) AS unique_sessions,
+  SUM(_sample_interval) AS total_events
+FROM otago_eclipse_usage
+WHERE timestamp > NOW() - INTERVAL '7' DAY
+GROUP BY event, detail
+ORDER BY total_events DESC;
+
+-- 2. Most popular presets and catalogued POIs
+SELECT
+  blob1 AS source_event,
+  blob3 AS spot,
+  COUNT(DISTINCT blob4) AS unique_sessions,
+  SUM(_sample_interval) AS clicks
+FROM otago_eclipse_usage
+WHERE blob1 IN ('preset_select', 'catalogue_select') AND blob3 != ''
+GROUP BY source_event, spot
+ORDER BY clicks DESC
+LIMIT 25;
+
+-- 3. How many locations each session explores
+SELECT
+  blob4 AS session_id,
+  SUM(_sample_interval) AS locations_checked
+FROM otago_eclipse_usage
+WHERE blob1 IN ('preset_select', 'catalogue_select', 'custom_search', 'map_pin', 'geolocation_use')
+  AND blob4 != ''
+GROUP BY session_id
+ORDER BY locations_checked DESC;
 ```
-
-That still costs an invocation per asset request. The cheaper shape, if asset volume ever
-matters, is to put the API on its own Worker and route it by path — leaving this one
-script-free. Worth deciding deliberately rather than by accident.
 
 ---
 

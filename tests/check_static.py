@@ -51,7 +51,7 @@ def check_no_secrets() -> None:
     jwt = re.compile(r"eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+")
     suspicious = re.compile(r"(api[_-]?key|secret|password)\s*[=:]\s*['\"][^'\"]{12,}", re.I)
     hits = 0
-    for name in SITE_FILES:
+    for name in [*SITE_FILES, "src/worker.js"]:
         p = ROOT / name
         if not p.exists():
             continue
@@ -67,7 +67,7 @@ def check_no_secrets() -> None:
 
 
 def check_analytics_beacon() -> None:
-    """Web Analytics lives in the markup, so an edit can lose it.
+    """Web Analytics and Worker usage metrics live in the markup, so an edit can lose them.
 
     Cloudflare Pages injected the beacon from a per-project dashboard toggle; Workers has no
     equivalent, so it is inlined in all HTML pages instead. A dropped beacon is invisible — the
@@ -88,10 +88,49 @@ def check_analytics_beacon() -> None:
         else:
             fail(f"{name}: analytics beacon present but carries no valid 32-hex site token")
             bad = True
+        if "/api/metric" not in text:
+            fail(f"{name}: Worker usage metric endpoint (/api/metric) is missing")
+            bad = True
     if len(tokens) > 1:
         fail(f"HTML pages report to different analytics sites: {sorted(tokens)}")
     elif not bad:
-        ok(f"analytics beacon on all {len(pages)} pages, same site token")
+        ok(f"analytics beacon and /api/metric present on all {len(pages)} pages")
+
+
+def check_worker_metrics() -> None:
+    """Verify Worker entry point, narrow /api/* routing, and Analytics Engine binding."""
+    wp = ROOT / "wrangler.jsonc"
+    sp = ROOT / "src" / "worker.js"
+    if not wp.exists():
+        fail("missing wrangler.jsonc")
+        return
+    if not sp.exists():
+        fail("missing src/worker.js")
+        return
+
+    w_text = wp.read_text(encoding="utf-8")
+    # Strip // comments from JSONC to parse cleanly
+    clean_json = re.sub(r"^\s*//.*$", "", w_text, flags=re.M)
+    try:
+        cfg = json.loads(clean_json)
+    except json.JSONDecodeError as ex:
+        fail(f"wrangler.jsonc is not valid JSONC: {ex}")
+        return
+
+    if cfg.get("main") != "src/worker.js":
+        fail("wrangler.jsonc: 'main' must point to 'src/worker.js'")
+    assets = cfg.get("assets") or {}
+    if assets.get("run_worker_first") != ["/api/*"]:
+        fail("wrangler.jsonc: 'assets.run_worker_first' must be ['/api/*'] so static assets stay free")
+    datasets = cfg.get("analytics_engine_datasets") or []
+    if not any(d.get("binding") == "METRICS" and d.get("dataset") for d in datasets):
+        fail("wrangler.jsonc: missing analytics_engine_datasets binding 'METRICS'")
+
+    s_text = sp.read_text(encoding="utf-8")
+    if "ALLOWED_METRICS" not in s_text or "writeDataPoint" not in s_text:
+        fail("src/worker.js: missing ALLOWED_METRICS allowlist or writeDataPoint call")
+    else:
+        ok("Worker metrics route (/api/metric) and Analytics Engine binding configured")
 
 
 def check_cache_not_tracked() -> None:
@@ -118,7 +157,7 @@ def check_local_references() -> None:
             continue
         for a, b in pattern.findall(p.read_text(encoding="utf-8", errors="replace")):
             ref = a or b
-            if not ref or ref.startswith(("http://", "https://", "data:", "//", "mailto:")):
+            if not ref or ref.startswith(("http://", "https://", "data:", "//", "mailto:", "/api/")):
                 continue
             # Skip JS template literals — these pages build markup with `${...}` inside
             # href attributes, which is not a real file reference.
@@ -347,6 +386,7 @@ def main() -> int:
     check_required_files()
     check_no_secrets()
     check_analytics_beacon()
+    check_worker_metrics()
     check_cache_not_tracked()
     check_local_references()
     check_catalogue()

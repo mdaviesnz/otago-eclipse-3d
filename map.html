@@ -409,11 +409,46 @@
     }
   }
 
+  function getMetricSessionId() {
+    try {
+      let sid = sessionStorage.getItem("eclipseMetricSid");
+      if (!sid || !/^[0-9a-f]{8}$/.test(sid)) {
+        const arr = new Uint32Array(1);
+        crypto.getRandomValues(arr);
+        sid = arr[0].toString(16).padStart(8, "0");
+        sessionStorage.setItem("eclipseMetricSid", sid);
+      }
+      return sid;
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function trackMetric(event, detail = "", spot = "") {
+    try {
+      if ((location.hostname === "localhost" || location.hostname === "127.0.0.1") && !window.__TEST_METRICS) return;
+      if (navigator.sendBeacon) {
+        const sid = getMetricSessionId();
+        navigator.sendBeacon("/api/metric", JSON.stringify({ event, detail, spot, sid }));
+      }
+    } catch (e) {}
+  }
+
   ["accessFilter", "clearFilter", "wholeOnly"].forEach((id) =>
     document.getElementById(id).addEventListener("input", render));
-  document.getElementById("srcPoi").addEventListener("click", () => setSource("poi"));
-  document.getElementById("srcGrid").addEventListener("click", () => setSource("grid"));
-  document.getElementById("srcBoth").addEventListener("click", () => setSource("both"));
+  document.getElementById("srcPoi").addEventListener("click", () => { trackMetric("map_filter", "poi"); setSource("poi"); });
+  document.getElementById("srcGrid").addEventListener("click", () => { trackMetric("map_filter", "grid"); setSource("grid"); });
+  document.getElementById("srcBoth").addEventListener("click", () => { trackMetric("map_filter", "both"); setSource("both"); });
+  document.getElementById("map").addEventListener("click", (e) => {
+    const a = e.target.closest && e.target.closest('a[href^="index.html"]');
+    if (a) {
+      let spotName = "";
+      try {
+        spotName = new URL(a.getAttribute("href"), location.origin).searchParams.get("name") || "";
+      } catch (err) {}
+      trackMetric("map_filter", "open_3d", spotName);
+    }
+  });
 
   const setMapFiltersOpen = (open) => {
     const body = document.getElementById("mapFiltersBody");
@@ -458,6 +493,7 @@
   });
 
   lucide.createIcons();
+  trackMetric("page_view", "map");
   load();
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(() => {});

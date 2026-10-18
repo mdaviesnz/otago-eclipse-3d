@@ -86,8 +86,9 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
 
-  // Never intercept analytics or live address autocomplete.
+  // Never intercept Worker API endpoints, analytics, or live address autocomplete.
   if (
+    url.pathname.startsWith("/api/") ||
     url.hostname.includes("cloudflareinsights.com") ||
     url.hostname.includes("photon.komoot.io")
   ) {
