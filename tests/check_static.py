@@ -109,8 +109,9 @@ def check_cache_not_tracked() -> None:
 
 
 def check_local_references() -> None:
-    """Every same-origin href/src/fetch target in the HTML must exist."""
+    """Every same-origin href/src/fetch target in the HTML must exist and be in SITE_FILES."""
     pattern = re.compile(r"""(?:href|src)=["']([^"'#?]+)["']|fetch\(["']([^"'?]+)["']""")
+    site_set = set(SITE_FILES)
     for name in ("index.html", "map.html", "astronomy.html", "methods.html"):
         p = ROOT / name
         if not p.exists():
@@ -126,7 +127,15 @@ def check_local_references() -> None:
             target = (ROOT / ref.lstrip("./")).resolve()
             if not target.exists():
                 fail(f"{name}: references missing local file '{ref}'")
-    ok("local asset references resolve")
+                continue
+            try:
+                rel = target.relative_to(ROOT).as_posix()
+            except ValueError:
+                fail(f"{name}: references file outside repo root '{ref}'")
+                continue
+            if rel not in site_set:
+                fail(f"{name}: references '{rel}', which exists on disk but is missing from SITE_FILES")
+    ok("local asset references resolve and are included in SITE_FILES")
 
 
 def check_catalogue() -> None:

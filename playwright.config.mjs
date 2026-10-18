@@ -8,16 +8,20 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   fullyParallel: true,
   retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI ? [["github"], ["list"]] : [["list"]],
+  reporter: process.env.CI
+    ? [["github"], ["list"], ["html", { open: "never" }]]
+    : [["list"]],
   use: {
     baseURL: "http://127.0.0.1:8788",
     trace: "on-first-retry",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: "npx --yes http-server . -p 8788 -c-1 --silent",
+    command: `python -m http.server 8788 --bind 127.0.0.1 -d ${process.env.SERVE_DIR || "."}`,
     url: "http://127.0.0.1:8788/map.html",
     reuseExistingServer: !process.env.CI,
+    stdout: "ignore",
+    stderr: "ignore",
     timeout: 60_000,
   },
 });
