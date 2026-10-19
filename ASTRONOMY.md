@@ -8,6 +8,12 @@ It is written for domain reviewers in astronomy, positional astrometry, and geod
 all physical assumptions, coordinate transformations, numerical algorithms, and error budgets
 explicitly.
 
+> **Review status — independent, unvalidated tool:** This is an independent project developed with
+> AI assistance and is not affiliated with or endorsed by any museum, university, or astronomical
+> society. While internal cross-checks against published predictions are documented in §9, it has
+> not yet undergone independent human validation by a domain specialist. Review feedback and
+> corrections are actively sought.
+
 ---
 
 ## 1. Physical Context of the Event
