@@ -186,6 +186,23 @@ test("catalogue spots are answered from precomputed data", async ({ page }) => {
   expect(r.phaseKeys).toEqual(["totalBegin", "peak", "totalEnd"]);
   expect(r.nullSafe).toBeNull();
 
+  // POI info card updates and renders a valid Google Maps link when a POI is active
+  const poiCardTest = await page.evaluate(() => {
+    const p = catalogue.pois[0];
+    updatePoiCard(p);
+    const card = document.getElementById("poiCard");
+    const isShown = !card.classList.contains("hidden");
+    const title = document.getElementById("poiCardTitle").textContent;
+    const gmapsHref = document.getElementById("poiCardGmaps").getAttribute("href");
+    updatePoiCard(null);
+    const isHiddenAfterNull = card.classList.contains("hidden");
+    return { isShown, title, gmapsHref, isHiddenAfterNull, expectedTitle: p.name, lat: p.lat, lon: p.lon };
+  });
+  expect(poiCardTest.isShown).toBe(true);
+  expect(poiCardTest.title).toBe(poiCardTest.expectedTitle);
+  expect(poiCardTest.gmapsHref).toBe(`https://www.google.com/maps/search/?api=1&query=${poiCardTest.lat},${poiCardTest.lon}`);
+  expect(poiCardTest.isHiddenAfterNull).toBe(true);
+
   expect(errs, "no JS errors while reading the catalogue").toEqual([]);
 });
 

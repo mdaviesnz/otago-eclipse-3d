@@ -178,12 +178,12 @@ terrain geometry, validation, and every approximation with its estimated magnitu
 offline and emits `viewpoints.json`. The app lists it under **Best viewing spots**, and
 `map.html` plots all of it.
 
-Two lists, toggled with **Lookouts / Anywhere**:
+Two lists, toggled with **Viewpoints & sites / Anywhere**:
 
-- **Lookouts** — named places people already go to look at things, from OSM: `tourism=viewpoint`,
+- **Viewpoints & sites** — named places people already go to look at things, from OSM: `tourism=viewpoint`,
   `natural=peak`, `man_made=tower` + `tower:type=observation`, `highway=rest_area`,
   `tourism=picnic_site`, `tourism=camp_site`. Usually the more useful list — a signposted
-  lookout beats an anonymous coordinate on a hillside.
+  summit, viewpoint, or recreation site beats an anonymous coordinate on a hillside.
 - **Anywhere** — the raw grid scan, for when no named spot works.
 
 Scoring POIs on visibility rather than just listing them matters: many OSM viewpoints exist to

@@ -337,23 +337,13 @@
             <i data-lucide="map" class="w-3.5 h-3.5"></i> Map
           </a>
         </p>
-        <div class="flex gap-1 mb-1.5">
-          <button id="srcPoi"
-            class="src-btn flex-1 text-[11px] font-medium rounded-lg px-2 py-1.5 transition bg-amber-500 text-slate-900">
-            Lookouts
-          </button>
-          <button id="srcGrid"
-            class="src-btn flex-1 text-[11px] font-medium rounded-lg px-2 py-1.5 transition bg-slate-800/70 hover:bg-slate-700 text-slate-300">
-            Anywhere
-          </button>
-        </div>
         <select id="accessFilter"
           class="w-full text-base sm:text-xs bg-slate-800/80 border border-slate-600 rounded-lg px-2 py-1.5 sm:py-1 mb-1.5 focus:outline-none focus:ring-2 focus:ring-amber-400 cursor-pointer">
           <option value="any" selected>Any access</option>
+          <option value="drive">Drivable (road or track)</option>
           <option value="sealed">Sealed road only</option>
           <option value="track">4WD track only</option>
           <option value="foot">Walking track only</option>
-          <option value="drive">Drivable (road or track)</option>
         </select>
         <select id="distFilter"
           class="w-full text-base sm:text-xs bg-slate-800/80 border border-slate-600 rounded-lg px-2 py-1.5 sm:py-1 mb-1.5 focus:outline-none focus:ring-2 focus:ring-amber-400 cursor-pointer">
@@ -469,6 +459,35 @@
         <span class="flex items-center gap-1"><span class="inline-block w-3 h-0.5 bg-amber-400"></span> sun track</span>
         <span id="horizonTotalityLegend" class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full bg-red-400"></span> totality</span>
       </div>
+    </div>
+
+    <!-- POI details card -->
+    <div id="poiCard" class="hidden panel rounded-xl p-3.5 shadow-lg shrink-0">
+      <div class="flex items-start justify-between gap-2 mb-2">
+        <div class="min-w-0">
+          <p class="text-[10px] uppercase tracking-wide text-amber-400 font-semibold flex items-center gap-1">
+            <i id="poiCardIcon" data-lucide="map-pin" class="w-3.5 h-3.5"></i>
+            <span id="poiCardKind">Viewpoint</span>
+          </p>
+          <h3 id="poiCardTitle" class="text-sm font-bold text-slate-100 leading-snug"></h3>
+        </div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <span id="poiCardElev" class="text-xs font-mono bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded border border-slate-700/60"></span>
+          <button id="closePoiCard" type="button" aria-label="Dismiss POI info" title="Close POI details"
+            class="inline-flex items-center justify-center w-6 h-6 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition">
+            <i data-lucide="x" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+      </div>
+      <table class="w-full text-xs text-slate-300 mb-2.5">
+        <tbody id="poiCardTable" class="divide-y divide-slate-800/80">
+        </tbody>
+      </table>
+      <div id="poiCardWarning" class="hidden mb-2.5 text-[11px] text-red-300 bg-red-950/40 border border-red-700/40 rounded-lg p-2 leading-snug"></div>
+      <a id="poiCardGmaps" href="#" target="_blank" rel="noopener"
+        class="w-full inline-flex items-center justify-center gap-1.5 text-xs font-semibold bg-slate-800 hover:bg-slate-700 border border-slate-600/80 text-amber-300 rounded-lg px-2.5 py-2 transition shadow-sm">
+        <i data-lucide="map-pin" class="w-3.5 h-3.5 text-amber-400"></i> Open in Google Maps &nearr;
+      </a>
     </div>
 
     <!-- Sightline / educational panel -->
@@ -1727,6 +1746,7 @@
     // Does this spot already have an answer on disk? A catalogue click passes its own record
     // through; anything else (a shared link, a dropped pin) is matched on coordinates.
     activeCatEntry = loc.cat || findCatalogueEntry(loc.lat, loc.lon);
+    updatePoiCard(activeCatEntry);
 
     // Sample ground height so the observer sits on the terrain.
     let groundHeight = 0;
@@ -2837,7 +2857,8 @@
       // Presets are town centres rather than recommendations, and two of the four are blocked.
       // Tag them so the verdict card can point somewhere useful instead of dead-ending.
       (data.presets || []).forEach((p) => { p.isPreset = true; });
-      setSpotSource((data.pois && data.pois.length) ? "poi" : "grid");
+      (data.pois || []).forEach((p) => { p.isPoi = true; });
+      renderTopSpots();
       lucide.createIcons();
 
       // The catalogue arrives after the opening location has been selected, so a deep link
@@ -2847,6 +2868,9 @@
         activeCatEntry = findCatalogueEntry(activeLoc.lat, activeLoc.lon);
         if (activeCatEntry?.profile) runPresetCheck(activeCatEntry);
         else if (activeCatEntry) renderCatalogueVerdict(activeCatEntry);
+        updatePoiCard(activeCatEntry);
+      } else if (activeCatEntry) {
+        updatePoiCard(activeCatEntry);
       }
     } catch (e) {
       /* no catalogue shipped — the live search still works */
@@ -3095,42 +3119,112 @@
   const ACCESS_ICON = { sealed: "car", track: "truck", foot: "footprints", none: "mountain" };
   const ACCESS_TIP = { sealed: "sealed road", track: "4WD track", foot: "walking track",
     none: "no mapped access — off-track" };
+  const ACCESS_SUB_LABEL = {
+    sealed_road: "Sealed road",
+    gravel_road: "Gravel road",
+    "4wd_track": "4WD track",
+    walking_track: "Walking track",
+    cycle_trail: "Cycle trail",
+    paper_road: "Unformed legal road",
+    off_track: "Off-track / alpine",
+  };
 
-  function setSpotSource(src) {
-    spotSource = src;
-    const on = "src-btn flex-1 text-[11px] font-medium rounded-lg px-2 py-1.5 sm:py-1 transition bg-amber-500 text-slate-900";
-    const off = "src-btn flex-1 text-[11px] font-medium rounded-lg px-2 py-1.5 sm:py-1 transition bg-slate-800/70 hover:bg-slate-700 text-slate-300";
-    document.getElementById("srcPoi").className = src === "poi" ? on : off;
-    document.getElementById("srcGrid").className = src === "grid" ? on : off;
-    renderTopSpots();
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  function formatTrackName(raw) {
+    if (!raw) return "";
+    if (raw === raw.toUpperCase() && raw !== raw.toLowerCase()) {
+      return raw.toLowerCase().replace(/\b([a-z])/g, (m) => m.toUpperCase()).replace(/\b(4wd|Doc|Sh)\b/g, (m) => m.toUpperCase());
+    }
+    return raw;
+  }
+
+  function updatePoiCard(s) {
+    const card = document.getElementById("poiCard");
+    if (!card) return;
+    if (!s || (!s.kind && !s.isPoi)) {
+      card.classList.add("hidden");
+      return;
+    }
+
+    const title = s.name || `Unnamed ${POI_LABEL[s.kind] || "viewpoint"}`;
+    const kindName = POI_LABEL[s.kind] || (s.kind ? s.kind : "Viewpoint");
+    const iconName = (s.kind && POI_ICON[s.kind]) || "map-pin";
+
+    const kindEl = document.getElementById("poiCardKind");
+    if (kindEl) kindEl.textContent = kindName;
+    const iconEl = document.getElementById("poiCardIcon");
+    if (iconEl) iconEl.setAttribute("data-lucide", iconName);
+    const titleEl = document.getElementById("poiCardTitle");
+    if (titleEl) titleEl.textContent = title;
+    const elevEl = document.getElementById("poiCardElev");
+    if (elevEl) elevEl.textContent = Number.isFinite(s.elev) ? `${s.elev} m` : "";
+
+    const accessText = (s.accessSub && ACCESS_SUB_LABEL[s.accessSub]) || ACCESS_TIP[s.access] || s.access || "";
+    const gmapsUrl = `https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lon}`;
+    const gmapsBtn = document.getElementById("poiCardGmaps");
+    if (gmapsBtn) gmapsBtn.href = gmapsUrl;
+
+    let rowsHtml = "";
+    if (accessText) {
+      rowsHtml += `<tr><td class="text-slate-400 py-1 pr-2">Access</td><td class="text-slate-200 text-right py-1 font-medium">${esc(accessText)}</td></tr>`;
+    }
+    if (s.publicAccess === false) {
+      rowsHtml += `<tr><td class="text-slate-400 py-1 pr-2">Tenure</td><td class="text-red-400 text-right py-1 font-medium">Private / unverified</td></tr>`;
+    } else if (s.publicAccess === true) {
+      rowsHtml += `<tr><td class="text-slate-400 py-1 pr-2">Tenure</td><td class="text-emerald-400 text-right py-1 font-medium">Public access</td></tr>`;
+    }
+    if (s.land) {
+      rowsHtml += `<tr><td class="text-slate-400 py-1 pr-2">Public land</td><td class="text-slate-200 text-right py-1 font-medium">${esc(s.land)}</td></tr>`;
+    }
+    if (s.trackName) {
+      rowsHtml += `<tr><td class="text-slate-400 py-1 pr-2">Trail</td><td class="text-slate-200 text-right py-1 font-medium">${esc(formatTrackName(s.trackName))}</td></tr>`;
+    }
+    if (Number.isFinite(s.clearance)) {
+      const clrClass = s.clearance >= 0 ? "text-emerald-300" : "text-red-300";
+      const clrSign = s.clearance >= 0 ? "+" : "";
+      rowsHtml += `<tr><td class="text-slate-400 py-1 pr-2">Clears skyline</td><td class="${clrClass} text-right py-1 font-medium">${clrSign}${s.clearance.toFixed(1)}&deg;</td></tr>`;
+    }
+    rowsHtml += `<tr><td class="text-slate-400 py-1 pr-2">Coordinates</td><td class="text-slate-400 font-mono text-right py-1">${s.lat.toFixed(5)}, ${s.lon.toFixed(5)}</td></tr>`;
+    const tableEl = document.getElementById("poiCardTable");
+    if (tableEl) tableEl.innerHTML = rowsHtml;
+
+    const warnEl = document.getElementById("poiCardWarning");
+    if (warnEl) {
+      if (s.publicAccess === false) {
+        warnEl.innerHTML = `<span class="font-semibold">&#9888; Private / unverified land:</span> no verified public conservation land or legal road parcel found &mdash; landowner permission may be required.`;
+        warnEl.classList.remove("hidden");
+      } else {
+        warnEl.classList.add("hidden");
+      }
+    }
+
+    card.classList.remove("hidden");
+    lucide.createIcons();
+  }
+
+  function matchesAccess(s, want) {
+    if (!want || want === "any") return true;
+    const acc = s.access || "none";
+    if (want === "drive") return acc === "sealed" || acc === "track";
+    if (want === "sealed") return acc === "sealed";
+    if (want === "track") return acc === "track";
+    if (want === "foot") return acc === "foot";
+    return true;
   }
 
   function renderTopSpots() {
-    if (!catalogue) return;
-    // Exclusive tiers, not inclusive-downward. Ranking already puts sealed-road spots first,
-    // so an inclusive "road or track" filter showed the same all-sealed top 40 as "sealed" and
-    // looked broken. Exclusive matching also makes "walking track only" actually reachable.
+    if (!catalogue || !catalogue.pois) return;
     const want = document.getElementById("accessFilter").value;
-    const allow = want === "sealed" ? ["sealed"]
-      : want === "track" ? ["track"]
-      : want === "foot" ? ["foot"]
-      : want === "drive" ? ["sealed", "track"]
-      : null;                                   // "any" = no filter
+    const source = catalogue.pois;
 
-    const usingPoi = spotSource === "poi";
-    const source = usingPoi ? (catalogue.pois || []) : (catalogue.spots || []);
-
-    // Distance from wherever the user currently is. This replaced a live grid search that
-    // re-probed terrain around the observer: the catalogue already covers the whole path at
-    // higher resolution and knows about road access, so all that was really missing was
-    // "near me".
     const radiusKm = parseFloat(document.getElementById("distFilter").value) || 0;
     let here = null;
     if (activeGroundCartesian) {
       const c = Cesium.Cartographic.fromCartesian(activeGroundCartesian);
       here = { lat: Cesium.Math.toDegrees(c.latitude), lon: Cesium.Math.toDegrees(c.longitude) };
     }
-    // Keep the original index: the entries below are copies, so indexOf would not find them.
     const withDist = source.map((s, i) => {
       if (!here) return { ...s, _i: i };
       const m = haversineM(here.lat, here.lon, s.lat, s.lon);
@@ -3139,7 +3233,7 @@
     });
 
     const matching = withDist.filter((s) =>
-      (!allow || allow.includes(s.access || "none")) &&
+      matchesAccess(s, want) &&
       (!radiusKm || !here || s._km <= radiusKm));
     const list = matching.slice(0, 40);
 
@@ -3147,44 +3241,43 @@
     wrap.innerHTML = list.length
       ? list.map((s) => {
           const acc = s.access || "none";
+          const subAcc = s.accessSub || "";
           const dur = `${Math.floor(s.totality / 60)}m${String(s.totality % 60).padStart(2, "0")}s`;
-          const title = usingPoi
-            ? (s.name || `Unnamed ${POI_LABEL[s.kind] || "spot"}`)
-            : `${s.lat.toFixed(4)}, ${s.lon.toFixed(4)}`;
+          const title = s.name || `Unnamed ${POI_LABEL[s.kind] || "viewpoint"}`;
           const away = s._km == null ? ""
             : `${s._km < 1 ? "here" : s._km.toFixed(s._km < 10 ? 1 : 0) + " km " + s._bearing}`;
-          const subLeft = usingPoi
-            ? `${POI_LABEL[s.kind] || s.kind} · ${s.elev} m · ${ACCESS_TIP[acc]}`
-            : `${s.elev} m · ${ACCESS_TIP[acc]}`;
+          const accessName = (subAcc && ACCESS_SUB_LABEL[subAcc])
+            ? ACCESS_SUB_LABEL[subAcc].toLowerCase()
+            : (ACCESS_TIP[acc] || acc);
+          const landOrTrail = s.trackName ? formatTrackName(s.trackName) : (s.land || "");
+          const subLeft = `${POI_LABEL[s.kind] || s.kind} · ${s.elev} m · ${accessName}${landOrTrail ? " · " + landOrTrail : ""}`;
           const subRight = [away, dur].filter(Boolean).join(" · ");
-          // A spot can clear the skyline at maximum yet be blocked at second or third
-          // contact — worth flagging, since you'd lose part of totality.
           const partial = s.wholeTotality === false || s.totality < 60;
+          const isPrivate = s.publicAccess === false;
           const isActive = activeLoc && haversineM(activeLoc.lat, activeLoc.lon, s.lat, s.lon) < CAT_MATCH_M;
           const btnCls = isActive
             ? "spot-btn text-left text-xs bg-amber-500/20 border border-amber-400/60 rounded-lg px-2 py-2 sm:py-1.5 transition"
             : "spot-btn text-left text-xs bg-slate-800/70 hover:bg-slate-700 border border-transparent rounded-lg px-2 py-2 sm:py-1.5 transition";
           return `
-          <button data-src="${usingPoi ? "poi" : "grid"}" data-i="${s._i}"
-            class="${btnCls}">
+          <button data-i="${s._i}" class="${btnCls}">
             <span class="flex items-center gap-1.5">
-              <i data-lucide="${usingPoi ? (POI_ICON[s.kind] || "map-pin") : ACCESS_ICON[acc]}" class="w-3 h-3 text-amber-400 shrink-0"></i>
-              <span class="text-slate-200 font-medium truncate">${title}</span>
+              <i data-lucide="${POI_ICON[s.kind] || "map-pin"}" class="w-3 h-3 text-amber-400 shrink-0"></i>
+              <span class="text-slate-200 font-medium truncate">${esc(title)}</span>
+              ${isPrivate ? `<span class="text-[9px] px-1 py-0.2 rounded bg-red-950/60 text-red-400 border border-red-800/50 shrink-0 font-normal">Private</span>` : ""}
               ${partial ? `<i data-lucide="alert-triangle" class="w-3 h-3 text-amber-400 shrink-0" title="Blocked for part of totality"></i>` : ""}
               <span class="text-emerald-300 font-mono text-[11px] ml-auto shrink-0">+${s.clearance.toFixed(1)}&deg;</span>
             </span>
             <span class="flex items-center justify-between gap-2 text-[10px] text-slate-400 mt-0.5">
-              <span class="truncate text-slate-500">${subLeft}${
+              <span class="truncate text-slate-500">${esc(subLeft)}${
                 s.totality < 60 ? " · near edge"
                 : s.wholeTotality === false ? " · partial" : ""}</span>
               <span class="shrink-0 font-mono text-slate-400">${subRight}</span>
             </span>
           </button>`;
         }).join("")
-      : `<p class="text-[11px] text-slate-500">No ${usingPoi ? "lookouts" : "spots"} match${
+      : `<p class="text-[11px] text-slate-500">No viewpoints or sites match${
           radiusKm ? ` within ${radiusKm} km` : ""} — try widening the filters.</p>`;
 
-    // Count against the matching set, not the whole catalogue, so the filter visibly bites.
     const shown = list.length === matching.length
       ? `${matching.length}`
       : `${list.length} of ${matching.length}`;
@@ -3197,13 +3290,10 @@
 
     wrap.querySelectorAll(".spot-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
-        const arr = btn.dataset.src === "poi" ? catalogue.pois : catalogue.spots;
-        const s = arr[+btn.dataset.i];
-        const label = btn.dataset.src === "poi"
-          ? (s.name || `Unnamed ${POI_LABEL[s.kind] || "spot"}`)
-          : `${s.lat.toFixed(4)}, ${s.lon.toFixed(4)}`;
-        trackMetric("catalogue_select", btn.dataset.src === "poi" ? "poi" : "grid", label);
-        // Pass the record itself, so the precomputed verdict is used without a lookup.
+        const s = catalogue.pois[+btn.dataset.i];
+        s.isPoi = true;
+        const label = s.name || `Unnamed ${POI_LABEL[s.kind] || "spot"}`;
+        trackMetric("catalogue_select", "poi", label);
         selectLocation({ name: label, lat: s.lat, lon: s.lon, cat: s }, true);
       });
     });
@@ -3430,6 +3520,9 @@
     };
     document.getElementById("aboutBtn").addEventListener("click", () => showAbout(true));
     document.getElementById("aboutClose").addEventListener("click", () => showAbout(false));
+    document.getElementById("closePoiCard")?.addEventListener("click", () => {
+      document.getElementById("poiCard")?.classList.add("hidden");
+    });
     about.addEventListener("click", (e) => { if (e.target === about) showAbout(false); });
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
@@ -3443,8 +3536,6 @@
     });
     document.getElementById("accessFilter").addEventListener("change", renderTopSpots);
     document.getElementById("distFilter").addEventListener("change", renderTopSpots);
-    document.getElementById("srcPoi").addEventListener("click", () => setSpotSource("poi"));
-    document.getElementById("srcGrid").addEventListener("click", () => setSpotSource("grid"));
 
     // Jump buttons use this observer's own contact times, so they shift as you move.
     const jump = (pick) => () => {

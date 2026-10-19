@@ -75,13 +75,15 @@ OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
 ]
+HERENGA_BASE = "https://maps.herengaanuku.govt.nz/maps/rest/services"
 
 # Road classes we treat as access, grouped from most to least civilised.
 #
-# Deliberately excludes footway/cycleway/service: those are dominated by urban pavements,
-# driveways and car-park aisles, which are not meaningful "can I get there" access for eclipse
-# viewing. They also made the Overpass query about 35x slower, since they outnumber real roads
-# in built-up areas.
+# Deliberately excludes footway/cycleway/service for the coarse 250 m grid scan: those are
+# dominated by urban pavements, driveways and car-park aisles, which are not meaningful "can I
+# get there" access for anonymous grid points and made the region-wide Overpass query ~35x
+# slower. Named POIs fetch a separate, full-tag neighbourhood query (including footway, steps,
+# cycleway, and service roads) and cross-check against Herenga a Nuku public access data.
 ACCESS_CLASSES = {
     "sealed": ["motorway", "trunk", "primary", "secondary", "tertiary",
                "unclassified", "residential"],
@@ -89,6 +91,17 @@ ACCESS_CLASSES = {
     "foot":  ["path", "bridleway"],
 }
 ACCESS_RANK = {"sealed": 3, "track": 2, "foot": 1, "none": 0}
+
+UNSEALED_SURFACES = {
+    "unpaved", "gravel", "fine_gravel", "compacted", "pebblestone",
+    "dirt", "earth", "ground", "mud", "sand", "grass", "grass_paver",
+    "rock", "stone", "ice", "salt", "unhewn_cobblestone", "woodchips",
+}
+ROUGH_4WD_SURFACES = {
+    "dirt", "earth", "ground", "mud", "sand", "grass", "rock", "stone", "ice",
+}
+PRIVATE_ACCESS_VALS = {"private", "no", "agricultural", "forestry", "military", "discouraged"}
+PUBLIC_FOOT_VALS = {"yes", "designated", "permissive", "official"}
 
 # Named places people already go to look at things. These make far better recommendations than
 # bare grid coordinates: they are known, usually signposted, and often have parking. Queried as
@@ -712,6 +725,12 @@ def fetch_pois(session: requests.Session, cell: float = 1.0):
                 kind = "peak"
             if not kind:
                 continue
+            name = (tags.get("name") or "").strip()
+            # Drop unnamed LINZ Topo50 spot-height nodes (natural=peak with no name): there are
+            # >2,300 of them spaced a few hundred metres apart along farm ridges, and they are
+            # survey spot heights rather than recognised summits or viewing destinations.
+            if kind == "peak" and not name:
+                continue
             oid = f"{el.get('type', 'node')}/{el.get('id')}"
             prev = out.get(oid)
             if prev and POI_PRIORITY[prev["kind"]] >= POI_PRIORITY[kind]:
@@ -719,14 +738,514 @@ def fetch_pois(session: requests.Session, cell: float = 1.0):
             out[oid] = {
                 "id": oid,
                 "kind": kind,
-                "name": tags.get("name") or "",
+                "name": name,
                 "lat": float(la),
                 "lon": float(lo),
                 "osmEle": tags.get("ele", ""),
+                "osmAccess": (tags.get("access") or "").strip().lower(),
             }
         print(f"\r  poi tiles {n}/{len(boxes)} ({len(out)} found)", end="", flush=True)
     print()
     return list(out.values()), failures
+
+
+def fetch_poi_ways(pois: list[dict], radius_m: float, session: requests.Session) -> list[dict]:
+    """Fetch full-tag OSM highway ways within ~radius_m of all candidate POIs, cached on disk.
+
+    Unlike the coarse grid scan (which strips tags and omits footway/steps/cycleway/service to
+    keep the region-wide query fast), POIs need surface, access, motor_vehicle, sac_scale,
+    4wd_only, and footway/steps/service geometry so we can distinguish sealed roads, gravel
+    roads, 4WD tracks, and walking tracks accurately.
+    """
+    if not pois:
+        return []
+    cache_dir = CACHE / "poi_ways"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    pad_lat = max(120.0, radius_m + 30.0) / 111132.0
+    pad_lon = max(120.0, radius_m + 30.0) / (111320.0 * math.cos(math.radians(-45.0)))
+
+    # Sort POIs deterministically and batch in groups of 150.
+    sorted_pois = sorted(pois, key=lambda p: p["id"])
+    batch_size = 150
+    ways_by_id: dict[int, dict] = {}
+    n_batches = (len(sorted_pois) + batch_size - 1) // batch_size
+
+    for b_idx in range(n_batches):
+        batch = sorted_pois[b_idx * batch_size:(b_idx + 1) * batch_size]
+        first_id = batch[0]["id"].replace("/", "_")
+        last_id = batch[-1]["id"].replace("/", "_")
+        path = cache_dir / f"batch_{len(batch)}_{int(radius_m)}_{first_id}_{last_id}.json"
+        elements = None
+        if path.exists() and path.stat().st_size > 0:
+            try:
+                elements = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                elements = None
+        if elements is None:
+            union = "".join(
+                f'way["highway"]({p["lat"] - pad_lat:.5f},{p["lon"] - pad_lon:.5f},'
+                f'{p["lat"] + pad_lat:.5f},{p["lon"] + pad_lon:.5f});'
+                for p in batch
+            )
+            q = f"[out:json][timeout:120];({union});out tags geom;"
+            last_err = None
+            for attempt in range(6):
+                url = OVERPASS_URLS[attempt % len(OVERPASS_URLS)]
+                try:
+                    r = session.post(url, data={"data": q}, timeout=180)
+                    if r.status_code in (429, 502, 503, 504):
+                        last_err = f"HTTP {r.status_code}"
+                        time.sleep(min(60, 8 * (attempt + 1)))
+                        continue
+                    r.raise_for_status()
+                    elements = r.json().get("elements", [])
+                    path.write_text(json.dumps(elements), encoding="utf-8")
+                    break
+                except Exception as ex:
+                    last_err = ex
+                    time.sleep(min(60, 6 * (attempt + 1)))
+            if elements is None:
+                raise OverpassFailure(f"POI ways batch {b_idx + 1}/{n_batches}: {last_err}")
+            time.sleep(1.0)
+
+        for el in elements:
+            if el.get("type") == "way" and "geometry" in el:
+                ways_by_id[el["id"]] = el
+        print(f"\r  poi ways batch {b_idx + 1}/{n_batches} ({len(ways_by_id)} unique ways)",
+              end="", flush=True)
+    print()
+    return list(ways_by_id.values())
+
+
+def fetch_herenga_tracks(session: requests.Session) -> dict[int, list[dict]]:
+    """Fetch public walking, shared-use, MTB, Te Araroa, and cycle trails from Herenga a Nuku."""
+    cache_dir = CACHE / "herenga"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    bbox = f'{REGION["lon_min"]},{REGION["lat_min"]},{REGION["lon_max"]},{REGION["lat_max"]}'
+    out: dict[int, list[dict]] = {}
+    for lid in (0, 1, 2, 3, 4):
+        path = cache_dir / f"tracks_layer_{lid}.json"
+        if path.exists() and path.stat().st_size > 0:
+            try:
+                out[lid] = json.loads(path.read_text(encoding="utf-8"))
+                continue
+            except Exception:
+                pass
+        feats: list[dict] = []
+        offset = 0
+        while True:
+            params = {
+                "f": "json",
+                "where": "1=1",
+                "geometry": bbox,
+                "geometryType": "esriGeometryEnvelope",
+                "inSR": "4326",
+                "outSR": "4326",
+                "spatialRel": "esriSpatialRelIntersects",
+                "outFields": "*",
+                "returnGeometry": "true",
+                "maxAllowableOffset": "0.00005",
+                "resultOffset": str(offset),
+                "resultRecordCount": "2000",
+            }
+            url = f"{HERENGA_BASE}/Tracks_Trails/MapServer/{lid}/query"
+            page = None
+            for attempt in range(4):
+                try:
+                    r = session.post(url, data=params, timeout=45)
+                    r.raise_for_status()
+                    page = r.json()
+                    break
+                except Exception:
+                    time.sleep(2 * (attempt + 1))
+            if not page or "features" not in page:
+                break
+            batch = page.get("features", [])
+            feats.extend(batch)
+            if not page.get("exceededTransferLimit") or not batch:
+                break
+            offset += len(batch)
+        path.write_text(json.dumps(feats), encoding="utf-8")
+        out[lid] = feats
+    total = sum(len(v) for v in out.values())
+    print(f"  Herenga a Nuku Tracks_Trails: {total} public trail polylines across 5 layers")
+    return out
+
+
+def fetch_herenga_paa(pois: list[dict], radius_m: float,
+                      session: requests.Session) -> dict[int, list[dict]]:
+    """Fetch Herenga a Nuku Public_Access_Areas polygons within ~radius_m of candidate POIs.
+
+    Layers:
+      1: Road Parcels (Road Parcel vs Unformed Legal Road Parcel)
+      2: Easements (Walkway Easements, PAE Easements, DOC Easements, Access Strips)
+      3: Reserve Land (Scenic, Recreation, Historic, Esplanade Reserves)
+      4: Public Access Conservation Land (National Parks, Conservation Parks, Stewardship Areas)
+      5: Other Parks & Reserves
+      6: Other Public Access Areas (Covenants, Legislation)
+    """
+    out: dict[int, dict[int, dict]] = {lid: {} for lid in (1, 2, 3, 4, 5, 6)}
+    if not pois:
+        return {lid: [] for lid in out}
+    cache_dir = CACHE / "herenga"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    sorted_pois = sorted(pois, key=lambda p: p["id"])
+    batch_size = 100
+    n_batches = (len(sorted_pois) + batch_size - 1) // batch_size
+    dist = max(120, int(round(radius_m + 25)))
+
+    for b_idx in range(n_batches):
+        batch = sorted_pois[b_idx * batch_size:(b_idx + 1) * batch_size]
+        first_id = batch[0]["id"].replace("/", "_")
+        last_id = batch[-1]["id"].replace("/", "_")
+        path = cache_dir / f"paa_{len(batch)}_{dist}_{first_id}_{last_id}.json"
+        cached = None
+        if path.exists() and path.stat().st_size > 0:
+            try:
+                cached = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                cached = None
+        if cached is None:
+            pts = [[round(p["lon"], 5), round(p["lat"], 5)] for p in batch]
+            mp = json.dumps({"points": pts, "spatialReference": {"wkid": 4326}})
+            cached = {}
+            for lid in (1, 2, 3, 4, 5, 6):
+                params = {
+                    "f": "json",
+                    "geometry": mp,
+                    "geometryType": "esriGeometryMultipoint",
+                    "inSR": "4326",
+                    "outSR": "4326",
+                    "spatialRel": "esriSpatialRelIntersects",
+                    "distance": str(dist),
+                    "units": "esriSRUnit_Meter",
+                    "outFields": "OBJECTID,common_name,paa_class,paa_type,public_access,managed_by",
+                    "returnGeometry": "true",
+                    "maxAllowableOffset": "0.00005",
+                }
+                url = f"{HERENGA_BASE}/Public_Access_Areas/MapServer/{lid}/query"
+                feats = []
+                for attempt in range(4):
+                    try:
+                        r = session.post(url, data=params, timeout=45)
+                        r.raise_for_status()
+                        feats = r.json().get("features", [])
+                        break
+                    except Exception:
+                        time.sleep(2 * (attempt + 1))
+                cached[str(lid)] = feats
+            path.write_text(json.dumps(cached), encoding="utf-8")
+
+        for lid in (1, 2, 3, 4, 5, 6):
+            for ft in cached.get(str(lid), []):
+                oid = ft.get("attributes", {}).get("OBJECTID")
+                if oid is not None:
+                    out[lid][oid] = ft
+        print(f"\r  Herenga a Nuku Public_Access_Areas batch {b_idx + 1}/{n_batches}",
+              end="", flush=True)
+    print()
+    return {lid: list(d.values()) for lid, d in out.items()}
+
+
+def _seg_dist_m(lat: float, lon: float, la1: float, lo1: float, la2: float, lo2: float) -> float:
+    """Planar point-to-segment distance in metres around (lat, lon)."""
+    c = math.cos(math.radians(lat))
+    px = (lon - lo1) * 111320.0 * c
+    py = (lat - la1) * 111132.0
+    vx = (lo2 - lo1) * 111320.0 * c
+    vy = (la2 - la1) * 111132.0
+    l2 = vx * vx + vy * vy
+    t = 0.0 if l2 == 0.0 else max(0.0, min(1.0, (px * vx + py * vy) / l2))
+    return math.hypot(px - t * vx, py - t * vy)
+
+
+def _point_in_ring(lon: float, lat: float, ring: list) -> bool:
+    inside = False
+    for i in range(len(ring) - 1):
+        x1, y1 = ring[i][0], ring[i][1]
+        x2, y2 = ring[i + 1][0], ring[i + 1][1]
+        if ((y1 > lat) != (y2 > lat)) and (lon < (x2 - x1) * (lat - y1) / (y2 - y1 + 1e-15) + x1):
+            inside = not inside
+    return inside
+
+
+def _poly_dist_m(lat: float, lon: float, rings: list) -> float:
+    inside = False
+    min_d = 999999.0
+    for ring in rings:
+        if _point_in_ring(lon, lat, ring):
+            inside = not inside
+        for a, b in zip(ring, ring[1:]):
+            d = _seg_dist_m(lat, lon, a[1], a[0], b[1], b[0])
+            if d < min_d:
+                min_d = d
+    return 0.0 if inside else min_d
+
+
+def _classify_osm_way(tags: dict) -> tuple[str | None, str | None, bool]:
+    """Return (tier, accessSub, is_private) for an OSM highway way based on its full tags."""
+    hw = (tags.get("highway") or "").strip().lower()
+    if not hw or hw in ("proposed", "construction", "abandoned", "disused", "razed",
+                        "platform", "corridor", "elevator", "raceway", "bridleway" if False else ""):
+        return None, None, False
+
+    srv = (tags.get("service") or "").strip().lower()
+    acc = (tags.get("access") or "").strip().lower()
+    mv = (tags.get("motor_vehicle") or "").strip().lower()
+    veh = (tags.get("vehicle") or "").strip().lower()
+    foot = (tags.get("foot") or "").strip().lower()
+    bic = (tags.get("bicycle") or "").strip().lower()
+    surf = (tags.get("surface") or "").strip().lower()
+    sac = (tags.get("sac_scale") or "").strip().lower()
+    fourwd = (tags.get("4wd_only") or "").strip().lower()
+    name_l = (tags.get("name") or "").strip().lower()
+
+    # Ignore private driveways, parking aisles, and yard spurs unless explicitly public.
+    if hw == "service" and srv in ("driveway", "parking_aisle", "alley", "yard", "spur", "siding"):
+        if acc not in ("yes", "public", "permissive", "designated"):
+            return None, None, False
+
+    # 1. Dedicated walking / cycling ways, or tracks restricted to foot/bike traffic.
+    if hw in ("path", "footway", "steps", "bridleway", "cycleway", "pedestrian"):
+        is_cycle = hw == "cycleway" or bic == "designated" or "cycle" in name_l
+        is_priv = acc in PRIVATE_ACCESS_VALS and foot not in PUBLIC_FOOT_VALS
+        return "foot", ("cycle_trail" if is_cycle else "walking_track"), is_priv
+
+    is_walk_named = any(w in name_l for w in (
+        "walking track", "tramping track", "hiking", "walkway", "cycle trail", "great walk",
+        "nature walk", "loop track",
+    )) and "4wd" not in name_l and "road" not in name_l
+
+    if hw in ("track", "unclassified", "service") and (
+        sac != ""
+        or mv in PRIVATE_ACCESS_VALS
+        or veh in PRIVATE_ACCESS_VALS
+        or foot == "designated"
+        or bic == "designated"
+        or (acc in PRIVATE_ACCESS_VALS and foot in PUBLIC_FOOT_VALS)
+        or (hw == "track" and is_walk_named)
+    ):
+        is_cycle = bic == "designated" or "cycle" in name_l
+        is_priv = acc in PRIVATE_ACCESS_VALS and foot not in PUBLIC_FOOT_VALS
+        return "foot", ("cycle_trail" if is_cycle else "walking_track"), is_priv
+
+    is_priv_veh = (acc in PRIVATE_ACCESS_VALS
+                   or mv in PRIVATE_ACCESS_VALS
+                   or veh in PRIVATE_ACCESS_VALS)
+
+    # 2. 4WD tracks and unsealed / gravel roads (grouped under "track").
+    if hw == "track":
+        return "track", "4wd_track", is_priv_veh
+
+    if hw in ("motorway", "trunk", "primary", "secondary", "tertiary",
+              "unclassified", "residential", "service"):
+        if fourwd in ("yes", "recommended", "only") or surf in ROUGH_4WD_SURFACES:
+            return "track", "4wd_track", is_priv_veh
+        if surf in UNSEALED_SURFACES:
+            return "track", "gravel_road", is_priv_veh
+        return "sealed", "sealed_road", is_priv_veh
+
+    return None, None, False
+
+
+def classify_pois_access(pois: list[dict], osm_ways: list[dict],
+                         herenga_tracks: dict[int, list[dict]],
+                         herenga_paa: dict[int, list[dict]],
+                         radius_m: float) -> None:
+    """Assign access, accessSub, publicAccess, and land/track metadata to each POI in place."""
+    bucket_deg = 0.02
+
+    def bkeys(la1, lo1, la2, lo2, pad=0.002):
+        y0 = int(math.floor((min(la1, la2) - pad) / bucket_deg))
+        y1 = int(math.floor((max(la1, la2) + pad) / bucket_deg))
+        x0 = int(math.floor((min(lo1, lo2) - pad) / bucket_deg))
+        x1 = int(math.floor((max(lo1, lo2) + pad) / bucket_deg))
+        return [(y, x) for y in range(y0, y1 + 1) for x in range(x0, x1 + 1)]
+
+    # Index OSM way segments
+    osm_buckets: dict[tuple[int, int], list] = {}
+    for el in osm_ways:
+        tags = el.get("tags", {})
+        tier, sub, is_priv = _classify_osm_way(tags)
+        if not tier:
+            continue
+        coords = [(pt["lat"], pt["lon"]) for pt in el.get("geometry", [])]
+        for (la1, lo1), (la2, lo2) in zip(coords, coords[1:]):
+            seg = (tier, sub, is_priv, la1, lo1, la2, lo2)
+            for k in bkeys(la1, lo1, la2, lo2):
+                osm_buckets.setdefault(k, []).append(seg)
+
+    # Index Herenga a Nuku public trail segments
+    trk_buckets: dict[tuple[int, int], list] = {}
+    for lid, feats in herenga_tracks.items():
+        for ft in feats:
+            attr = ft.get("attributes", {})
+            tname = (attr.get("Name") or attr.get("NAME") or attr.get("cycleTrail") or "").strip()
+            sub = "cycle_trail" if lid in (2, 4) else "walking_track"
+            for path in ft.get("geometry", {}).get("paths", []):
+                for a, b in zip(path, path[1:]):
+                    lo1, la1, lo2, la2 = a[0], a[1], b[0], b[1]
+                    seg = (sub, tname, la1, lo1, la2, lo2)
+                    for k in bkeys(la1, lo1, la2, lo2):
+                        trk_buckets.setdefault(k, []).append(seg)
+
+    # Index Herenga a Nuku Public Access Area polygons by bbox
+    paa_buckets: dict[tuple[int, int], list] = {}
+    for lid, feats in herenga_paa.items():
+        for ft in feats:
+            rings = ft.get("geometry", {}).get("rings", [])
+            if not rings:
+                continue
+            lons = [pt[0] for r in rings for pt in r]
+            lats = [pt[1] for r in rings for pt in r]
+            attr = ft.get("attributes", {})
+            item = (lid, attr, rings, min(lats), max(lats), min(lons), max(lons))
+            for k in bkeys(min(lats), min(lons), max(lats), max(lons), pad=0.002):
+                paa_buckets.setdefault(k, []).append(item)
+
+    for p in pois:
+        lat, lon = p["lat"], p["lon"]
+        bk = (int(math.floor(lat / bucket_deg)), int(math.floor(lon / bucket_deg)))
+
+        # 1. Herenga a Nuku Public_Access_Areas check
+        d_formed_rd = 999999.0
+        d_unformed_rd = 999999.0
+        d_pub_land = 999999.0
+        land_label = ""
+        for lid, attr, rings, la_min, la_max, lo_min, lo_max in paa_buckets.get(bk, []):
+            if lat < la_min - 0.002 or lat > la_max + 0.002 or lon < lo_min - 0.003 or lon > lo_max + 0.003:
+                continue
+            dm = _poly_dist_m(lat, lon, rings)
+            if lid == 1:
+                if attr.get("paa_type") == "Road Parcel":
+                    if dm < d_formed_rd:
+                        d_formed_rd = dm
+                else:
+                    if dm < d_unformed_rd:
+                        d_unformed_rd = dm
+            else:
+                if dm < d_pub_land:
+                    d_pub_land = dm
+                    cname = (attr.get("common_name") or "").strip()
+                    ptype = (attr.get("paa_type") or attr.get("paa_class") or "").strip()
+                    land_label = cname if cname and cname.lower() != "none" else ptype
+
+        # 2. Herenga a Nuku Tracks_Trails check
+        d_h_trk = 999999.0
+        h_trk_sub = "walking_track"
+        h_trk_name = ""
+        for sub, tname, la1, lo1, la2, lo2 in trk_buckets.get(bk, []):
+            dm = _seg_dist_m(lat, lon, la1, lo1, la2, lo2)
+            if dm < d_h_trk:
+                d_h_trk = dm
+                h_trk_sub = sub
+                if tname:
+                    h_trk_name = tname
+
+        # 3. OSM ways check (separating public ways from private ways)
+        pub_dist = {"sealed": 999999.0, "track": 999999.0, "foot": 999999.0}
+        pub_sub = {"sealed": "sealed_road", "track": "4wd_track", "foot": "walking_track"}
+        priv_dist = {"sealed": 999999.0, "track": 999999.0, "foot": 999999.0}
+        priv_sub = {"sealed": "sealed_road", "track": "4wd_track", "foot": "walking_track"}
+
+        for tier, sub, is_priv, la1, lo1, la2, lo2 in osm_buckets.get(bk, []):
+            dm = _seg_dist_m(lat, lon, la1, lo1, la2, lo2)
+            target_d = priv_dist if is_priv else pub_dist
+            target_s = priv_sub if is_priv else pub_sub
+            if dm < target_d[tier]:
+                target_d[tier] = dm
+                target_s[tier] = sub
+
+        # Fold Herenga a Nuku public trails into public foot access
+        if d_h_trk < pub_dist["foot"]:
+            pub_dist["foot"] = d_h_trk
+            pub_sub["foot"] = h_trk_sub
+
+        # Use public OSM ways if any exist within radius_m; otherwise fall back to private ways
+        has_pub_way = any(d <= radius_m for d in pub_dist.values())
+        d_map = pub_dist if has_pub_way else priv_dist
+        s_map = pub_sub if has_pub_way else priv_sub
+        used_private_way = (not has_pub_way) and any(d <= radius_m for d in priv_dist.values())
+
+        # If a "sealed" road is not backed by a formed legal Road Parcel or public reserve
+        # within radius_m (e.g. gated utility road on remote land like Swampy Summit, or an
+        # Unformed Legal Road), downgrade it so it is never falsely advertised as a sealed road.
+        if d_map["sealed"] <= radius_m and d_formed_rd > radius_m and d_pub_land > 35.0:
+            if d_h_trk <= radius_m and d_unformed_rd > 40.0:
+                if d_map["sealed"] < d_map["foot"]:
+                    d_map["foot"] = d_map["sealed"]
+                    s_map["foot"] = "walking_track"
+            else:
+                if d_map["sealed"] < d_map["track"]:
+                    d_map["track"] = d_map["sealed"]
+                    s_map["track"] = "gravel_road"
+            d_map["sealed"] = 999999.0
+
+        # If an OSM "track" is right on a Herenga a Nuku walking/biking trail and not on a
+        # formed/unformed road parcel, treat it as a walking/biking trail (e.g. Isthmus Peak,
+        # Roys Peak Track, Lake Dunstan Cycle Trail).
+        if d_map["track"] <= radius_m and d_h_trk <= 35.0 and d_formed_rd > 50.0 and d_unformed_rd > 50.0:
+            if d_map["track"] < d_map["foot"]:
+                d_map["foot"] = d_map["track"]
+                s_map["foot"] = h_trk_sub
+            d_map["track"] = 999999.0
+
+        ds, dt, df = d_map["sealed"], d_map["track"], d_map["foot"]
+
+        # Direct-attachment rule: if a POI sits directly on a walking track (<=20 m) or 4WD
+        # track (<=20 m) while any higher-tier road is much further away (>25-40 m and >2.5x
+        # the distance), classify the POI by the way it actually sits on rather than a road
+        # passing nearby at the base of a bluff or hill.
+        if df <= 20.0 and df <= radius_m and min(ds, dt) > max(25.0, df * 2.5):
+            acc = "foot"
+            sub = s_map["foot"]
+        elif dt <= 20.0 and dt <= radius_m and ds > max(40.0, dt * 2.5):
+            acc = "track"
+            sub = s_map["track"]
+        elif ds <= radius_m:
+            acc = "sealed"
+            sub = s_map["sealed"]
+        elif dt <= radius_m:
+            acc = "track"
+            sub = s_map["track"]
+        elif df <= radius_m:
+            acc = "foot"
+            sub = s_map["foot"]
+        elif d_unformed_rd <= 35.0:
+            acc = "foot"
+            sub = "paper_road"
+        else:
+            acc = "none"
+            sub = "off_track"
+
+        # Determine legal public access from Herenga a Nuku + OSM access tags
+        osm_acc = p.get("osmAccess", "")
+        pub_tol = 35.0 if p["kind"] == "peak" else radius_m
+        if osm_acc in PRIVATE_ACCESS_VALS:
+            is_public = False
+        elif used_private_way and d_pub_land > 30.0 and d_h_trk > 35.0 and d_unformed_rd > 30.0:
+            is_public = False
+        elif (
+            d_pub_land <= pub_tol
+            or d_h_trk <= pub_tol
+            or d_unformed_rd <= pub_tol
+            or (d_formed_rd <= pub_tol and not used_private_way)
+            or (p["kind"] == "campsite" and acc != "none")
+        ):
+            is_public = True
+        else:
+            is_public = False
+
+        p["access"] = acc
+        p["accessSub"] = sub
+        p["publicAccess"] = bool(is_public)
+        if not land_label and d_unformed_rd <= 35.0 and d_formed_rd > 35.0:
+            land_label = "Unformed legal road"
+        if land_label:
+            p["land"] = land_label
+        if h_trk_name and d_h_trk <= 50.0 and acc == "foot":
+            p["trackName"] = h_trk_name
+        p.pop("osmAccess", None)
 
 
 class AccessGrid:
@@ -885,8 +1404,10 @@ def main():
                 p_cB = PF["altB"][idx] - horizon_angles(dem, pl, po, PF["azB"][idx], pe)
                 p_cE = PF["altE"][idx] - horizon_angles(dem, pl, po, PF["azE"][idx], pe)
                 for k, i in enumerate(idx):
-                    r = dict(raw[i])
                     clr = float(pa[k] - p_hor[k])
+                    if clr <= args.min_clearance:
+                        continue
+                    r = dict(raw[i])
                     r.update(elev=int(round(float(pg[k]))),
                              sunAlt=round(float(pa[k]), 2),
                              sunAz=round(float(pz[k]), 1),
@@ -897,20 +1418,25 @@ def main():
                              wholeTotality=bool(clr > 0 and p_cB[k] > 0 and p_cE[k] > 0),
                              totality=int(round(float(pd[k]))))
                     pois.append(r)
+                print(f"  {len(pois)} POIs clear terrain at maximum")
     else:
         print("4/6  Skipping POI fetch")
 
     access = np.zeros(lat_f.size, dtype=np.uint8)
     if not args.no_osm and lat_f.size:
-        print("5/6  Fetching OpenStreetMap access (roads and tracks)")
+        print("5/6  Fetching OpenStreetMap & Herenga a Nuku access (roads, tracks, public land)")
         # Only query cells that actually contain surviving candidates or POIs -- this cuts the
         # number of Overpass requests dramatically over ocean and roadless wilderness.
         cell = 0.25
         keys = set(zip(np.floor(lat_f / cell).astype(int), np.floor(lon_f / cell).astype(int)))
+        pad_deg = args.radius / 111132.0 + 0.001
         for p in pois:
-            keys.add((int(math.floor(p["lat"] / cell)), int(math.floor(p["lon"] / cell))))
+            for d_la in (-pad_deg, 0.0, pad_deg):
+                for d_lo in (-pad_deg, 0.0, pad_deg):
+                    keys.add((int(math.floor((p["lat"] + d_la) / cell)),
+                              int(math.floor((p["lon"] + d_lo) / cell))))
         print(f"  {len(keys)} Overpass tiles of {cell} deg to fetch")
-        grid = AccessGrid(cell_m=max(50.0, args.radius), radius_m=args.radius)
+        grid = AccessGrid(cell_m=min(25.0, max(10.0, args.radius / 4.0)), radius_m=args.radius)
         cells = sorted(keys)
 
         # Serial, one cell at a time. Parallel requests get this IP throttled (503/504), and a
@@ -958,14 +1484,13 @@ def main():
             v[reachable] for v in
             (lat_f, lon_f, ground, alt, az, dur, horizon, clearance, clearB, clearE, access))
 
-        # POIs keep their access class rather than being filtered out: a lookout with no
-        # mapped road is still worth knowing about, it just needs a walk.
+        # POIs get exact point-to-segment distance + full OSM way tag classification + Herenga
+        # a Nuku public access & trail verification rather than the coarse raster AccessGrid.
         if pois:
-            rank_name_local = {3: "sealed", 2: "track", 1: "foot", 0: "none"}
-            pa = grid.lookup(np.array([p["lat"] for p in pois]),
-                             np.array([p["lon"] for p in pois]))
-            for p, a in zip(pois, pa):
-                p["access"] = rank_name_local[int(a)]
+            poi_ways = fetch_poi_ways(pois, args.radius, SESSION)
+            h_tracks = fetch_herenga_tracks(SESSION)
+            h_paa = fetch_herenga_paa(pois, args.radius, SESSION)
+            classify_pois_access(pois, poi_ways, h_tracks, h_paa, args.radius)
     else:
         print("5/6  Skipping OSM access filter")
 
@@ -1003,20 +1528,65 @@ def main():
 
     # Named POIs are ranked on their own: a signposted lookout with a modest clearance is
     # usually a better recommendation than an anonymous grid point with a slightly better one.
-    # Access tier dominates for the same reason as above -- otherwise the list fills with
-    # 2500 m peaks like Mount Tutoko that nobody is driving to on eclipse afternoon.
+    # Access tier dominates (so 2500 m off-track summits don't crowd out reachable spots), and
+    # within each access tier publicly accessible POIs rank ahead of private-land POIs.
     def poi_score(p):
+        pub_bonus = 50.0 if p.get("publicAccess", True) else 0.0
         return (ACCESS_RANK.get(p.get("access", "none"), 0) * 100.0
+                + pub_bonus
                 + p["clearance"]
                 + POI_PRIORITY[p["kind"]] * 0.35
                 + (0.4 if p["name"] else 0.0))
 
-    poi_out = sorted(
+    sorted_pois = sorted(
         (p for p in pois if p.get("clearance", -99) > args.min_clearance),
         key=lambda p: -poi_score(p),
-    )[:args.top]
+    )
+
+    # Spatially deduplicate near-identical POIs of the same kind within 200 m (e.g. duplicate
+    # OSM summit nodes for Mount Tennyson / Karu-a-hine or paired viewpoint nodes on one deck),
+    # and enforce a per-tier quota so sealed roads and 4WD tracks cannot push walking-track
+    # viewpoints and summits out of the top N.
+    poi_min_sep = 200.0 / 111132.0
+    dedup_pois = []
+    for p in sorted_pois:
+        if any(
+            p["kind"] == q["kind"]
+            and abs(p["lat"] - q["lat"]) < poi_min_sep
+            and abs(p["lon"] - q["lon"]) < poi_min_sep
+            for q in dedup_pois
+        ):
+            continue
+        dedup_pois.append(p)
+
+    poi_quota = {
+        "sealed": int(args.top * 0.45),
+        "track": int(args.top * 0.30),
+        "foot": int(args.top * 0.25),
+        "none": 0,
+    }
+    poi_picked = {"sealed": 0, "track": 0, "foot": 0, "none": 0}
+    poi_out = []
+    overflow_pois = []
+    for p in dedup_pois:
+        if len(poi_out) >= args.top:
+            break
+        acc = p.get("access", "none")
+        if poi_picked.get(acc, 0) < poi_quota.get(acc, 0):
+            poi_out.append(p)
+            poi_picked[acc] = poi_picked.get(acc, 0) + 1
+        else:
+            overflow_pois.append(p)
+    for p in overflow_pois:
+        if len(poi_out) >= args.top:
+            break
+        poi_out.append(p)
+    poi_out.sort(key=lambda p: -poi_score(p))
+
     by_access = Counter(p.get("access", "none") for p in poi_out)
-    print(f"  {len(poi_out)} named POIs with a clear view  {dict(by_access)}")
+    by_pub = Counter(p.get("publicAccess", True) for p in poi_out)
+    print(f"  {len(poi_out)} named POIs with a clear view  {dict(by_access)}  "
+          f"(public={by_pub[True]}, private={by_pub[False]})")
 
     try:
         from enrich_unnamed_pois import enrich_viewpoints
@@ -1065,11 +1635,13 @@ def main():
             "eyeHeightM": EYE_HEIGHT,
         },
         "attribution": ("Terrain: Re:Earth Terrain / Mapterhorn (CC BY 4.0). "
-                        "Roads: OpenStreetMap contributors (ODbL). "
+                        "Roads & places: OpenStreetMap contributors (ODbL). "
+                        "Public access: Herenga a Nuku Aotearoa (CC BY 4.0). "
                         "Astronomy: astronomy-engine."),
-        "caveats": ("Access means proximity to an OSM road or track, not a right of way. "
-                    "Land may be private. Horizon angles come from a ~%d m DEM and should be "
-                    "re-checked in the app at full resolution."
+        "caveats": ("Public access is cross-checked against Herenga a Nuku Aotearoa "
+                    "(Public Access Areas & Tracks/Trails) and OpenStreetMap tags, but "
+                    "local conditions or closures may apply. Horizon angles come from a "
+                    "~%d m DEM and should be re-checked in the app at full resolution."
                     % round(dem.metres_per_pixel(-45.0))),
         "count": len(spots),
         "spots": spots,
@@ -1088,10 +1660,12 @@ def main():
 
     if poi_out:
         print("\n  top named viewing spots:")
-        for p in poi_out[:8]:
+        for p in poi_out[:12]:
             label = p["name"] or f"(unnamed {p['kind']})"
+            pub_tag = "public" if p.get("publicAccess", True) else "private"
             print(f"    {label[:34]:<34} {p['kind']:<9} {p['elev']:>4d} m  "
-                  f"clear +{p['clearance']:.1f}deg  {p['totality']}s  {p.get('access','?')}")
+                  f"clear +{p['clearance']:.1f}deg  {p['totality']}s  "
+                  f"{p.get('access','?'):<6} ({p.get('accessSub','?')}, {pub_tag})")
     if spots:
         print("\n  top grid spots:")
         for s in spots[:5]:
