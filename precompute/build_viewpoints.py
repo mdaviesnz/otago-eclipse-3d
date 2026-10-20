@@ -1654,6 +1654,14 @@ def main():
     }
     if osm_gaps:
         print(f"  NOTE: {len(osm_gaps)} OSM bbox(es) missing — recorded as osmGaps in the JSON")
+
+    try:
+        from cloud_climatology import enrich_catalogue
+        enrich_catalogue(payload)
+        print("  enriched with EUMETSAT CM SAF July cloud climatology (1979-2026)")
+    except Exception as ex:
+        print(f"  warning: could not enrich cloud climatology: {ex}")
+
     OUT.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
     print(f"  wrote {OUT} -- {len(spots)} spots, {OUT.stat().st_size / 1024:.0f} KB")
     print(f"done in {time.time() - t_start:.0f}s")

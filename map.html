@@ -115,6 +115,12 @@
         <input id="clearFilter" type="range" min="0" max="120" value="0"
           class="w-full accent-amber-400 cursor-pointer mb-2" />
 
+        <label class="block text-[11px] text-slate-400 mb-1">
+          Maximum July cloud: <span id="cloudVal" class="text-sky-300 font-mono">Any</span>
+        </label>
+        <input id="cloudFilter" type="range" min="45" max="70" value="70"
+          class="w-full accent-sky-400 cursor-pointer mb-2" />
+
         <label class="flex items-center gap-2 text-xs sm:text-[11px] text-slate-300 sm:text-slate-400 mb-1.5 py-0.5 cursor-pointer">
           <input id="publicOnly" type="checkbox" checked class="accent-amber-400 w-4 h-4 sm:w-3.5 sm:h-3.5" />
           Verified public access only
@@ -125,9 +131,14 @@
           Only spots clear for all of totality
         </label>
 
-        <label class="flex items-center gap-2 text-xs sm:text-[11px] text-slate-300 sm:text-slate-400 mb-2 py-0.5 cursor-pointer">
+        <label class="flex items-center gap-2 text-xs sm:text-[11px] text-slate-300 sm:text-slate-400 mb-1.5 py-0.5 cursor-pointer">
           <input id="showPath" type="checkbox" checked class="accent-amber-400 w-4 h-4 sm:w-3.5 sm:h-3.5" />
           Show eclipse path &amp; bands
+        </label>
+
+        <label class="flex items-center gap-2 text-xs sm:text-[11px] text-slate-300 sm:text-slate-400 mb-2 py-0.5 cursor-pointer">
+          <input id="showCloud" type="checkbox" class="accent-sky-400 w-4 h-4 sm:w-3.5 sm:h-3.5" />
+          Show historic July cloud cover
         </label>
 
         <p id="count" class="text-[11px] text-slate-400"></p>
@@ -156,6 +167,18 @@
         </div>
         <div class="flex items-center gap-2 text-[10px] text-slate-400">
           <span class="inline-block w-4 border-t-2 border-dashed" style="border-color:#fde68a"></span> Centreline of totality
+        </div>
+      </div>
+      <div id="cloudLegendSection" class="hidden mt-2.5 pt-2 border-t border-slate-700/60">
+        <div class="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+          <span class="uppercase tracking-wide font-medium">July daytime cloud</span>
+          <span class="text-[9px] text-slate-400">CM SAF 1979&ndash;2026</span>
+        </div>
+        <div class="h-2 rounded overflow-hidden mb-1 border border-slate-700/80" style="background:linear-gradient(to right, #0284c7, #38bdf8, #818cf8, #cbd5e1, #f8fafc)"></div>
+        <div class="flex justify-between text-[9px] text-slate-400">
+          <span class="text-sky-300">&le;45% (clearer)</span>
+          <span>60%</span>
+          <span class="text-slate-300">&ge;85% (cloudier)</span>
         </div>
       </div>
       <p class="text-[10px] text-slate-500 mt-2 leading-snug">
@@ -229,6 +252,7 @@
             <li>Imagery &mdash; Esri World Imagery</li>
             <li>Roads &amp; places &mdash; <a class="text-amber-300 hover:underline" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors (ODbL)</li>
             <li>Public access &amp; trails &mdash; <a class="text-amber-300 hover:underline" href="https://www.herengaanuku.govt.nz" target="_blank" rel="noopener">Herenga &amacr; Nuku Aotearoa</a> (CC BY 4.0)</li>
+            <li>Cloud climatology &mdash; <a class="text-amber-300 hover:underline" href="https://www.cmsaf.eu" target="_blank" rel="noopener">EUMETSAT CM SAF</a> (CLARA-A3 1979&ndash;2026, AVHRR) &middot; inspired by <a class="text-amber-300 hover:underline" href="https://eclipsophile.com/tse2028/" target="_blank" rel="noopener">Jay Anderson / Eclipsophile</a></li>
             <li>Sun &amp; moon &mdash; <a class="text-amber-300 hover:underline" href="https://github.com/cosinekitty/astronomy" target="_blank" rel="noopener">astronomy-engine</a></li>
           </ul>
         </div>
@@ -308,11 +332,116 @@
     { maxZoom: 17, opacity: 0.9 }
   ).addTo(map);
 
+  const cloudLayer = L.layerGroup().addTo(map);
   const pathLayer = L.layerGroup().addTo(map);
   const layer = L.layerGroup().addTo(map);
   const townLayer = L.layerGroup().addTo(map);
   let catalogue = null;
   let source = "poi";
+  let cloudOverlay = null;
+
+  function renderCloudOverlay() {
+    cloudLayer.clearLayers();
+    const show = document.getElementById("showCloud");
+    const legendSec = document.getElementById("cloudLegendSection");
+    if (!show || !show.checked || !catalogue || !catalogue.cloudGrid) {
+      if (legendSec) legendSec.classList.add("hidden");
+      return;
+    }
+    if (legendSec) legendSec.classList.remove("hidden");
+
+    const cg = catalogue.cloudGrid;
+    const lats = cg.lats;
+    const lons = cg.lons;
+    const cfc = cg.cfcDay;
+    const nLat = lats.length;
+    const nLon = lons.length;
+
+    const dlat = cg.dlat || 0.25;
+    const dlon = cg.dlon || 0.25;
+    const south = lats[0] - dlat / 2;
+    const north = lats[nLat - 1] + dlat / 2;
+    const west = lons[0] - dlon / 2;
+    const east = lons[nLon - 1] + dlon / 2;
+
+    const canvas = document.createElement("canvas");
+    const width = 180;
+    const height = Math.round(width * ((north - south) / (east - west)));
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    const imgData = ctx.createImageData(width, height);
+    const data = imgData.data;
+
+    function getColor(val) {
+      const t = Math.max(0, Math.min(1, (val - 42) / 46));
+      let r, g, b, a;
+      if (t < 0.25) {
+        const f = t / 0.25;
+        r = 2 + f * (56 - 2);
+        g = 132 + f * (189 - 132);
+        b = 199 + f * (248 - 199);
+        a = 0.50 + f * 0.05;
+      } else if (t < 0.55) {
+        const f = (t - 0.25) / 0.30;
+        r = 56 + f * (129 - 56);
+        g = 189 + f * (140 - 189);
+        b = 248 + f * (248 - 248);
+        a = 0.55 + f * 0.05;
+      } else if (t < 0.80) {
+        const f = (t - 0.55) / 0.25;
+        r = 129 + f * (203 - 129);
+        g = 140 + f * (213 - 140);
+        b = 248 + f * (225 - 248);
+        a = 0.60 + f * 0.08;
+      } else {
+        const f = (t - 0.80) / 0.20;
+        r = 203 + f * (248 - 203);
+        g = 213 + f * (250 - 213);
+        b = 225 + f * (252 - 225);
+        a = 0.68 + f * 0.12;
+      }
+      return [Math.round(r), Math.round(g), Math.round(b), Math.round(a * 255)];
+    }
+
+    for (let py = 0; py < height; py++) {
+      const lat = north - (py / (height - 1)) * (north - south);
+      const gy = (lat - lats[0]) / dlat;
+      const yClamped = Math.max(0, Math.min(nLat - 1, gy));
+      const y0 = Math.floor(yClamped);
+      const y1 = Math.min(nLat - 1, y0 + 1);
+      const fy = yClamped - y0;
+
+      for (let px = 0; px < width; px++) {
+        const lon = west + (px / (width - 1)) * (east - west);
+        const gx = (lon - lons[0]) / dlon;
+        const xClamped = Math.max(0, Math.min(nLon - 1, gx));
+        const x0 = Math.floor(xClamped);
+        const x1 = Math.min(nLon - 1, x0 + 1);
+        const fx = xClamped - x0;
+
+        const v00 = cfc[y0][x0];
+        const v01 = cfc[y0][x1];
+        const v10 = cfc[y1][x0];
+        const v11 = cfc[y1][x1];
+        const val = (1 - fy) * ((1 - fx) * v00 + fx * v01) + fy * ((1 - fx) * v10 + fx * v11);
+
+        const [r, g, b, alpha] = getColor(val);
+        const idx = (py * width + px) * 4;
+        data[idx] = r;
+        data[idx + 1] = g;
+        data[idx + 2] = b;
+        data[idx + 3] = alpha;
+      }
+    }
+
+    ctx.putImageData(imgData, 0, 0);
+    const dataUrl = canvas.toDataURL("image/png");
+    cloudOverlay = L.imageOverlay(dataUrl, [[south, west], [north, east]], {
+      opacity: 0.65,
+      interactive: false,
+    }).addTo(cloudLayer);
+  }
 
   // Precomputed 22 July 2028 eclipse path & partial obscuration bands across the Tasman / NZ
   // (astronomy-engine local solar eclipse circumference + sunset terminus).
@@ -406,6 +535,7 @@
             <tr><td style="color:#94a3b8">Town centre view</td><td style="text-align:right">${verdictHtml}</td></tr>
             <tr><td style="color:#94a3b8">Sun at maximum</td><td style="text-align:right">${t.sunAlt.toFixed(1)}&deg;</td></tr>
             <tr><td style="color:#94a3b8">Totality</td><td style="text-align:right">${dur(t.totality)}</td></tr>
+            ${t.cloud != null ? `<tr><td style="color:#94a3b8">July cloud cover</td><td style="text-align:right;color:#e2e8f0">${t.cloud.toFixed(0)}% <span style="color:#38bdf8">(${t.clearProb != null ? t.clearProb.toFixed(0) + "% clear" : ""})</span></td></tr>` : ""}
           </table>
           <a href="${url}" style="display:block;margin-top:8px;text-align:center;background:#f59e0b;color:#0f172a;font-weight:600;border-radius:6px;padding:5px 8px;text-decoration:none">
             Open in 3D &rarr;
@@ -453,16 +583,23 @@
   function render() {
     const want = document.getElementById("accessFilter").value;
     const minClear = document.getElementById("clearFilter").value / 10;
+    const cloudFilterEl = document.getElementById("cloudFilter");
+    const maxCloud = cloudFilterEl ? parseFloat(cloudFilterEl.value) : 70;
     const wholeOnly = document.getElementById("wholeOnly").checked;
     const publicOnlyEl = document.getElementById("publicOnly");
     const publicOnly = publicOnlyEl ? publicOnlyEl.checked : false;
     document.getElementById("clearVal").textContent = minClear.toFixed(1) + "°";
+    const cloudEl = document.getElementById("cloudVal");
+    if (cloudEl) {
+      cloudEl.innerHTML = maxCloud >= 70 ? "Any" : `&le;&nbsp;${maxCloud}% <span class="text-[10px] text-slate-400 font-normal">(${100 - maxCloud}% clear)</span>`;
+    }
 
     const list = entries().filter((s) =>
       matchesAccess(s, want) &&
       (!publicOnly || s.publicAccess !== false) &&
       s.clearance >= minClear &&
-      (!wholeOnly || s.wholeTotality !== false));
+      (!wholeOnly || s.wholeTotality !== false) &&
+      (maxCloud >= 70 || s.cloud == null || s.cloud <= maxCloud));
 
     const isCoarsePointer = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
     const baseRadius = isCoarsePointer ? 4.5 : 3;
@@ -526,6 +663,8 @@
           <tr><td style="color:#94a3b8">Sun at maximum</td><td style="text-align:right">${s.sunAlt.toFixed(1)}&deg;</td></tr>
           <tr><td style="color:#94a3b8">Totality</td><td style="text-align:right">${dur(s.totality)}</td></tr>
           <tr><td style="color:#94a3b8">Access</td><td style="text-align:right">${esc(accessLabel)}</td></tr>
+          ${s.cloud != null ? `<tr><td style="color:#94a3b8">July cloud cover</td><td style="text-align:right;color:#e2e8f0">${s.cloud.toFixed(0)}% <span style="color:#38bdf8">(${s.clearProb != null ? s.clearProb.toFixed(0) + "% clear" : ""})</span></td></tr>` : ""}
+          ${s.cloudLow > 18 ? `<tr><td style="color:#94a3b8">Low cloud / fog</td><td style="text-align:right;color:#fbbf24">${s.cloudLow.toFixed(0)}%</td></tr>` : ""}
           ${publicRow}
           ${landRow}
           ${trailRow}
@@ -560,6 +699,7 @@
       if (!catalogue.spots || !catalogue.spots.length) throw new Error("catalogue is empty");
       setSource("poi");
       renderTowns();
+      renderCloudOverlay();
       const all = entries().concat((catalogue.spots || []).map((s) => ({ ...s })));
       map.fitBounds(L.latLngBounds(all.map((s) => [s.lat, s.lon])).pad(0.05));
       status.textContent = `Catalogue generated ${(catalogue.generated || "").slice(0, 10)}`;
@@ -597,9 +737,10 @@
     } catch (e) {}
   }
 
-  ["accessFilter", "clearFilter", "wholeOnly", "publicOnly"].forEach((id) =>
+  ["accessFilter", "clearFilter", "cloudFilter", "wholeOnly", "publicOnly"].forEach((id) =>
     document.getElementById(id).addEventListener("input", render));
   document.getElementById("showPath").addEventListener("change", renderEclipsePath);
+  document.getElementById("showCloud").addEventListener("change", renderCloudOverlay);
   document.getElementById("srcPoi").addEventListener("click", () => { trackMetric("map_filter", "poi"); setSource("poi"); });
   document.getElementById("srcGrid").addEventListener("click", () => { trackMetric("map_filter", "grid"); setSource("grid"); });
   document.getElementById("srcBoth").addEventListener("click", () => { trackMetric("map_filter", "both"); setSource("both"); });

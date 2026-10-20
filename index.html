@@ -270,6 +270,7 @@
             <li>Terrain &mdash; <a class="text-amber-300 hover:underline" href="https://terrain.reearth.land" target="_blank" rel="noopener">Re:Earth Terrain</a> / Mapterhorn (CC BY 4.0)</li>
             <li>Imagery &mdash; Esri World Imagery</li>
             <li>Roads &amp; places &mdash; <a class="text-amber-300 hover:underline" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors (ODbL)</li>
+            <li>Cloud climatology &mdash; <a class="text-amber-300 hover:underline" href="https://www.cmsaf.eu" target="_blank" rel="noopener">EUMETSAT CM SAF</a> (CLARA-A3 1979&ndash;2026, AVHRR) &middot; inspired by <a class="text-amber-300 hover:underline" href="https://eclipsophile.com/tse2028/" target="_blank" rel="noopener">Jay Anderson / Eclipsophile</a></li>
             <li>Sun &amp; moon &mdash; <a class="text-amber-300 hover:underline" href="https://github.com/cosinekitty/astronomy" target="_blank" rel="noopener">astronomy-engine</a></li>
             <li>3D globe &mdash; <a class="text-amber-300 hover:underline" href="https://cesium.com/platform/cesiumjs/" target="_blank" rel="noopener">CesiumJS</a></li>
           </ul>
@@ -2612,6 +2613,25 @@
       })
       .join("");
 
+    let cloudStat = (preset && preset.cloud != null) ? preset : (cat && cat.cloud != null) ? cat : null;
+    if (!cloudStat && activeGroundCartesian && typeof sampleCloudClimatology === "function") {
+      const cart = Cesium.Cartographic.fromCartesian(activeGroundCartesian);
+      cloudStat = sampleCloudClimatology(Cesium.Math.toDegrees(cart.latitude), Cesium.Math.toDegrees(cart.longitude));
+    }
+    const cloudNote = cloudStat && cloudStat.cloud != null
+      ? `<div class="mt-2 pt-2 border-t border-slate-700/60 flex items-center justify-between text-xs text-slate-300">
+          <span class="flex items-center gap-1.5 text-slate-400">
+            <i data-lucide="cloud" class="w-3.5 h-3.5 text-sky-400 shrink-0"></i>
+            <span>July cloud climatology</span>
+          </span>
+          <span class="font-medium text-slate-200">
+            ${cloudStat.cloud.toFixed(0)}% mean
+            <span class="text-sky-300 font-semibold">(${cloudStat.clearProb != null ? cloudStat.clearProb.toFixed(0) : (100 - cloudStat.cloud).toFixed(0)}% clear)</span>
+            ${cloudStat.cloudLow > 18 ? `<span class="text-amber-400 text-[10px] ml-1" title="Low-level stratus / valley fog frequency">· ${cloudStat.cloudLow.toFixed(0)}% fog</span>` : ""}
+          </span>
+        </div>`
+      : "";
+
     box.innerHTML = `
       <div class="rounded-lg border p-3 mb-2 ${headline.box}">
         <p class="font-semibold flex items-center gap-1.5 ${headline.tone}">
@@ -2631,6 +2651,7 @@
       <p class="expert-only text-xs text-slate-400 mt-2">At maximum, terrain along bearing
       ${focus.az.toFixed(0)}&deg; rises to <b>${focus.horizon.toFixed(1)}&deg;</b>
       (${focus.ridgeHeight.toFixed(0)} m, ~${(focus.ridgeDist / 1000).toFixed(1)} km away).</p>
+      ${cloudNote}
       ${partialOnlyNote}
       ${partialTotNote}
       ${edgeNote}
@@ -2927,6 +2948,35 @@
     return best;
   }
 
+  // Bilinear interpolation across the 48-year July CM SAF CLARA-A3 cloud cover grid.
+  function sampleCloudClimatology(lat, lon) {
+    if (!catalogue || !catalogue.cloudGrid || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    const g = catalogue.cloudGrid;
+    if (lat < g.latMin - 0.25 || lat > g.latMax + 0.25 || lon < g.lonMin - 0.25 || lon > g.lonMax + 0.25) return null;
+    const y = Math.max(0, Math.min(g.rows - 1, (lat - g.latMin) / g.dlat));
+    const x = Math.max(0, Math.min(g.cols - 1, (lon - g.lonMin) / g.dlon));
+    const y0 = Math.floor(y);
+    const y1 = Math.min(g.rows - 1, y0 + 1);
+    const x0 = Math.floor(x);
+    const x1 = Math.min(g.cols - 1, x0 + 1);
+    const fy = y - y0;
+    const fx = x - x0;
+    const interp = (grid) => {
+      const v00 = grid[y0][x0];
+      const v01 = grid[y0][x1];
+      const v10 = grid[y1][x0];
+      const v11 = grid[y1][x1];
+      return (1.0 - fy) * ((1.0 - fx) * v00 + fx * v01) + fy * ((1.0 - fx) * v10 + fx * v11);
+    };
+    const cDay = Math.round(interp(g.cfcDay) * 10) / 10;
+    const cLow = Math.round(interp(g.cfcLow) * 10) / 10;
+    return {
+      cloud: cDay,
+      clearProb: Math.round(Math.max(0, Math.min(100, 100 - cDay)) * 10) / 10,
+      cloudLow: cLow,
+    };
+  }
+
   // Pure: reduce a catalogue record to a verdict. No DOM, no Cesium, no clock — so it can be
   // tested directly and cannot drift from what the panel renders.
   //
@@ -3074,6 +3124,20 @@
       ? `<p class="text-[11px] text-amber-300 mt-2 flex items-start gap-1.5"><i data-lucide="alert-triangle" class="w-3.5 h-3.5 mt-px shrink-0"></i><span>Totality lasts under a minute here — this spot is near the edge of the path. A few kilometres towards the centre line buys a lot more.</span></p>`
       : "";
 
+    const cloudNote = s.cloud != null
+      ? `<div class="mt-2 pt-2 border-t border-slate-700/60 flex items-center justify-between text-xs text-slate-300">
+          <span class="flex items-center gap-1.5 text-slate-400">
+            <i data-lucide="cloud" class="w-3.5 h-3.5 text-sky-400 shrink-0"></i>
+            <span>July cloud climatology</span>
+          </span>
+          <span class="font-medium text-slate-200">
+            ${s.cloud.toFixed(0)}% mean
+            <span class="text-sky-300 font-semibold">(${s.clearProb != null ? s.clearProb.toFixed(0) : (100 - s.cloud).toFixed(0)}% clear)</span>
+            ${s.cloudLow > 18 ? `<span class="text-amber-400 text-[10px] ml-1" title="Low-level stratus / valley fog frequency">· ${s.cloudLow.toFixed(0)}% fog</span>` : ""}
+          </span>
+        </div>`
+      : "";
+
     box.innerHTML = `
       <div class="rounded-lg border p-3 mb-2 ${headline.box}">
         <p class="font-semibold flex items-center gap-1.5 ${headline.tone}">
@@ -3092,6 +3156,7 @@
       <p class="expert-only text-xs text-slate-400 mt-2">At maximum the sun sits at
       <b>${s.sunAlt.toFixed(1)}&deg;</b> on bearing ${s.sunAz.toFixed(0)}&deg;, where terrain
       rises to <b>${s.horizon.toFixed(1)}&deg;</b>. Ground elevation ${s.elev} m.</p>
+      ${cloudNote}
       ${presetNote}
       ${edgeNote}
       <p class="text-[10px] text-slate-500 mt-1.5">Source: precomputed catalogue, ~27 m
@@ -3189,6 +3254,12 @@
       const clrSign = s.clearance >= 0 ? "+" : "";
       rowsHtml += `<tr><td class="text-slate-400 py-1 pr-2">Clears skyline</td><td class="${clrClass} text-right py-1 font-medium">${clrSign}${s.clearance.toFixed(1)}&deg;</td></tr>`;
     }
+    if (s.cloud != null) {
+      rowsHtml += `<tr><td class="text-slate-400 py-1 pr-2">July cloud cover</td><td class="text-slate-200 text-right py-1 font-medium">${s.cloud.toFixed(0)}% <span class="text-sky-300 font-semibold">(${s.clearProb != null ? s.clearProb.toFixed(0) + "% clear" : ""})</span></td></tr>`;
+    }
+    if (s.cloudLow > 18) {
+      rowsHtml += `<tr><td class="text-slate-400 py-1 pr-2">Low cloud / fog</td><td class="text-amber-400 text-right py-1 font-medium">${s.cloudLow.toFixed(0)}%</td></tr>`;
+    }
     rowsHtml += `<tr><td class="text-slate-400 py-1 pr-2">Coordinates</td><td class="text-slate-400 font-mono text-right py-1">${s.lat.toFixed(5)}, ${s.lon.toFixed(5)}</td></tr>`;
     const tableEl = document.getElementById("poiCardTable");
     if (tableEl) tableEl.innerHTML = rowsHtml;
@@ -3254,15 +3325,17 @@
             : (ACCESS_TIP[acc] || acc);
           const landOrTrail = s.trackName ? formatTrackName(s.trackName) : (s.land || "");
           const subLeft = `${POI_LABEL[s.kind] || s.kind} · ${s.elev} m · ${accessName}${landOrTrail ? " · " + landOrTrail : ""}`;
-          const subRight = [away, dur].filter(Boolean).join(" · ");
+          const clearProbStr = s.clearProb != null ? `${s.clearProb.toFixed(0)}% clear` : "";
+          const subRight = [away, dur, clearProbStr].filter(Boolean).join(" · ");
           const partial = s.wholeTotality === false || s.totality < 60;
           const isPrivate = s.publicAccess === false;
           const isActive = activeLoc && haversineM(activeLoc.lat, activeLoc.lon, s.lat, s.lon) < CAT_MATCH_M;
+          const cloudTip = s.cloud != null ? `July cloud: ${s.cloud.toFixed(0)}% (${s.clearProb.toFixed(0)}% clear-sky odds)` : "";
           const btnCls = isActive
             ? "spot-btn text-left text-xs bg-amber-500/20 border border-amber-400/60 rounded-lg px-2 py-2 sm:py-1.5 transition"
             : "spot-btn text-left text-xs bg-slate-800/70 hover:bg-slate-700 border border-transparent rounded-lg px-2 py-2 sm:py-1.5 transition";
           return `
-          <button data-i="${s._i}" class="${btnCls}">
+          <button data-i="${s._i}" class="${btnCls}" title="${esc(cloudTip)}">
             <span class="flex items-center gap-1.5">
               <i data-lucide="${POI_ICON[s.kind] || "map-pin"}" class="w-3 h-3 text-amber-400 shrink-0"></i>
               <span class="text-slate-200 font-medium truncate">${esc(title)}</span>

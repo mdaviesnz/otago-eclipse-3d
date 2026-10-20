@@ -446,6 +446,90 @@ horizon  = max_d angle(d),    clearance = alt_sun - horizon</div>
       </div>
     </section>
 
+    <!-- 9. Meteorological Climatology & Cloud Cover -->
+    <section class="spec-section">
+      <h2>9. Meteorological Climatology &amp; Cloud Cover</h2>
+      <p>
+        While terrain horizon ray-marching establishes where the low solar disc is physically unobstructed
+        by local relief, atmospheric cloud cover is the definitive real-world determinant of visibility.
+        To provide quantitative guidance on where clear skies are historically most probable, the app
+        incorporates a 48-year satellite climate data record across the South Island totality path.
+      </p>
+
+      <h3>9.1 Data Source: EUMETSAT CM SAF CLARA-A3</h3>
+      <p>
+        Cloud statistics are derived from the <b>CLARA-A3</b> (CM SAF cLoud, Albedo and Surface Radiation dataset,
+        Edition 3) and its operational Interim Climate Data Record (ICDR), produced by the
+        <a href="https://www.cmsaf.eu" target="_blank" rel="noopener" class="text-amber-300 hover:underline">EUMETSAT Satellite Application Facility on Climate Monitoring (CM SAF)</a>
+        (DOI: <code>10.5676/EUM_SAF_CM/CLARA_AVHRR/V003</code>).
+      </p>
+      <ul>
+        <li><b>Sensor:</b> Advanced Very High Resolution Radiometer (AVHRR) onboard NOAA and MetOp polar-orbiting satellites.</li>
+        <li><b>Temporal baseline:</b> 48 consecutive July months (<b>1979 to 2026</b>). July is isolated to match the seasonal winter synoptic circulation of the 22 July event.</li>
+        <li><b>Spatial resolution:</b> 0.25&deg; &times; 0.25&deg; (~20 km &times; 28 km at 45&deg;S), covering the regional bounding box (43.5&deg;S&ndash;47.0&deg;S, 166.0&deg;E&ndash;172.0&deg;E).</li>
+        <li><b>Primary variables:</b>
+          <ul>
+            <li><code>cfc_day</code>: Daytime Fractional Cloud Cover (0&ndash;100%), filtered for daytime satellite passes.</li>
+            <li><code>cfc</code>: Total 24-hour Fractional Cloud Cover (0&ndash;100%).</li>
+            <li><code>cfc_low</code>: Low-level Cloud Fractional Cover, capturing boundary-layer stratus and valley fog pools.</li>
+          </ul>
+        </li>
+      </ul>
+
+      <h3>9.2 Mathematical Formulation &amp; Probability Metrics</h3>
+      <p>
+        For each grid point (<var>&phi;</var>, <var>&lambda;</var>), the multi-decadal climatological mean
+        daytime cloud fraction is computed across the <var>N</var> = 49 July months:
+      </p>
+      <div class="math-block">C_day(φ, λ) = (1 / N) · ∑_{y=1979}^{2026} CFC_day,y(φ, λ)
+P_clear(φ, λ) = 100% - C_day(φ, λ)</div>
+      <p>
+        For an arbitrary observer coordinate (<var>&phi;</var><sub>obs</sub>, <var>&lambda;</var><sub>obs</sub>),
+        the values are interpolated bilinearly from the surrounding four 0.25&deg; grid nodes. In the
+        catalogue and spot popups:
+      </p>
+      <ul>
+        <li><b>Historic July daytime cloud cover:</b> <var>C</var><sub>day</sub> (percentage of sky obscured on average during July afternoons).</li>
+        <li><b>Clear-sky / favourable probability:</b> <var>P</var><sub>clear</sub> = 100% &minus; <var>C</var><sub>day</sub> (empirical frequency of open sky).</li>
+        <li><b>Low cloud / fog risk:</b> Flagged whenever low-level cloud cover <var>C</var><sub>low</sub> &gt; 18%, highlighting locations vulnerable to winter ground inversions or coastal marine advection.</li>
+      </ul>
+
+      <h3>9.3 Regional Synoptic Mechanics &amp; Findings</h3>
+      <p>
+        The satellite climatology reproduces the eclipse meteorology analysis published by
+        meteorologist Jay Anderson (<a href="https://eclipsophile.com/tse2028/" target="_blank" rel="noopener" class="text-amber-300 hover:underline">Eclipsophile.com</a>):
+      </p>
+      <div class="overflow-x-auto -mx-2 px-2">
+        <table class="spec-table">
+          <thead>
+            <tr><th>Region / Location</th><th>July Daytime Cloud</th><th>Clear-Sky Odds</th><th>Synoptic &amp; Topographic Driver</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><b>Wānaka</b></td><td>48.0%</td><td>52.0%</td><td>Lee-side rain shadow of the Southern Alps; lowest cloud in the track</td></tr>
+            <tr><td><b>Cromwell / Alexandra</b></td><td>49.2% &ndash; 50.9%</td><td>49.1% &ndash; 50.8%</td><td>Dry inland basin; protected from westerlies; susceptible to valley radiation fog</td></tr>
+            <tr><td><b>Palmerston / East Otago</b></td><td>49.0%</td><td>51.0%</td><td>Rain shadow where high ranges block westerly moisture</td></tr>
+            <tr><td><b>Queenstown / Wakatipu</b></td><td>62.1%</td><td>37.9%</td><td>Transitional alpine margin; moisture spills via southern river valleys</td></tr>
+            <tr><td><b>Dunedin (East Coast)</b></td><td>67.8%</td><td>32.2%</td><td>Marine boundary layer, cold-air advection from the Southern Ocean, and coastal stratus</td></tr>
+            <tr><td><b>Te Anau / Fiordland</b></td><td>62.0% &ndash; 90.9%</td><td>9.1% &ndash; 38.0%</td><td>Direct exposure to moisture-laden Southern Ocean westerlies and orographic uplift</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>9.4 Low-Altitude Slant-Path Geometry</h3>
+      <p>
+        Standard satellite cloud fraction represents the <i>nadir</i> (vertical zenith) view. Because the
+        eclipsed Sun sits at an altitude of only <var>&alpha;</var> &approx; 8.4&deg;&ndash;10.0&deg; toward
+        azimuth 311&deg; (north-west), the sightline traverses an optical airmass of:
+      </p>
+      <div class="math-block">m ≈ 1 / sin(α) ≈ 1 / sin(8.4°) ≈ 6.85 airmasses</div>
+      <p>
+        Consequently, an observer looks through nearly seven times more atmospheric path length than zenith.
+        Cloud banks banked against the Main Divide 40&ndash;80 km to the north-west can obscure the solar disc
+        even when the local zenith sky overhead appears mostly clear. This reinforces the advantage of
+        inland viewing sites positioned well downwind of the Main Divide.
+      </p>
+    </section>
+
     <div class="panel rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4">
       <div>
         <p class="text-sm font-bold text-slate-100">Feedback or review comments?</p>

@@ -37,6 +37,11 @@ test("catalogue is served and well-formed", async ({ request }) => {
   expect(d.pois.length).toBeGreaterThan(100);
   // Walk-in spots must survive the tier quota.
   expect(d.spots.some((s) => s.access === "foot")).toBeTruthy();
+  expect(d.cloudGrid, "catalogue must include cloudGrid").toBeDefined();
+  expect(d.cloudGrid.cfcDay.length).toBeGreaterThan(0);
+  expect(d.cloudGrid.years).toEqual([1979, 2026]);
+  expect(d.pois[0].cloud).toBeGreaterThan(0);
+  expect(d.pois[0].clearProb).toBeGreaterThan(0);
 });
 
 test("overview map plots spots and filters them", async ({ page }) => {
@@ -75,6 +80,42 @@ test("overview map plots spots and filters them", async ({ page }) => {
     return out;
   });
   expect(href, "top POI marker should be on the layer and link into the 3D view").toContain("index.html?lat=");
+
+  // Historical cloud overlay toggles via #showCloud
+  const cloudCountOff = await page.evaluate(() => cloudLayer.getLayers().length);
+  expect(cloudCountOff).toBe(0);
+  await expect(page.locator("#cloudLegendSection")).toBeHidden();
+
+  await page.locator("#showCloud").check();
+  const cloudCountOn = await page.evaluate(() => cloudLayer.getLayers().length);
+  expect(cloudCountOn).toBe(1);
+  await expect(page.locator("#cloudLegendSection")).toBeVisible();
+
+  await page.locator("#showCloud").uncheck();
+  expect(await page.evaluate(() => cloudLayer.getLayers().length)).toBe(0);
+  await expect(page.locator("#cloudLegendSection")).toBeHidden();
+
+  // Cloud slider filters spots
+  const countBeforeCloud = await page.evaluate(() => layer.getLayers().length);
+  await page.evaluate(() => {
+    const s = document.getElementById("cloudFilter");
+    s.value = "50";
+    s.dispatchEvent(new Event("input"));
+  });
+  const countFilteredCloud = await page.evaluate(() => layer.getLayers().length);
+  expect(countFilteredCloud).toBeLessThan(countBeforeCloud);
+  expect(countFilteredCloud).toBeGreaterThan(0);
+  const cloudValText = await page.locator("#cloudVal").textContent();
+  expect(cloudValText).toContain("50%");
+
+  // Reset cloudFilter to 70 restores full list and displays "Any"
+  await page.evaluate(() => {
+    const s = document.getElementById("cloudFilter");
+    s.value = "70";
+    s.dispatchEvent(new Event("input"));
+  });
+  expect(await page.evaluate(() => layer.getLayers().length)).toBe(countBeforeCloud);
+  expect(await page.locator("#cloudVal").textContent()).toBe("Any");
 
   expect(errs, "no JS errors on the map page").toEqual([]);
 });
@@ -194,14 +235,28 @@ test("catalogue spots are answered from precomputed data", async ({ page }) => {
     const isShown = !card.classList.contains("hidden");
     const title = document.getElementById("poiCardTitle").textContent;
     const gmapsHref = document.getElementById("poiCardGmaps").getAttribute("href");
+    const tableHtml = document.getElementById("poiCardTable")?.innerHTML || "";
     updatePoiCard(null);
     const isHiddenAfterNull = card.classList.contains("hidden");
-    return { isShown, title, gmapsHref, isHiddenAfterNull, expectedTitle: p.name, lat: p.lat, lon: p.lon };
+
+    // Also test sampleCloudClimatology
+    const dunedinCloud = sampleCloudClimatology(-45.8788, 170.5028);
+    const oobCloud = sampleCloudClimatology(0, 0);
+
+    return {
+      isShown, title, gmapsHref, isHiddenAfterNull,
+      expectedTitle: p.name, lat: p.lat, lon: p.lon,
+      tableHtml, dunedinCloud, oobCloud,
+    };
   });
   expect(poiCardTest.isShown).toBe(true);
   expect(poiCardTest.title).toBe(poiCardTest.expectedTitle);
+  expect(poiCardTest.tableHtml).toContain("July cloud cover");
   expect(poiCardTest.gmapsHref).toBe(`https://www.google.com/maps/search/?api=1&query=${poiCardTest.lat},${poiCardTest.lon}`);
   expect(poiCardTest.isHiddenAfterNull).toBe(true);
+  expect(poiCardTest.dunedinCloud).toBeTruthy();
+  expect(poiCardTest.dunedinCloud.cloud).toBeGreaterThan(50);
+  expect(poiCardTest.oobCloud).toBeNull();
 
   expect(errs, "no JS errors while reading the catalogue").toEqual([]);
 });

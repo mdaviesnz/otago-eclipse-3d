@@ -394,9 +394,63 @@
       </div>
     </section>
 
-    <!-- 5. Limitations: What to Check in Person -->
+    <!-- 5. Cloud Cover & Weather: Playing the Odds -->
     <section class="prose-card">
-      <h2><i data-lucide="alert-triangle" class="w-5 h-5 text-amber-400"></i> 5. What the elevation model cannot see</h2>
+      <h2><i data-lucide="cloud-sun" class="w-5 h-5 text-amber-400"></i> 5. Cloud cover &amp; weather: playing the odds</h2>
+      <p>
+        A mountain in the way is fixed and predictable: if your spot has a clear view today, it will still have a clear view in 2028.
+        Weather, however, is the wild card. Because the sun sits just <b>8&deg;&ndash;10&deg; above the horizon</b>, your line of sight
+        does not travel straight up through the thin atmosphere overhead—it slices diagonally through nearly <b>seven times as much air</b>
+        (<var>m</var> &approx; 6.85 airmasses). Even a distant band of low cloud or valley fog dozens of kilometres to the north-west can hide the eclipse.
+      </p>
+
+      <div class="stat-grid">
+        <div class="stat-box">
+          <p class="text-[11px] uppercase tracking-wide text-slate-400">Clearest corridor</p>
+          <p class="text-lg font-bold text-sky-300 mt-0.5">Central Otago</p>
+          <p class="text-xs text-slate-400 mt-0.5">~48&ndash;51% daytime cloud (Cromwell, Wānaka, Alexandra, Palmerston)</p>
+        </div>
+        <div class="stat-box">
+          <p class="text-[11px] uppercase tracking-wide text-slate-400">Higher cloud risk</p>
+          <p class="text-lg font-bold text-amber-300 mt-0.5">Coastal Otago &amp; Southland</p>
+          <p class="text-xs text-slate-400 mt-0.5">~65&ndash;70% daytime cloud (Dunedin, Catlins, Invercargill)</p>
+        </div>
+        <div class="stat-box">
+          <p class="text-[11px] uppercase tracking-wide text-slate-400">Data source</p>
+          <p class="text-lg font-bold text-slate-200 mt-0.5">48 years of satellite data</p>
+          <p class="text-xs text-slate-400 mt-0.5">EUMETSAT CM SAF CLARA-A3 (1979&ndash;2026 July daytime observations)</p>
+        </div>
+      </div>
+
+      <p>
+        To help you plan, this tool includes historical cloud cover estimates derived from <b>48 years of afternoon satellite observations</b> (1979&ndash;2026),
+        following the eclipse meteorology methods pioneered by retired Canadian meteorologist <b>Jay Anderson</b> (<a href="https://eclipsophile.com/tse2028/" target="_blank" rel="noopener" class="text-amber-300 hover:underline">Eclipsophile</a>).
+        These show clear regional patterns:
+      </p>
+      <ul class="space-y-1.5 text-xs text-slate-300 mt-2 mb-3">
+        <li>&bull; <b class="text-slate-100">The Southern Alps rain shadow:</b> As prevailing westerly winds hit the Southern Alps, mountains squeeze out their moisture. By the time air spills east into the Central Otago basins (Cromwell, Alexandra, Wānaka) and down to Palmerston, it dries and warms. These spots enjoy the lowest average July cloud cover (~48&ndash;51%) anywhere in the path of totality.</li>
+        <li>&bull; <b class="text-slate-100">Coastal marine cloud:</b> Dunedin and the Southland coast are exposed to moist ocean air, onshore southerly changes, and marine stratocumulus, resulting in higher average cloud cover (~65&ndash;70%).</li>
+        <li>&bull; <b class="text-slate-100">Winter valley inversions &amp; fog:</b> On calm, cold July afternoons, cold air settles in low river basins like the Clutha and Manuherikia, occasionally forming localized ground fog or low stratus. Choosing viewing spots slightly elevated above the valley floor can reduce this risk.</li>
+      </ul>
+
+      <div class="rounded-xl bg-amber-950/30 border border-amber-500/30 border-l-4 border-l-amber-400 p-3.5 sm:p-4 mt-3 flex items-start gap-3" style="background: rgba(120, 53, 15, 0.28); border: 1px solid rgba(245, 158, 11, 0.35); border-left: 4px solid #fbbf24;">
+        <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-400 shrink-0 mt-0.5"></i>
+        <div class="text-xs text-amber-200/90 leading-relaxed space-y-1.5">
+          <p class="font-bold text-amber-100 text-[13px] tracking-tight">Important: These numbers are historical estimates, not a weather forecast</p>
+          <p>
+            A &ldquo;52% clear-sky probability&rdquo; means that on July afternoons over the past five decades, about half were clear and half were cloudy.
+            On <b>22 July 2028</b>, it will either be completely clear or completely overcast at your spot. A passing winter front can easily cloud out Central Otago while leaving Dunedin clear, or vice versa.
+          </p>
+          <p class="text-amber-300 font-medium">
+            Use these historical statistics as a guide for booking accommodations and planning flexible travel corridors, but <b>rely on live weather forecasts (such as MetService) in the final 48&ndash;72 hours</b> before eclipse day.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. Limitations: What to Check in Person -->
+    <section class="prose-card">
+      <h2><i data-lucide="alert-triangle" class="w-5 h-5 text-amber-400"></i> 6. What the elevation model cannot see</h2>
       <p>
         The satellite elevation model used by the app measures terrain height on a ~30-metre grid (sharpened to ~7 metres
         around the four preset towns). That is ideal for mountains, hills, and valley walls several kilometres away,
