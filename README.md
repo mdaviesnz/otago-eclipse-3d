@@ -114,7 +114,7 @@ render close to black.
 
 ### Features
 
-- **Preset navigation** — Queenstown, Arrowtown, Cromwell, Dunedin.
+- **Preset navigation** — Queenstown, Arrowtown, Wānaka, Cromwell, Dunedin.
 - **Custom location** — coordinates (`-44.70, 169.13`), address search with autocomplete
   (↑/↓ to highlight, Enter to choose, Esc to dismiss), browser geolocation, or **Pin on map**
   to click a point on the terrain.

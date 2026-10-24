@@ -595,6 +595,7 @@
   const LOCATIONS = [
     { name: "Queenstown", lon: 168.6626, lat: -45.0312, icon: "mountain" },
     { name: "Arrowtown",  lon: 168.8306, lat: -44.9385, icon: "trees" },
+    { name: "Wānaka",     lon: 169.1365, lat: -44.6942, icon: "sailboat" },
     { name: "Cromwell",   lon: 169.2030, lat: -45.0382, icon: "grape" },
     { name: "Dunedin",    lon: 170.5028, lat: -45.8788, icon: "waves" },
   ];
@@ -656,7 +657,7 @@
   // ====================================================================================
   let viewer = null;
   let terrainSource = "open";           // "open" (default) | "ion" (via ?terrain=ion)
-  let activeLoc = LOCATIONS[3];         // default Dunedin
+  let activeLoc = LOCATIONS.find((l) => l.name === "Dunedin") || LOCATIONS[0];         // default Dunedin
   let activeGroundCartesian = null;     // observer position (ground + eye height)
   let sightlinePrimitive = null;        // current drawn ray
   let sightlineRun = false;             // has the user asked for a check at least once?
@@ -1558,7 +1559,7 @@
         `${qLat.toFixed(4)}, ${qLon.toFixed(4)}`;
       await selectLocation({ name, lat: qLat, lon: qLon }, false);
     } else {
-      await selectLocation(LOCATIONS[3], false);
+      await selectLocation(LOCATIONS.find((l) => l.name === "Dunedin") || LOCATIONS[0], false);
       if (Number.isFinite(qLat) && Number.isFinite(qLon)) {
         setCustomStatus("Location must be within New Zealand — showing Dunedin", "error");
       }

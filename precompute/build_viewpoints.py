@@ -64,6 +64,7 @@ REGION = dict(lat_min=-46.60, lat_max=-43.30, lon_min=166.00, lon_max=171.60)
 PRESETS = [
     ("Queenstown", -45.0312, 168.6626),
     ("Arrowtown",  -44.9385, 168.8306),
+    ("Wānaka",     -44.6942, 169.1365),
     ("Cromwell",   -45.0382, 169.2030),
     ("Dunedin",    -45.8788, 170.5028),
 ]

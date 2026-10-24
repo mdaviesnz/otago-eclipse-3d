@@ -20,6 +20,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 ROOT = Path(__file__).resolve().parent.parent
 SITE_FILES = ["index.html", "map.html", "astronomy.html", "methods.html", "app.css",
               "viewpoints.json", "social-card.svg", "icon.svg", "manifest.webmanifest",

@@ -461,6 +461,11 @@ test("usage metrics: browser interactions emit anonymous events, POI names, and 
     events.some((e) => e.event === "preset_select" && e.detail === "Dunedin" && e.spot === "Dunedin")
   ).toBe(true);
 
+  await page.locator('#presetButtons button[data-name="Wānaka"]').click();
+  await expect.poll(() =>
+    events.some((e) => e.event === "preset_select" && e.detail === "Wānaka" && e.spot === "Wānaka")
+  ).toBe(true);
+
   // Entering coordinates records only { event: "custom_search", detail: "coords", spot: "" } — never the numbers
   await page.locator("#customInput").fill("-45.0312, 168.6626");
   await page.locator("#customGo").click();

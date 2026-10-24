@@ -20,7 +20,7 @@
 
 export const ALLOWED_METRICS = {
   page_view: new Set(["simulator", "map", "astronomy", "methods"]),
-  preset_select: new Set(["Queenstown", "Arrowtown", "Cromwell", "Dunedin"]),
+  preset_select: new Set(["Queenstown", "Arrowtown", "Wānaka", "Wanāka", "Wanaka", "Cromwell", "Dunedin"]),
   catalogue_select: new Set(["poi", "grid"]),
   custom_search: new Set(["address", "coords"]),
   geolocation_use: new Set([""]),
