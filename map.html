@@ -521,11 +521,14 @@
     townLayer.clearLayers();
     if (!catalogue || !Array.isArray(catalogue.presets)) return;
     for (const t of catalogue.presets) {
-      const clear = t.clearance >= 0 && t.wholeTotality !== false;
+      // Verdicts are precomputed (docs/adr/0001-precomputed-verdicts.md): read, never judged here.
+      const clear = t.level === "clear";
       const url = `index.html?lat=${t.lat}&lon=${t.lon}&name=${encodeURIComponent(t.name)}`;
       const gmapsUrl = `https://www.google.com/maps/search/?api=1&query=${t.lat},${t.lon}`;
-      const verdictHtml = t.clearance < 0
+      const verdictHtml = t.level === "blocked"
         ? `<span style="color:#f87171">Blocked by ${Math.abs(t.clearance).toFixed(1)}&deg;</span>`
+        : t.level === "partial"
+        ? `<span style="color:#fbbf24">Part of totality blocked</span>`
         : `<span style="color:#6ee7b7">+${t.clearance.toFixed(1)}&deg; clear</span>`;
       const popup = `
         <div style="min-width:190px">
@@ -598,7 +601,7 @@
       matchesAccess(s, want) &&
       (!publicOnly || s.publicAccess !== false) &&
       s.clearance >= minClear &&
-      (!wholeOnly || s.wholeTotality !== false) &&
+      (!wholeOnly || s.level === "clear") &&
       (maxCloud >= 70 || s.cloud == null || s.cloud <= maxCloud));
 
     const isCoarsePointer = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
@@ -650,7 +653,7 @@
     // great horizon there still buys you far less than the ~3 minutes on the centreline.
     const warn = (s.publicAccess === false
         ? `<div style="color:#f87171;margin-top:4px;font-size:11px">&#9888; No verified public land or road parcel &mdash; landowner permission may be required</div>` : "")
-      + (s.wholeTotality === false
+      + (s.level !== "clear"
         ? `<div style="color:#fbbf24;margin-top:4px">&#9888; blocked for part of totality</div>` : "")
       + (s.totality < 60
         ? `<div style="color:#fbbf24;margin-top:4px">&#9888; near the path edge &mdash; only ${dur(s.totality)} of totality</div>` : "");

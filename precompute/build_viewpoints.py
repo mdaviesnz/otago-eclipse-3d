@@ -43,6 +43,8 @@ from PIL import Image
 
 import astronomy as A
 
+from verdict import verdict_fields
+
 # ----------------------------------------------------------------------------------------
 # Configuration
 # ----------------------------------------------------------------------------------------
@@ -568,7 +570,7 @@ def preset_rows(dem: "Dem") -> list:
             "clearance": clr,
             "clearBegin": cB,
             "clearEnd": cE,
-            "wholeTotality": bool(clr > 0 and (cB or 0) > 0 and (cE or 0) > 0),
+            **verdict_fields(cB, clr, cE),
             "totality": int(round(dur)),
             # Terrain elevation angle vs azimuth, and the rise responsible for each. Angles are
             # degrees; ridgeDist is metres out along the bearing; ridgeElev is its height.
@@ -1409,14 +1411,19 @@ def main():
                     if clr <= args.min_clearance:
                         continue
                     r = dict(raw[i])
+                    # Round first, judge second: the stored level must agree with the stored
+                    # clearances, which is what tests/check_static.py re-judges.
+                    c_max = round(clr, 2)
+                    c_beg = round(float(p_cB[k]), 2)
+                    c_end = round(float(p_cE[k]), 2)
                     r.update(elev=int(round(float(pg[k]))),
                              sunAlt=round(float(pa[k]), 2),
                              sunAz=round(float(pz[k]), 1),
                              horizon=round(float(p_hor[k]), 2),
-                             clearance=round(clr, 2),
-                             clearBegin=round(float(p_cB[k]), 2),
-                             clearEnd=round(float(p_cE[k]), 2),
-                             wholeTotality=bool(clr > 0 and p_cB[k] > 0 and p_cE[k] > 0),
+                             clearance=c_max,
+                             clearBegin=c_beg,
+                             clearEnd=c_end,
+                             **verdict_fields(c_beg, c_max, c_end),
                              totality=int(round(float(pd[k]))))
                     pois.append(r)
                 print(f"  {len(pois)} POIs clear terrain at maximum")
@@ -1606,7 +1613,8 @@ def main():
         "clearance": round(float(clearance[i]), 2),
         "clearBegin": round(float(clearB[i]), 2),
         "clearEnd": round(float(clearE[i]), 2),
-        "wholeTotality": bool(clearance[i] > 0 and clearB[i] > 0 and clearE[i] > 0),
+        **verdict_fields(round(float(clearB[i]), 2), round(float(clearance[i]), 2),
+                         round(float(clearE[i]), 2)),
         "totality": int(round(float(dur[i]))),
         "access": rank_name[int(access[i])] if access.size else "unknown",
     } for i in chosen]
@@ -1614,8 +1622,8 @@ def main():
     print("  computing the app's fixed presets (full horizon profiles)")
     presets = preset_rows(dem)
     for p in presets:
-        state = ("clear through totality" if p["wholeTotality"]
-                 else "clear at maximum only" if p["clearance"] > 0 else "BLOCKED")
+        state = {"clear": "clear through totality", "partial": "part of totality blocked",
+                 "blocked": "BLOCKED"}[p["level"]]
         pr = p["profile"]
         print(f"    {p['name']:<12} {p['elev']:>4d} m  clear {p['clearance']:+.1f}deg  "
               f"{state}  profile {pr['azFrom']}..{pr['azFrom'] + len(pr['angles']) - 1}deg "

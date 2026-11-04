@@ -23,6 +23,7 @@ const PRECACHE_SHELL = [
   "./methods.html",
   "./app.css",
   "./viewpoints.json",
+  "./verdict.js",
   "./manifest.webmanifest",
   "./icon.svg",
 ];

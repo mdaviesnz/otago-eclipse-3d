@@ -228,9 +228,9 @@ re-runs and interrupted runs are cheap. Flags: `--zoom`, `--spacing`, `--radius`
    optimistically included.
 4. **Horizon scan** — candidates on a **250 m** grid, each probed along *its own* sun bearing at
    **second contact, maximum and third contact**. Vectorised in numpy, so ~650k candidates cost
-   minutes. Each spot records `clearBegin` / `clearance` / `clearEnd` and a `wholeTotality`
-   flag, because the sun shifts in azimuth across totality — a spot can be clear at second
-   contact and blocked by third.
+   minutes. Each spot records `clearBegin` / `clearance` / `clearEnd` and a verdict `level`
+   (`clear` / `partial` / `blocked`, see [GLOSSARY.md](GLOSSARY.md)), because the sun shifts
+   in azimuth across totality — a spot can be clear at second contact and blocked by third.
 
    The probe ray uses the **same 3% growth and 45 km reach as the app**, deliberately. An
    earlier version grew at 13%, putting samples ~3.6 km apart at 28 km range and striding over

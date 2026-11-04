@@ -1,0 +1,146 @@
+{
+  "//": "Shared verdict cases. Run by tests/unit/verdict.spec.mjs against verdict.js and by tests/check_static.py against precompute/verdict.py, so the two implementations of the rule cannot drift apart (docs/adr/0001-precomputed-verdicts.md). Expected values are worked by hand from GLOSSARY.md, not computed. Python judges totality scope only and checks level and grazing; nearEdge is checked in JS only.",
+  "cases": [
+    { "name": "totality: clear throughout",
+      "scope": "totality",
+      "contacts": [{ "contact": "totalBegin", "clearance": 2.0 }, { "contact": "peak", "clearance": 3.0 }, { "contact": "totalEnd", "clearance": 2.5 }],
+      "expect": { "level": "clear", "grazing": false } },
+
+    { "name": "totality: clearance exactly zero at maximum is blocked",
+      "scope": "totality",
+      "contacts": [{ "contact": "totalBegin", "clearance": 1.0 }, { "contact": "peak", "clearance": 0.0 }, { "contact": "totalEnd", "clearance": 1.0 }],
+      "expect": { "level": "partial", "grazing": false } },
+
+    { "name": "totality: negative zero (a rounded -0.004) is blocked",
+      "scope": "totality",
+      "contacts": [{ "contact": "totalBegin", "clearance": -0.0 }, { "contact": "peak", "clearance": 1.0 }, { "contact": "totalEnd", "clearance": 1.0 }],
+      "expect": { "level": "partial", "grazing": false } },
+
+    { "name": "totality: blocked at every contact",
+      "scope": "totality",
+      "contacts": [{ "contact": "totalBegin", "clearance": -1.0 }, { "contact": "peak", "clearance": 0.0 }, { "contact": "totalEnd", "clearance": -0.5 }],
+      "expect": { "level": "blocked", "grazing": false } },
+
+    { "name": "totality: skyline cuts in before third contact",
+      "scope": "totality",
+      "contacts": [{ "contact": "totalBegin", "clearance": 1.0 }, { "contact": "peak", "clearance": 0.8 }, { "contact": "totalEnd", "clearance": -0.2 }],
+      "expect": { "level": "partial", "grazing": false } },
+
+    { "name": "totality: just inside the grazing band",
+      "scope": "totality",
+      "contacts": [{ "contact": "totalBegin", "clearance": 0.25 }, { "contact": "peak", "clearance": 1.0 }, { "contact": "totalEnd", "clearance": 1.0 }],
+      "expect": { "level": "clear", "grazing": true } },
+
+    { "name": "totality: exactly one solar radius is not grazing",
+      "scope": "totality",
+      "contacts": [{ "contact": "totalBegin", "clearance": 0.26 }, { "contact": "peak", "clearance": 1.0 }, { "contact": "totalEnd", "clearance": 1.0 }],
+      "expect": { "level": "clear", "grazing": false } },
+
+    { "name": "totality: smallest stored positive clearance is clear but grazing",
+      "scope": "totality",
+      "contacts": [{ "contact": "totalBegin", "clearance": 0.01 }, { "contact": "peak", "clearance": 0.01 }, { "contact": "totalEnd", "clearance": 0.01 }],
+      "expect": { "level": "clear", "grazing": true } },
+
+    { "name": "totality: a partial verdict is grazing when an unblocked contact grazes",
+      "scope": "totality",
+      "contacts": [{ "contact": "totalBegin", "clearance": -1.0 }, { "contact": "peak", "clearance": 0.1 }, { "contact": "totalEnd", "clearance": 2.0 }],
+      "expect": { "level": "partial", "grazing": true } },
+
+    { "name": "totality: a missing contact counts as blocked",
+      "scope": "totality",
+      "contacts": [{ "contact": "totalBegin", "clearance": null }, { "contact": "peak", "clearance": 1.0 }, { "contact": "totalEnd", "clearance": 1.0 }],
+      "expect": { "level": "partial", "grazing": false } },
+
+    { "name": "eclipse: clear at every contact, near edge",
+      "scope": "eclipse", "totalitySeconds": 59,
+      "contacts": [
+        { "contact": "partialBegin", "sunAlt": 18.0, "clearance": 12.0 },
+        { "contact": "totalBegin", "sunAlt": 10.1, "clearance": 3.0 },
+        { "contact": "peak", "sunAlt": 10.0, "clearance": 3.0 },
+        { "contact": "totalEnd", "sunAlt": 9.9, "clearance": 3.0 },
+        { "contact": "partialEnd", "sunAlt": 1.0, "clearance": 0.5 }],
+      "expect": { "level": "clear", "grazing": false, "nearEdge": true } },
+
+    { "name": "eclipse: a minute of totality is not near edge",
+      "scope": "eclipse", "totalitySeconds": 60,
+      "contacts": [
+        { "contact": "partialBegin", "sunAlt": 18.0, "clearance": 12.0 },
+        { "contact": "totalBegin", "sunAlt": 10.1, "clearance": 3.0 },
+        { "contact": "peak", "sunAlt": 10.0, "clearance": 3.0 },
+        { "contact": "totalEnd", "sunAlt": 9.9, "clearance": 3.0 },
+        { "contact": "partialEnd", "sunAlt": 1.0, "clearance": 0.5 }],
+      "expect": { "level": "clear", "grazing": false, "nearEdge": false } },
+
+    { "name": "eclipse: sun set before last contact is skipped, not blocked",
+      "scope": "eclipse", "totalitySeconds": 150,
+      "contacts": [
+        { "contact": "partialBegin", "sunAlt": 18.0, "clearance": 12.0 },
+        { "contact": "totalBegin", "sunAlt": 10.1, "clearance": 3.0 },
+        { "contact": "peak", "sunAlt": 10.0, "clearance": 3.0 },
+        { "contact": "totalEnd", "sunAlt": 9.9, "clearance": 3.0 },
+        { "contact": "partialEnd", "sunAlt": -0.5, "clearance": -2.0 }],
+      "expect": { "level": "clear", "grazing": false, "nearEdge": false } },
+
+    { "name": "eclipse: third contact blocked turns clear into partial",
+      "scope": "eclipse", "totalitySeconds": 150,
+      "contacts": [
+        { "contact": "partialBegin", "sunAlt": 18.0, "clearance": 12.0 },
+        { "contact": "totalBegin", "sunAlt": 10.1, "clearance": 0.4 },
+        { "contact": "peak", "sunAlt": 10.0, "clearance": 0.3 },
+        { "contact": "totalEnd", "sunAlt": 9.9, "clearance": -0.1 },
+        { "contact": "partialEnd", "sunAlt": 1.0, "clearance": 0.5 }],
+      "expect": { "level": "partial", "grazing": false, "nearEdge": false } },
+
+    { "name": "eclipse: sun below the horizon at second contact turns clear into partial",
+      "scope": "eclipse", "totalitySeconds": 150,
+      "contacts": [
+        { "contact": "partialBegin", "sunAlt": 5.0, "clearance": 4.0 },
+        { "contact": "totalBegin", "sunAlt": -0.1, "clearance": 0.5 },
+        { "contact": "peak", "sunAlt": 0.5, "clearance": 0.5 },
+        { "contact": "totalEnd", "sunAlt": 0.4, "clearance": 0.4 }],
+      "expect": { "level": "partial", "grazing": false, "nearEdge": false } },
+
+    { "name": "eclipse: blocked at maximum and last contact only",
+      "scope": "eclipse", "totalitySeconds": 150,
+      "contacts": [
+        { "contact": "partialBegin", "sunAlt": 18.0, "clearance": 2.3 },
+        { "contact": "totalBegin", "sunAlt": 10.1, "clearance": -10.8 },
+        { "contact": "peak", "sunAlt": 10.0, "clearance": -10.9 },
+        { "contact": "totalEnd", "sunAlt": 9.9, "clearance": -11.0 },
+        { "contact": "partialEnd", "sunAlt": 1.0, "clearance": -20.6 }],
+      "expect": { "level": "partial", "grazing": false, "nearEdge": false } },
+
+    { "name": "eclipse: blocked at every contact where the sun is up",
+      "scope": "eclipse", "totalitySeconds": 150,
+      "contacts": [
+        { "contact": "partialBegin", "sunAlt": 18.0, "clearance": -1.0 },
+        { "contact": "totalBegin", "sunAlt": 10.1, "clearance": -2.0 },
+        { "contact": "peak", "sunAlt": 10.0, "clearance": 0.0 },
+        { "contact": "totalEnd", "sunAlt": 9.9, "clearance": -2.0 },
+        { "contact": "partialEnd", "sunAlt": -0.5, "clearance": -3.0 }],
+      "expect": { "level": "blocked", "grazing": false, "nearEdge": false } },
+
+    { "name": "eclipse: sun below the horizon at every judged contact",
+      "scope": "eclipse", "totalitySeconds": 0,
+      "contacts": [
+        { "contact": "partialBegin", "sunAlt": -1.0, "clearance": -1.0 },
+        { "contact": "peak", "sunAlt": -3.0, "clearance": -3.0 },
+        { "contact": "partialEnd", "sunAlt": -6.0, "clearance": -6.0 }],
+      "expect": { "level": "below", "grazing": false, "nearEdge": false } },
+
+    { "name": "eclipse: grazing at first contact",
+      "scope": "eclipse", "totalitySeconds": 150,
+      "contacts": [
+        { "contact": "partialBegin", "sunAlt": 18.0, "clearance": 0.1 },
+        { "contact": "totalBegin", "sunAlt": 10.1, "clearance": 3.0 },
+        { "contact": "peak", "sunAlt": 10.0, "clearance": 3.0 },
+        { "contact": "totalEnd", "sunAlt": 9.9, "clearance": 3.0 },
+        { "contact": "partialEnd", "sunAlt": 1.0, "clearance": 0.5 }],
+      "expect": { "level": "clear", "grazing": true, "nearEdge": false } },
+
+    { "name": "eclipse: outside the eclipse, judged on the sun now",
+      "scope": "eclipse", "totalitySeconds": 0,
+      "contacts": [{ "contact": "now", "sunAlt": 20.0, "clearance": -0.3 }],
+      "expect": { "level": "blocked", "grazing": false, "nearEdge": false } }
+  ]
+}
