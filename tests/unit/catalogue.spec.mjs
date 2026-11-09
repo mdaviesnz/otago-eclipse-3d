@@ -3,6 +3,7 @@
 import { test, expect } from "@playwright/test";
 import {
   haversineM, bearingDeg, matchesAccess, thinNearby, nearestClearSpot, compareSpots, rankSpots,
+  declutter,
 } from "../../catalogue.js";
 
 const spot = (over) => ({
@@ -45,6 +46,10 @@ test.describe("access filters", () => {
   test("tiers are exclusive, so sealed excludes tracks", () => {
     expect(matchesAccess(gravel, "sealed")).toBe(false);
     expect(matchesAccess(sealed, "track")).toBe(false);
+  });
+  test("road means what a normal car can reach", () => {
+    expect([sealed, gravel, fourWd, gridTrack, walk].map((s) => matchesAccess(s, "road")))
+      .toEqual([true, true, false, false, false]);
   });
   test("the track tier includes gravel roads", () => {
     expect(matchesAccess(gravel, "track")).toBe(true);
@@ -116,6 +121,19 @@ test.describe("nearestClearSpot", () => {
   });
   test("copes with no catalogue", () => {
     expect(nearestClearSpot(null, -45, 169)).toBeNull();
+  });
+});
+
+test.describe("declutter", () => {
+  const at = (x, y, name) => ({ x, y, name });
+  const project = (s) => s;
+  test("keeps the first spot in each cell", () => {
+    const a = at(5, 5, "best"), b = at(20, 20, "worse"), c = at(40, 5, "elsewhere");
+    expect(declutter([a, b, c], project, 34)).toEqual([a, c]);
+  });
+  test("a smaller cell keeps more", () => {
+    const list = [at(5, 5), at(20, 20), at(40, 5)];
+    expect(declutter(list, project, 10)).toHaveLength(3);
   });
 });
 

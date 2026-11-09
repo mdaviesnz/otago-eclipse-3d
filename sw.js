@@ -25,6 +25,8 @@ const PRECACHE_SHELL = [
   "./viewpoints.json",
   "./verdict.js",
   "./catalogue.js",
+  "./places.js",
+  "./contours.js",
   "./simulator.js",
   "./map.js",
   "./font-piazzolla-latin.woff2",

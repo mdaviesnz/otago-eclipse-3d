@@ -61,14 +61,19 @@ is not downgraded merely because the sun had set.
 | `viewpoints.json` | The precomputed catalogue |
 | `catalogue.js` | The rules for reading it, shared by both app pages: filters, ranking, distance, suggestions |
 | `verdict.js` | The sightline verdict rule |
+| `places.js` | New Zealand bounds, address search, compass directions and heights in fists |
+| `contours.js` | Contour drawing for one spot's topo view, from Terrarium elevation tiles |
 
 See [ASTRONOMY.md](ASTRONOMY.md) (or `methods.html` in the app) for the astronomical and geodetic
 methods in review-ready detail, [DEPLOYMENT.md](DEPLOYMENT.md) for hosting and CI, and
 [IDEAS.md](IDEAS.md) for parked ideas and the reasoning behind decisions already made.
 
-The two pages link to each other. On the map, clicking a spot opens a popup with its clearance,
-sun altitude, totality duration and access, plus **Open in 3D →**, which loads
-`index.html?lat=…&lon=…&name=…`. Those URL parameters also make any location shareable.
+The two pages link to each other. The map's job is finding where to stand: it opens on spots
+you can drive to, ranked by enough clearance, then totality length, then chance of clear sky.
+Search for a place and the list sorts by distance instead. Choosing a spot opens its detail,
+with contact times, a printable field card, a contour map on request, and **Stand here in 3D**,
+which loads `index.html?lat=…&lon=…&name=…`. Those URL parameters make any location shareable, as
+do the map's own `?near=lat,lon&place=…` and `?spot=lat,lon`.
 
 Without `viewpoints.json` the simulator still works — the *Best viewing spots* panel simply
 stays hidden — but the map page has nothing to show.

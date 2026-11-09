@@ -44,103 +44,116 @@ test("catalogue is served and well-formed", async ({ request }) => {
   expect(d.pois[0].clearProb).toBeGreaterThan(0);
 });
 
-test("overview map plots spots and filters them", async ({ page }) => {
+test("overview map opens on spots you can drive to and filters them", async ({ page }) => {
   const errs = errors(page);
   await page.goto("/map.html");
 
-  await expect.poll(
-    () => page.evaluate(() => document.getElementById("count").textContent),
-    { timeout: 20000 }
-  ).toMatch(/\d+ of \d+ shown|\d+ shown/);
+  const count = () => page.locator("#count").textContent();
+  const number = async () => parseInt((await count()).match(/\d+/)[0], 10);
+  await expect.poll(count, { timeout: 20000 }).toMatch(/\d+ spots?, best first/);
 
-  const countFor = (v) =>
-    page.evaluate((val) => {
-      const s = document.getElementById("accessFilter");
-      s.value = val;
-      s.dispatchEvent(new Event("input"));
-      return document.getElementById("count").textContent;
-    }, v);
+  // Opens on Drive only; a filter that does nothing would be invisible here.
+  await expect(page.locator("#chipRoad")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#chipFoot")).toHaveAttribute("aria-pressed", "false");
+  const drive = await number();
+  await page.locator("#chipFoot").click();
+  const driveOrWalk = await number();
+  expect(driveOrWalk).toBeGreaterThan(drive);
+  await page.locator("#chipFoot").click();
+  expect(await number()).toBe(drive);
 
-  const any = await countFor("any");
-  const foot = await countFor("foot");
-  expect(any).not.toEqual(foot);          // exclusive tiers must actually change the set
+  // Nothing selected says so, rather than showing an empty list with no reason.
+  await page.locator("#chipRoad").click();
+  await expect(page.locator("#count")).toContainText("at least one way");
+  await page.locator("#chipRoad").click();
 
-  // Reset the filter first: the previous assertion left it on "foot", so the top-ranked POI
-  // (a sealed-road spot) is no longer on the layer and would not be found.
-  await countFor("any");
+  // The marks are decluttered, so fewer are drawn than match, and they are reachable by keyboard.
+  const drawn = await page.evaluate(() => layer.getLayers().length);
+  expect(drawn).toBeGreaterThan(0);
+  expect(drawn).toBeLessThan(await page.evaluate(() => matching.length));
+  await expect(page.locator('.mark[tabindex="0"]').first()).toBeVisible();
+  await page.locator('.mark[tabindex="0"]').first().focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#detailView")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#listView")).toBeVisible();
 
-  // Every marker links back into the 3D view with coordinates.
-  const href = await page.evaluate(() => {
-    const t = catalogue.pois[0];
-    let out = null;
-    layer.eachLayer((l) => {
-      const ll = l.getLatLng();
-      if (out === null && Math.abs(ll.lat - t.lat) < 1e-6) out = l.getPopup().getContent();
-    });
-    return out;
-  });
-  expect(href, "top POI marker should be on the layer and link into the 3D view").toContain("index.html?lat=");
+  // Unnamed scan spots stay off until asked for, and public land is the default.
+  await page.locator("#moreFilters summary").click();
+  await page.locator("#includeUnnamed").check();
+  expect(await number()).toBeGreaterThan(drive);
+  await page.locator("#includeUnnamed").uncheck();
+  await page.locator("#publicOnly").uncheck();
+  expect(await number()).toBeGreaterThan(drive);
+  await page.locator("#publicOnly").check();
 
-  // Historical cloud overlay toggles via #showCloud
-  const cloudCountOff = await page.evaluate(() => cloudLayer.getLayers().length);
-  expect(cloudCountOff).toBe(0);
-  await expect(page.locator("#cloudLegendSection")).toBeHidden();
-
+  // Cloud overlay and its filter.
+  expect(await page.evaluate(() => cloudLayer.getLayers().length)).toBe(0);
+  await expect(page.locator("#cloudLegend")).toBeHidden();
   await page.locator("#showCloud").check();
-  const cloudCountOn = await page.evaluate(() => cloudLayer.getLayers().length);
-  expect(cloudCountOn).toBe(1);
-  await expect(page.locator("#cloudLegendSection")).toBeVisible();
-
+  expect(await page.evaluate(() => cloudLayer.getLayers().length)).toBe(1);
+  await expect(page.locator("#cloudLegend")).toBeVisible();
   await page.locator("#showCloud").uncheck();
   expect(await page.evaluate(() => cloudLayer.getLayers().length)).toBe(0);
-  await expect(page.locator("#cloudLegendSection")).toBeHidden();
 
-  // Cloud slider filters spots
-  const countBeforeCloud = await page.evaluate(() => layer.getLayers().length);
-  await page.evaluate(() => {
-    const s = document.getElementById("cloudFilter");
-    s.value = "50";
+  const setRange = (id, v) => page.evaluate(([i, val]) => {
+    const s = document.getElementById(i);
+    s.value = val;
     s.dispatchEvent(new Event("input"));
-  });
-  const countFilteredCloud = await page.evaluate(() => layer.getLayers().length);
-  expect(countFilteredCloud).toBeLessThan(countBeforeCloud);
-  expect(countFilteredCloud).toBeGreaterThan(0);
-  const cloudValText = await page.locator("#cloudVal").textContent();
-  expect(cloudValText).toContain("50%");
+  }, [id, v]);
+  await setRange("minSky", "48");
+  expect(await number()).toBeLessThan(drive);
+  await expect(page.locator("#minSkyVal")).toHaveText("48%");
+  await setRange("minSky", "30");
+  await expect(page.locator("#minSkyVal")).toHaveText("Any");
+  expect(await number()).toBe(drive);
 
-  // Reset cloudFilter to 70 restores full list and displays "Any"
-  await page.evaluate(() => {
-    const s = document.getElementById("cloudFilter");
-    s.value = "70";
-    s.dispatchEvent(new Event("input"));
-  });
-  expect(await page.evaluate(() => layer.getLayers().length)).toBe(countBeforeCloud);
-  expect(await page.locator("#cloudVal").textContent()).toBe("Any");
+  // A spot's detail links back into the 3D view with its coordinates.
+  await page.locator("#spotList .row").first().click();
+  await expect(page.locator("#detailView")).toBeVisible();
+  await expect(page.locator("#open3d")).toHaveAttribute("href", /index\.html\?lat=/);
+  await expect(page.locator("#detailBody .contacts")).toContainText("Totality begins");
+  await expect(page).toHaveURL(/spot=/);
+  await page.locator("#backToList").click();
+  await expect(page.locator("#listView")).toBeVisible();
 
-  // Town markers and the whole-totality filter read the stored verdict level rather than
-  // judging clearances themselves (docs/adr/0001-precomputed-verdicts.md).
-  const towns = await page.evaluate(() => {
-    const out = {};
-    townLayer.eachLayer((l) => {
-      const html = l.getPopup().getContent();
-      const name = (html.match(/font-weight:700;color:#fbbf24">([^<]+) \(town centre\)/) || [])[1];
-      if (name) out[name] = html;
-    });
-    return out;
-  });
-  expect(towns["Queenstown"], "Queenstown's town centre cannot see totality").toContain("Blocked by");
-  expect(towns["Dunedin"]).toContain("clear");
-  const shownWithWholeOnly = async (on) => page.evaluate((checked) => {
-    const el = document.getElementById("wholeOnly");
-    el.checked = checked;
-    el.dispatchEvent(new Event("input"));
-    return layer.getLayers().length;
-  }, on);
-  const allShown = await shownWithWholeOnly(false);
-  expect(await shownWithWholeOnly(true), "whole-totality filter must drop partial spots").toBeLessThan(allShown);
-  expect(await shownWithWholeOnly(false)).toBe(allShown);
+  // Towns carry the stored verdict (docs/adr/0001-precomputed-verdicts.md).
+  await expect(page.locator(".town-label", { hasText: "Queenstown: blocked" })).toHaveCount(1);
+  await expect(page.locator(".town-label", { hasText: "Dunedin: clear" })).toHaveCount(1);
+  await page.evaluate(() => openDetail({ ...catalogue.presets.find((p) => p.name === "Queenstown"), isPreset: true }));
+  await expect(page.locator("#detailBody")).toContainText("Totality not visible");
+  await expect(page.locator("#goNearest")).toContainText("Halfway Remarkables");
+  await page.locator("#goNearest").click();
+  await expect(page.locator("#detailTitle")).toHaveText("Halfway Remarkables");
+  await expect(page.locator("#detailBody")).toContainText("Clear through totality");
 
   expect(errs, "no JS errors on the map page").toEqual([]);
+});
+
+test("a place on the map sorts spots by distance and can be shared", async ({ page }) => {
+  const errs = errors(page);
+  await page.goto("/map.html?near=-45.0312,168.6626&place=Queenstown");
+  await expect(page.locator("#hereName")).toHaveText("Near Queenstown", { timeout: 20000 });
+  await expect(page.locator("#count")).toContainText("closest first");
+  await expect(page.locator("#spotList .row-sub").first()).toContainText(/km/);
+  await expect(page).toHaveURL(/near=-45\.0312/);
+  await page.locator("#clearHere").click();
+  await expect(page.locator("#count")).toContainText("best first");
+  await expect(page).not.toHaveURL(/near=/);
+
+  // A pasted coordinate pair is a place too; one outside New Zealand is refused.
+  await page.locator("#placeSearch").fill("-33.8688, 151.2093");
+  await page.locator("#placeSearch").press("Enter");
+  await expect(page.locator("#searchStatus")).toContainText("within New Zealand");
+  await page.locator("#placeSearch").fill("-45.0312, 168.6626");
+  await page.locator("#placeSearch").press("Enter");
+  await expect(page.locator("#hereName")).toContainText("-45.031");
+
+  // A spot in the link opens directly.
+  await page.goto("/map.html?spot=-45.02571,168.77750");
+  await expect(page.locator("#detailTitle")).toHaveText("Halfway Remarkables", { timeout: 20000 });
+
+  expect(errs, "no JS errors with a place set").toEqual([]);
 });
 
 test("astronomy reproduces the published Dunedin circumstances", async ({ page }) => {
@@ -419,6 +432,7 @@ test("PWA manifest, icon, and service worker are served and valid", async ({ req
   const swText = await swRes.text();
   expect(swText).toContain("viewpoints.json");
   expect(swText).toContain("simulator.js");
+  expect(swText).toContain("contours.js");
   expect(swText).toContain("font-overpass-latin.woff2");
 });
 
@@ -426,13 +440,16 @@ test("mobile viewport UX: drawers, floating verdict pill, and map filter collaps
   const errs = errors(page);
   await page.setViewportSize({ width: 375, height: 667 });
 
-  // 1. Overview map collapses filters by default on mobile and toggles cleanly
+  // 1. On the overview map the sheet leaves the map in view, even with filters open
   await page.goto("/map.html");
-  await expect(page.locator("#mapFiltersBody")).toBeHidden();
-  await page.locator("#toggleMapFilters").click();
-  await expect(page.locator("#mapFiltersBody")).toBeVisible();
-  await page.locator("#toggleMapFilters").click();
-  await expect(page.locator("#mapFiltersBody")).toBeHidden();
+  await expect(page.locator("#count")).toContainText("spots", { timeout: 20000 });
+  const sheetTop = () => page.locator("#panel").evaluate((el) => el.getBoundingClientRect().top);
+  expect(await sheetTop()).toBeGreaterThan(667 * 0.4);
+  await page.locator("#moreFilters summary").evaluate((el) => el.click());
+  expect(await sheetTop()).toBeGreaterThan(667 * 0.4);
+  await expect(page.locator("#legend")).toBeVisible();
+  await page.locator("#sheetHandle").click();
+  await expect.poll(sheetTop).toBeLessThan(667 * 0.2);
 
   // 2. Simulator mobile drawers open/close via tabs and close buttons
   await page.goto("/index.html");
@@ -487,7 +504,7 @@ test("service worker precaches the app shell and serves pages + catalogue offlin
   await context.setOffline(true);
   try {
     await page.goto("/map.html");
-    await expect(page.locator("#accessFilter")).toHaveCount(1);
+    await expect(page.locator("#chipRoad")).toHaveCount(1);
 
     // Catalogue JSON must also be served from the Service Worker cache while offline.
     const catCount = await page.evaluate(async () => {
@@ -578,8 +595,9 @@ test("usage metrics: browser interactions emit anonymous events, POI names, and 
 
   await page.goto("/map.html");
   await expect.poll(() => events.some((e) => e.event === "page_view" && e.detail === "map")).toBe(true);
-  await page.locator("#srcGrid").click();
-  await expect.poll(() => events.some((e) => e.event === "map_filter" && e.detail === "grid")).toBe(true);
+  await page.locator("#moreFilters summary").click();
+  await page.locator("#includeUnnamed").check();
+  await expect.poll(() => events.some((e) => e.event === "map_filter" && e.detail === "both")).toBe(true);
 
   await page.goto("/index.html");
   await expect.poll(() => events.some((e) => e.event === "page_view" && e.detail === "simulator")).toBe(true);
@@ -613,16 +631,14 @@ test("usage metrics: browser interactions emit anonymous events, POI names, and 
 test("NZ bounds, partial-only eclipse UI (Christchurch), and map eclipse path overlay", async ({ page }) => {
   const errs = errors(page);
 
-  // 1. Overview map renders the eclipse path and bands by default and toggles via #showPath
+  // 1. The path is always on; the partial bands appear only once zoomed out far enough to see them
   await page.goto("/map.html");
-  const pathCountOn = await page.evaluate(() => pathLayer.getLayers().length);
-  expect(pathCountOn).toBe(7); // 3 partial bands + totality polygon + 2 limit lines + 1 centreline
-  await expect(page.locator("#pathLegendSection")).toBeVisible();
-
-  await page.locator("#showPath").uncheck();
-  const pathCountOff = await page.evaluate(() => pathLayer.getLayers().length);
-  expect(pathCountOff).toBe(0);
-  await expect(page.locator("#pathLegendSection")).toBeHidden();
+  await expect(page.locator("#count")).toContainText("spots", { timeout: 20000 });
+  expect(await page.evaluate(() => pathLayer.getLayers().length)).toBe(4); // polygon + 2 limits + centreline
+  await expect(page.locator("#bandLegend")).toBeHidden();
+  await page.evaluate(() => map.setZoom(5, { animate: false }));
+  await expect.poll(() => page.evaluate(() => pathLayer.getLayers().length)).toBe(7);
+  await expect(page.locator("#bandLegend")).toBeVisible();
 
   // 2. Partial-only location in NZ (Christchurch: ?lat=-43.53095&lon=172.63643)
   await page.goto("/index.html?lat=-43.53095&lon=172.63643");

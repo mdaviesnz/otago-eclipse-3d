@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Otago Eclipse 2028 — best viewing spots map</title>
+  <title>Find where to stand — Otago Eclipse 2028</title>
   <meta name="description" content="Map of the best places to watch the 22 July 2028 total solar eclipse in Otago, New Zealand — ranked by how far the sun clears the skyline, filtered by whether you can drive, 4WD or walk there." />
-  <meta name="theme-color" content="#0f172a" />
+  <meta name="theme-color" content="#0A1016" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Eclipse 2028" />
@@ -22,184 +22,269 @@
   <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <link rel="stylesheet" href="app.css" />
   <script defer src="https://unpkg.com/lucide@latest"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/astronomy-engine@2/astronomy.browser.min.js"></script>
 
   <style>
-    html, body, #map { width: 100%; height: 100%; margin: 0; padding: 0; }
-    body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: #0f172a; }
-    .panel { backdrop-filter: blur(10px); background: rgba(15, 23, 42, 0.88); border: 1px solid rgba(148, 163, 184, 0.25); }
-    .leaflet-container { background: #0b1220; }
-    /* Dark popup to match the rest of the app */
-    .leaflet-popup-content-wrapper, .leaflet-popup-tip {
-      background: #0f172a; color: #e2e8f0; border: 1px solid rgba(148,163,184,0.3);
+    :root {
+      --p-bg: var(--ridge);
+      --p-fg: var(--corona);
+      --p-dim: #AAB7BC;
+      --p-line: rgba(239, 243, 241, 0.16);
+      --no: #FF9AA6;
+      --sheet-h: 48vh;
     }
-    .leaflet-popup-content { margin: 10px 12px; font-size: 12px; line-height: 1.45; }
-    .leaflet-popup-close-button { color: #94a3b8 !important; width: 28px !important; height: 28px !important; line-height: 26px !important; font-size: 18px !important; }
-    .leaflet-bar a { background: #1e293b; color: #e2e8f0; border-color: #334155; }
-    .leaflet-bar a:hover { background: #334155; }
-    .leaflet-control-attribution { background: rgba(15,23,42,0.85) !important; color: #94a3b8 !important; font-size: 10px; }
-    .leaflet-control-attribution a { color: #fbbf24 !important; }
-    .town-tooltip {
-      background: rgba(15, 23, 42, 0.92);
-      border: 1px solid rgba(251, 191, 36, 0.55);
-      color: #f8fafc;
-      font-size: 11px;
-      font-weight: 600;
-      padding: 2px 6px;
-      border-radius: 6px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
-      pointer-events: none;
+    html, body { height: 100%; margin: 0; }
+    body { font-family: Overpass, "Segoe UI", system-ui, sans-serif; background: var(--p-bg); color: var(--p-fg);
+           font-size: 15px; line-height: 1.42; font-variant-numeric: tabular-nums lining-nums; }
+    #app { display: grid; grid-template-columns: 388px minmax(0, 1fr); height: 100dvh; }
+    #mapWrap { position: relative; min-width: 0; }
+    #map { position: absolute; inset: 0; background: var(--ridge); }
+
+    #panel { display: flex; flex-direction: column; min-height: 0; background: var(--p-bg); z-index: 1000; }
+    #sheetHandle { display: none; }
+    #panelScroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+      padding: 22px 20px 28px; scrollbar-width: thin; scrollbar-color: rgba(170,183,188,.4) transparent; }
+
+    h1, #detailTitle { font-family: Piazzolla, Georgia, serif; font-weight: 620; letter-spacing: -0.012em;
+      line-height: 1.04; margin: 0; text-wrap: balance; }
+    h1 { font-size: 2.15rem; }
+    .lede { margin: 8px 0 0; color: var(--p-dim); }
+    .links { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 12px 0 0; font-weight: 600; font-size: 0.93rem; }
+    .links a, .links button { color: var(--p-fg); background: none; border: 0; padding: 0; font: inherit;
+      cursor: pointer; text-decoration: underline; text-decoration-color: rgba(239,243,241,.4); text-underline-offset: 3px; }
+
+    #searchForm { position: relative; display: flex; gap: 6px; margin-top: 20px; }
+    #placeSearch { flex: 1; min-width: 0; font: inherit; font-size: 16px; color: var(--p-fg); background: transparent;
+      border: 1px solid rgba(239,243,241,.45); border-radius: 3px; padding: 9px 10px 7px; }
+    #placeSearch::placeholder { color: var(--p-dim); }
+    #nearMe { font: inherit; font-weight: 600; white-space: nowrap; color: var(--p-fg); background: transparent;
+      border: 1px solid rgba(239,243,241,.45); border-radius: 3px; padding: 8px 11px 6px; cursor: pointer; }
+    #suggestions { position: absolute; left: 0; right: 0; top: 100%; margin-top: 4px; background: #151C24;
+      border: 1px solid var(--p-line); border-radius: 3px; z-index: 5; overflow: hidden; }
+    .suggestion { display: block; width: 100%; text-align: left; font: inherit; color: var(--p-fg); background: none;
+      border: 0; border-bottom: 1px solid var(--p-line); padding: 9px 10px 7px; cursor: pointer; }
+    .suggestion:last-child { border-bottom: 0; }
+    .suggestion:hover, .suggestion.active { background: rgba(239,243,241,.1); }
+    #searchStatus { margin: 8px 0 0; color: var(--p-dim); font-size: 0.93rem; }
+    #hereLine { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-top: 14px; }
+    #hereLine[hidden] { display: none; }
+    #hereName { font-family: Piazzolla, Georgia, serif; font-weight: 600; font-size: 1.3rem; line-height: 1.1; }
+    #clearHere { font: inherit; font-size: 0.93rem; color: var(--p-dim); background: none; border: 0; padding: 0;
+      cursor: pointer; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+
+    .filters { margin-top: 18px; }
+    .filter-label { font-size: 0.93rem; color: var(--p-dim); margin: 0 0 6px; }
+    .chips { display: flex; gap: 6px; }
+    .chip { flex: 1; font: inherit; font-weight: 700; color: var(--p-fg); background: transparent; cursor: pointer;
+      border: 1px solid rgba(239,243,241,.45); border-radius: 3px; padding: 8px 6px 6px; }
+    .chip[aria-pressed="true"] { background: var(--p-fg); color: var(--p-bg); border-color: var(--p-fg); }
+    .check { display: flex; align-items: center; gap: 9px; margin-top: 11px; cursor: pointer; }
+    .check input { width: 17px; height: 17px; accent-color: var(--corona); margin: 0 0 2px; flex: none; }
+    #moreFilters { margin-top: 10px; }
+    #moreFilters summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
+    .range { display: block; margin-top: 12px; }
+    .range span { display: flex; justify-content: space-between; gap: 8px; }
+    .range b { font-weight: 600; }
+    .range input { width: 100%; accent-color: var(--corona); margin: 6px 0 0; }
+
+    #count { margin: 20px 0 4px; color: var(--p-dim); font-size: 0.93rem; }
+    #spotList { list-style: none; margin: 0; padding: 0; }
+    .row { display: flex; gap: 11px; width: 100%; text-align: left; font: inherit; color: inherit; background: none; border: 0;
+      border-top: 1px solid var(--p-line); padding: 11px 2px 9px; cursor: pointer; }
+    .row:hover { background: rgba(239,243,241,.06); }
+    .row-body { min-width: 0; }
+    .row-name { display: block; font-weight: 700; }
+    .row-sub { display: block; color: var(--p-dim); font-size: 0.93rem; }
+    #showMore { width: 100%; font: inherit; font-weight: 600; color: var(--p-fg); background: none; cursor: pointer;
+      border: 1px solid var(--p-line); border-radius: 3px; padding: 9px 6px 7px; margin-top: 10px; }
+    #status, .credit { margin: 16px 0 0; color: var(--p-dim); font-size: 0.86rem; }
+
+    /* One family of marks across the map, its legend and the list. */
+    .mark, .glyph { border-radius: 50%; box-sizing: border-box; }
+    .mark--clear { background: var(--corona); box-shadow: 0 0 0 1.5px var(--ridge); }
+    .mark--tight { background: rgba(10,16,22,.55); border: 2.5px solid var(--corona); box-shadow: 0 0 0 1px var(--ridge); }
+    .mark--blocked { position: relative; background: var(--prominence); box-shadow: 0 0 0 1.5px var(--ridge); }
+    .mark--blocked::before { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 2.5px;
+      margin-left: -1.25px; background: var(--ridge); transform: rotate(45deg); }
+    .glyph { flex: none; width: 13px; height: 13px; margin-top: 4px; }
+    .mark { cursor: pointer; }
+    .mark::after { content: ""; position: absolute; inset: -9px; border-radius: 50%; }
+    .mark--selected { outline: 2.5px solid var(--corona); outline-offset: 3px; }
+    .here { border-radius: 50%; border: 3px solid var(--corona); background: rgba(44,74,82,.75);
+      box-shadow: 0 0 0 1.5px var(--ridge); box-sizing: border-box; }
+
+    .town::before { content: ""; position: absolute; inset: 0; background: var(--corona);
+      box-shadow: 0 0 0 1.5px var(--ridge); transform: rotate(45deg); }
+    .town--blocked::before, .town--partial::before { background: var(--prominence); }
+    .town-label { position: absolute; white-space: nowrap; font: 700 13px/1 Overpass, "Segoe UI", sans-serif;
+      background: var(--ridge); color: var(--corona); padding: 5px 7px 3px; border-radius: 2px; }
+    .town--blocked .town-label, .town--partial .town-label { color: var(--no); }
+    .town--right .town-label { left: 22px; top: -4px; }
+    .town--left .town-label { right: 22px; top: -4px; }
+    .town--top .town-label { bottom: 22px; left: 50%; transform: translateX(-50%); }
+
+    #legend { position: absolute; left: 10px; bottom: 10px; z-index: 900; max-width: min(620px, calc(100% - 180px));
+      background: rgba(10,16,22,.88); padding: 8px 11px 6px; font-size: 0.86rem; border-radius: 2px; }
+    .legend-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; }
+    .legend-item { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+    .legend-item .glyph { margin: -2px 0 0; width: 11px; height: 11px; }
+    .legend-path { display: inline-block; width: 20px; height: 0; border-top: 2px solid var(--sun); margin-top: -2px; }
+    .legend-note { margin: 4px 0 0; color: var(--p-dim); }
+
+    .leaflet-container { background: var(--ridge); font-family: inherit; }
+    .leaflet-bar a { background: var(--ridge); color: var(--corona); border-color: var(--p-line); }
+    .leaflet-bar a:hover, .leaflet-bar a:focus { background: #1B242D; color: var(--corona); }
+    .leaflet-control-attribution { background: rgba(10,16,22,.8) !important; color: var(--p-dim) !important; font-size: 10.5px; }
+    .leaflet-control-attribution a { color: var(--corona) !important; }
+
+    /* The About dialog keeps the shared markup, in this page's colours. */
+    #aboutOverlay .panel { background: var(--ridge); border: 1px solid var(--p-line); }
+    #aboutOverlay svg, #aboutOverlay .text-amber-300, #aboutOverlay .text-amber-400 { color: var(--corona); }
+    #aboutOverlay .text-amber-200\/90 { color: var(--corona); }
+    #aboutOverlay .bg-amber-900\/25 { background: rgba(239,243,241,.08); border-color: var(--p-line); }
+    #aboutOverlay a.bg-amber-500 { background: var(--corona); color: var(--ridge); }
+    #aboutOverlay a.bg-amber-500 svg { color: var(--ridge); }
+
+    #backToList { font: inherit; font-weight: 600; color: var(--p-fg); background: none; border: 0; padding: 0; cursor: pointer;
+      text-decoration: underline; text-underline-offset: 3px; }
+    #detailTitle { font-size: 2rem; margin-top: 16px; outline: none; }
+    .detail-kind { margin: 6px 0 0; color: var(--p-dim); }
+    .detail-verdict { margin: 16px 0 0; font-weight: 700; font-size: 1.14rem; }
+    .detail-verdict--no { color: var(--no); }
+    .detail-look { margin: 5px 0 0; }
+    .detail-note { margin: 10px 0 0; color: var(--no); }
+    .contacts { width: 100%; border-collapse: collapse; margin-top: 18px; }
+    .contacts td { padding: 5px 0 3px; border-top: 1px solid var(--p-line); }
+    .contacts td:last-child { text-align: right; }
+    .contacts .strong td { font-weight: 700; }
+    .facts { margin: 16px 0 0; }
+    .facts div { display: flex; justify-content: space-between; gap: 18px; padding: 5px 0 3px; border-top: 1px solid var(--p-line); }
+    .facts dt { color: var(--p-dim); white-space: nowrap; }
+    .facts dd { margin: 0; text-align: right; min-width: 0; }
+    .action { display: block; box-sizing: border-box; width: 100%; text-align: center; font: inherit; font-weight: 700;
+      color: var(--p-fg); background: none; border: 1px solid rgba(239,243,241,.45); border-radius: 3px; padding: 10px 8px 8px;
+      cursor: pointer; text-decoration: none; }
+    .action small { display: block; font-size: 0.86rem; font-weight: 500; }
+    .action--primary { background: var(--p-fg); color: var(--p-bg); border-color: var(--p-fg); }
+    .action:disabled { opacity: .6; cursor: default; }
+    #goNearest { margin-top: 14px; }
+    .actions { display: grid; gap: 7px; margin-top: 18px; }
+    #contourFigure { margin: 16px 0 0; }
+    #contourCanvas { display: block; width: 100%; height: auto; background: #fff; }
+    #contourFigure figcaption { margin-top: 6px; color: var(--p-dim); font-size: 0.86rem; }
+    .fine { margin: 18px 0 0; color: var(--p-dim); font-size: 0.86rem; }
+
+    a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible, .leaflet-marker-icon:focus-visible {
+      outline: 2px solid var(--corona); outline-offset: 2px; }
+    [hidden] { display: none !important; }
+
+    @media (max-width: 767px) {
+      #app { display: block; height: 100dvh; }
+      #mapWrap { position: fixed; inset: 0; }
+      #panel { position: fixed; left: 0; right: 0; bottom: 0; height: var(--sheet-h);
+        border-radius: 12px 12px 0 0; box-shadow: 0 -6px 24px rgba(0,0,0,.45); transition: height .22s ease; }
+      #panel.dragging { transition: none; }
+      #sheetHandle { display: block; flex: none; width: 100%; height: 26px; background: none; border: 0; padding: 0;
+        cursor: grab; touch-action: none; }
+      #sheetHandle::before { content: ""; display: block; width: 44px; height: 4px; margin: 0 auto; border-radius: 2px; background: var(--p-dim); }
+      #panelScroll { padding: 0 16px calc(24px + env(safe-area-inset-bottom, 0px)); }
+      h1 { font-size: 1.7rem; }
+      .lede { display: none; }
+      /* At this size the name and the mark's colour carry it; the words would run off the edge. */
+      .town-word { display: none; }
+      .town--top .town-label { left: auto; right: -8px; transform: none; }
+      .links { margin-top: 8px; }
+      #searchForm { margin-top: 12px; }
+      #legend { left: 8px; top: calc(8px + env(safe-area-inset-top, 0px)); bottom: auto; max-width: calc(100% - 64px); padding: 6px 8px 4px; font-size: 0.8rem; }
+      .legend-note { display: none; }
+      .leaflet-top { top: env(safe-area-inset-top, 0px); }
     }
-    .town-tooltip::before { display: none; }
-    .map-top-left {
-      top: calc(0.75rem + env(safe-area-inset-top, 0px));
-      left: calc(0.75rem + env(safe-area-inset-left, 0px));
-    }
-    .map-nav-bar {
-      bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
-      left: calc(0.75rem + env(safe-area-inset-left, 0px));
-    }
-    @media (min-width: 640px) {
-      .map-nav-bar {
-        bottom: auto;
-        left: auto;
-        top: calc(0.75rem + env(safe-area-inset-top, 0px));
-        right: calc(0.75rem + env(safe-area-inset-right, 0px));
-      }
+
+    /* The field card: one page of what you need on the day. */
+    @media print {
+      :root { --p-bg: #fff; --p-fg: #000; --p-dim: #333; --p-line: #999; --no: #A30F27; }
+      body { background: #fff; font-size: 12pt; }
+      #app { display: block; height: auto; }
+      #mapWrap, #sheetHandle, #backToList, .no-print, #goNearest, #aboutOverlay, #listView { display: none !important; }
+      #panel { position: static; height: auto; box-shadow: none; }
+      #panelScroll { overflow: visible; padding: 0; }
+      #contourCanvas { max-width: 13cm; }
+      .contacts tr, .facts div { break-inside: avoid; }
     }
   </style>
 </head>
-<body class="text-slate-100">
+<body>
 
-  <div id="map"></div>
+  <div id="app">
+    <aside id="panel" aria-label="Viewing spots">
+      <button id="sheetHandle" type="button" aria-label="Enlarge this panel"></button>
+      <div id="panelScroll">
 
-  <!-- ============================= CONTROLS ============================= -->
-  <div class="fixed map-top-left z-[1000] w-72 sm:w-64 max-w-[calc(100vw-1.5rem)]">
-    <div class="panel rounded-xl p-3 shadow-2xl">
-      <div class="flex items-center gap-2 mb-1">
-        <i data-lucide="eclipse" class="w-5 h-5 text-amber-400 shrink-0"></i>
-        <h1 class="text-sm font-bold truncate">Eclipse viewing spots</h1>
-        <button id="toggleMapFilters" aria-label="Toggle filters" aria-expanded="true"
-          class="ml-auto sm:hidden inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 transition">
-          <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5 text-amber-400"></i>
-          <span id="toggleMapFiltersLabel">Filters</span>
-        </button>
+        <section id="listView">
+          <h1>Find where to stand</h1>
+          <p class="lede">At totality on 22 July 2028 the sun is one fist above the horizon, so a single hill can hide it.</p>
+          <p class="links">
+            <a href="index.html">3D simulator</a>
+            <a href="astronomy.html">How it works</a>
+            <button id="aboutBtn" type="button">About</button>
+          </p>
+
+          <form id="searchForm" role="search">
+            <input id="placeSearch" type="search" autocomplete="off" placeholder="Search a town or address"
+              aria-label="Search for a town, address or coordinates" />
+            <button id="nearMe" type="button">Near me</button>
+            <div id="suggestions" hidden></div>
+          </form>
+          <p id="searchStatus" role="status" hidden></p>
+          <p id="hereLine" hidden><span id="hereName"></span><button id="clearHere" type="button">Show all spots</button></p>
+
+          <div class="filters">
+            <p class="filter-label">How will you get there?</p>
+            <div class="chips">
+              <button id="chipRoad" class="chip" type="button" data-access="road" aria-pressed="true">Drive</button>
+              <button id="chip4wd" class="chip" type="button" data-access="4wd_track" aria-pressed="false">4WD</button>
+              <button id="chipFoot" class="chip" type="button" data-access="foot" aria-pressed="false">Walk</button>
+            </div>
+            <label class="check"><input id="publicOnly" type="checkbox" checked /> Public land only</label>
+            <details id="moreFilters">
+              <summary>More filters</summary>
+              <label class="range"><span>Clears the skyline by at least <b id="minClearVal">Any</b></span>
+                <input id="minClear" type="range" min="0" max="120" value="0" /></label>
+              <label class="range"><span>Chance of clear sky at least <b id="minSkyVal">Any</b></span>
+                <input id="minSky" type="range" min="30" max="55" value="30" /></label>
+              <label class="check"><input id="includeOffTrack" type="checkbox" /> Include off-track and alpine spots</label>
+              <label class="check"><input id="includeUnnamed" type="checkbox" /> Include unnamed spots from the terrain scan</label>
+              <label class="check"><input id="showCloud" type="checkbox" /> Show typical July cloud on the map</label>
+            </details>
+          </div>
+
+          <p id="count" role="status">Loading viewing spots…</p>
+          <ol id="spotList"></ol>
+          <button id="showMore" type="button" hidden>Show more spots</button>
+          <p class="credit">Independent planning tool, not yet validated. Check any spot in person before the day.</p>
+          <p id="status"></p>
+        </section>
+
+        <section id="detailView" hidden>
+          <button id="backToList" type="button">All spots</button>
+          <div id="detailBody"></div>
+        </section>
       </div>
-      <div class="flex items-center justify-between gap-2 mb-1.5">
-        <p class="text-[11px]"><span class="text-amber-300 font-medium">22 July 2028</span><span class="text-slate-400"> · Otago</span></p>
-        <p id="mobileCountBadge" class="sm:hidden text-[11px] text-slate-400 font-mono"></p>
-      </div>
+    </aside>
 
-      <div id="mapFiltersBody" class="mt-2">
-        <div class="flex gap-1 mb-2">
-          <button id="srcPoi" class="flex-1 text-xs sm:text-[11px] font-medium rounded-lg px-2 py-1.5 sm:py-1 transition bg-amber-500 text-slate-900">Viewpoints</button>
-          <button id="srcGrid" class="flex-1 text-xs sm:text-[11px] font-medium rounded-lg px-2 py-1.5 sm:py-1 transition bg-slate-800/70 hover:bg-slate-700 text-slate-300">Anywhere</button>
-          <button id="srcBoth" class="flex-1 text-xs sm:text-[11px] font-medium rounded-lg px-2 py-1.5 sm:py-1 transition bg-slate-800/70 hover:bg-slate-700 text-slate-300">Both</button>
+    <div id="mapWrap">
+      <div id="map"></div>
+      <div id="legend">
+        <div class="legend-row">
+          <span class="legend-item"><span class="glyph mark--clear"></span>Clear</span>
+          <span class="legend-item"><span class="glyph mark--tight"></span>Tight, check in person</span>
+          <span class="legend-item"><span class="glyph mark--blocked"></span>Blocked</span>
+          <span class="legend-item"><span class="legend-path"></span>Path of totality</span>
         </div>
-
-        <select id="accessFilter"
-          class="w-full text-base sm:text-xs bg-slate-800/80 border border-slate-600 rounded-lg px-2 py-1.5 mb-2 focus:outline-none focus:ring-2 focus:ring-amber-400 cursor-pointer">
-          <option value="any" selected>Any access</option>
-          <option value="drive">Drivable (road or track)</option>
-          <option value="sealed">Sealed road only</option>
-          <option value="gravel_road">Gravel road only</option>
-          <option value="track">Unsealed / 4WD track</option>
-          <option value="4wd_track">4WD track only</option>
-          <option value="foot">Walking or cycle track</option>
-          <option value="cycle_trail">Cycle trail only</option>
-          <option value="none">Off-track / alpine</option>
-        </select>
-
-        <label class="block text-[11px] text-slate-400 mb-1">
-          Minimum clearance: <span id="clearVal" class="text-amber-300 font-mono">0.0&deg;</span>
-        </label>
-        <input id="clearFilter" type="range" min="0" max="120" value="0"
-          class="w-full accent-amber-400 cursor-pointer mb-2" />
-
-        <label class="block text-[11px] text-slate-400 mb-1">
-          Maximum July cloud: <span id="cloudVal" class="text-sky-300 font-mono">Any</span>
-        </label>
-        <input id="cloudFilter" type="range" min="45" max="70" value="70"
-          class="w-full accent-sky-400 cursor-pointer mb-2" />
-
-        <label class="flex items-center gap-2 text-xs sm:text-[11px] text-slate-300 sm:text-slate-400 mb-1.5 py-0.5 cursor-pointer">
-          <input id="publicOnly" type="checkbox" checked class="accent-amber-400 w-4 h-4 sm:w-3.5 sm:h-3.5" />
-          Verified public access only
-        </label>
-
-        <label class="flex items-center gap-2 text-xs sm:text-[11px] text-slate-300 sm:text-slate-400 mb-1.5 py-0.5 cursor-pointer">
-          <input id="wholeOnly" type="checkbox" class="accent-amber-400 w-4 h-4 sm:w-3.5 sm:h-3.5" />
-          Only spots clear for all of totality
-        </label>
-
-        <label class="flex items-center gap-2 text-xs sm:text-[11px] text-slate-300 sm:text-slate-400 mb-1.5 py-0.5 cursor-pointer">
-          <input id="showPath" type="checkbox" checked class="accent-amber-400 w-4 h-4 sm:w-3.5 sm:h-3.5" />
-          Show eclipse path &amp; bands
-        </label>
-
-        <label class="flex items-center gap-2 text-xs sm:text-[11px] text-slate-300 sm:text-slate-400 mb-2 py-0.5 cursor-pointer">
-          <input id="showCloud" type="checkbox" class="accent-sky-400 w-4 h-4 sm:w-3.5 sm:h-3.5" />
-          Show historic July cloud cover
-        </label>
-
-        <p id="count" class="text-[11px] text-slate-400"></p>
-        <p id="status" class="text-[11px] text-slate-500 mt-1"></p>
+        <p id="bandLegend" class="legend-note" hidden>Outer lines show where 90%, 75% and 50% of the sun is covered.</p>
+        <p id="cloudLegend" class="legend-note" hidden>Whiter means cloudier in past Julys (EUMETSAT CM SAF, 1979–2026).</p>
       </div>
     </div>
-
-    <!-- Legend -->
-    <div id="mapLegendCard" class="panel rounded-xl p-3 shadow-2xl mt-2">
-      <p class="text-[10px] uppercase tracking-wide text-slate-400 mb-1.5">Access &amp; towns</p>
-      <div class="flex flex-col gap-1 text-[11px]">
-        <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full" style="background:#34d399"></span> Sealed road</span>
-        <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full" style="background:#a3e635"></span> Gravel road</span>
-        <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full" style="background:#fbbf24"></span> 4WD track</span>
-        <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full" style="background:#60a5fa"></span> Walking / cycle track</span>
-        <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full" style="background:#94a3b8"></span> Off-track / alpine</span>
-        <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full border-2 border-amber-400" style="background:#0f172a"></span> Reference town centre</span>
-      </div>
-      <div id="pathLegendSection" class="mt-2.5 pt-2 border-t border-slate-700/60">
-        <p class="text-[10px] uppercase tracking-wide text-slate-400 mb-1.5">Eclipse path &amp; obscuration</p>
-        <div class="flex rounded overflow-hidden text-[10px] font-semibold text-center leading-tight mb-1.5 border border-slate-700/80">
-          <span class="flex-1 py-0.5 text-amber-100" style="background:rgba(245,158,11,0.38)">Total</span>
-          <span class="flex-1 py-0.5 text-slate-100" style="background:rgba(251,146,60,0.26)">&gt;90%</span>
-          <span class="flex-1 py-0.5 text-slate-100" style="background:rgba(251,191,36,0.18)">&gt;75%</span>
-          <span class="flex-1 py-0.5 text-slate-200" style="background:rgba(254,240,138,0.12)">&gt;50%</span>
-        </div>
-        <div class="flex items-center gap-2 text-[10px] text-slate-400">
-          <span class="inline-block w-4 border-t-2 border-dashed" style="border-color:#fde68a"></span> Centreline of totality
-        </div>
-      </div>
-      <div id="cloudLegendSection" class="hidden mt-2.5 pt-2 border-t border-slate-700/60">
-        <div class="flex items-center justify-between text-[10px] text-slate-400 mb-1">
-          <span class="uppercase tracking-wide font-medium">July daytime cloud</span>
-          <span class="text-[9px] text-slate-400">CM SAF 1979&ndash;2026</span>
-        </div>
-        <div class="h-2 rounded overflow-hidden mb-1 border border-slate-700/80" style="background:linear-gradient(to right, #0284c7, #38bdf8, #818cf8, #cbd5e1, #f8fafc)"></div>
-        <div class="flex justify-between text-[9px] text-slate-400">
-          <span class="text-sky-300">&le;45% (clearer)</span>
-          <span>60%</span>
-          <span class="text-slate-300">&ge;85% (cloudier)</span>
-        </div>
-      </div>
-      <p class="text-[10px] text-slate-500 mt-2 leading-snug">
-        Marker size shows how far the sun clears the skyline. Ringed markers are named viewpoints &amp; sites. Independent, unvalidated planning tool.
-      </p>
-    </div>
-  </div>
-
-  <div class="fixed map-nav-bar z-[1000] flex items-center gap-1.5 sm:gap-2">
-    <a href="astronomy.html" title="How the astronomy and sightline checks work"
-       class="panel rounded-xl px-3 py-2 shadow-2xl inline-flex items-center gap-1.5 text-xs font-medium hover:bg-slate-800 transition">
-      <i data-lucide="compass" class="w-4 h-4 text-amber-400"></i> <span class="hidden sm:inline">Astronomy</span>
-    </a>
-    <button id="aboutBtn" title="About this tool"
-       class="panel rounded-xl px-3 py-2 shadow-2xl inline-flex items-center gap-1.5 text-xs font-medium hover:bg-slate-800 transition">
-      <i data-lucide="info" class="w-4 h-4 text-amber-400"></i> <span class="hidden sm:inline">About</span>
-    </button>
-    <a href="index.html"
-       class="panel rounded-xl px-3 py-2 shadow-2xl inline-flex items-center gap-1.5 text-xs font-semibold text-amber-300 hover:bg-slate-800 transition">
-      <i data-lucide="box" class="w-4 h-4 text-amber-400"></i> 3D simulator
-    </a>
   </div>
 
   <!-- ============================= ABOUT DIALOG ============================= -->
@@ -288,10 +373,14 @@
     </div>
   </div>
 
-  <!-- The catalogue rules, shared with the simulator; handed to the classic script below. -->
+  <!-- The shared rules; handed to the classic script below on window. -->
   <script type="module">
     import * as Catalogue from "./catalogue.js";
+    import * as Places from "./places.js";
+    import * as Contours from "./contours.js";
     window.Catalogue = Catalogue;
+    window.Places = Places;
+    window.Contours = Contours;
   </script>
   <script defer src="map.js"></script>
 

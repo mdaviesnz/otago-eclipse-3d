@@ -42,14 +42,7 @@ const LOCATIONS = [
   { name: "Dunedin",    lon: 170.5028, lat: -45.8788, icon: "waves" },
 ];
 
-// Bounding box around mainland New Zealand (North Island, South Island, Stewart Island).
-// Keeps custom searches, coordinates, URL deep links, and map pins focused on NZ.
-const NZ_BOUNDS = { latMin: -47.6, latMax: -34.0, lonMin: 166.0, lonMax: 179.0 };
-function inNzBounds(lat, lon) {
-  return Number.isFinite(lat) && Number.isFinite(lon) &&
-    lat >= NZ_BOUNDS.latMin && lat <= NZ_BOUNDS.latMax &&
-    lon >= NZ_BOUNDS.lonMin && lon <= NZ_BOUNDS.lonMax;
-}
+const { inNzBounds, compassName, compassShort, heightPhrase, photonUrl, photonFeatures } = Places;
 
 const EARTH_RADIUS = 6371000;        // mean Earth radius, m
 const REFRACTION_K = 0.13;           // standard terrestrial refraction coefficient (effective R = R / (1 - k))
@@ -72,25 +65,6 @@ function radialDistances(growth, maxRange = SIGHTLINE_RANGE) {
   const out = [];
   for (let d = MIN_PROBE; d <= maxRange; d += Math.max(MIN_PROBE * 0.25, d * growth)) out.push(d);
   return out;
-}
-
-const COMPASS = ["north", "north-north-east", "north-east", "east-north-east", "east",
-  "east-south-east", "south-east", "south-south-east", "south", "south-south-west",
-  "south-west", "west-south-west", "west", "west-north-west", "north-west", "north-north-west"];
-const compassName = (az) => COMPASS[Math.round(((az % 360) + 360) % 360 / 22.5) % 16];
-const COMPASS_SHORT = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
-  "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
-const compassShort = (az) => COMPASS_SHORT[Math.round(((az % 360) + 360) % 360 / 22.5) % 16];
-
-// Height described the way you'd actually judge it in the field: an outstretched fist
-// spans roughly 10 degrees of sky.
-function heightPhrase(alt) {
-  if (alt <= 0) return "below the horizon";
-  const fists = alt / 10;
-  if (fists < 0.35) return "barely above the horizon";
-  if (fists < 0.75) return "about half a fist above the horizon";
-  if (fists < 1.4) return "about one fist above the horizon";
-  return `about ${Math.round(fists)} fists above the horizon`;
 }
 
 // ====================================================================================
@@ -1665,42 +1639,6 @@ function setCustomStatus(msg, type) {
   el.className = "mt-1.5 text-[11px] " + color;
 }
 
-// Geocoding uses Photon rather than Nominatim. Nominatim's usage policy explicitly forbids
-// autocomplete ("you must not implement such a service") and bans offenders; Photon is
-// OSM-based and purpose-built for type-ahead. Results are biased toward Otago and bounded
-// to New Zealand.
-const PHOTON_URL = "https://photon.komoot.io/api/";
-const BIAS = { lat: -45.1, lon: 169.2 };
-
-function photonUrl(query, limit) {
-  const bbox = `${NZ_BOUNDS.lonMin},${NZ_BOUNDS.latMin},${NZ_BOUNDS.lonMax},${NZ_BOUNDS.latMax}`;
-  return `${PHOTON_URL}?q=${encodeURIComponent(query)}&limit=${limit}` +
-         `&lat=${BIAS.lat}&lon=${BIAS.lon}&bbox=${bbox}&lang=en`;
-}
-
-// Build a readable label from Photon's structured properties.
-function photonLabel(p) {
-  const parts = [
-    [p.name, p.housenumber && p.street ? `${p.housenumber} ${p.street}` : p.street].find(Boolean),
-    p.city || p.town || p.village || p.locality,
-    p.county || p.state,
-    p.country,
-  ].filter(Boolean);
-  const seen = new Set();
-  return parts.filter((x) => (seen.has(x) ? false : seen.add(x))).join(", ");
-}
-
-function photonFeatures(json) {
-  return (json.features || [])
-    .filter((f) => f.geometry && Array.isArray(f.geometry.coordinates))
-    .map((f) => ({
-      name: photonLabel(f.properties || {}),
-      lon: f.geometry.coordinates[0],
-      lat: f.geometry.coordinates[1],
-    }))
-    .filter((f) => f.name && inNzBounds(f.lat, f.lon));
-}
-
 async function geocodeAddress(query) {
   const res = await fetch(photonUrl(query, 5), { headers: { Accept: "application/json" } });
   if (!res.ok) throw new Error("Geocoding service unavailable");
@@ -2472,11 +2410,11 @@ function catalogueVerdict(s) {
 // Totality scope, whichever way the verdict was reached: stored or checked live.
 const TOTALITY_HEADLINE = {
   clear:   { box: "bg-emerald-900/40 border-emerald-600/40", tone: "text-emerald-300",
-             icon: "check-circle", text: "Clear through totality" },
+             icon: "check-circle", text: Catalogue.TOTALITY_TEXT.clear },
   partial: { box: "bg-amber-900/40 border-amber-600/40", tone: "text-amber-300",
-             icon: "alert-triangle", text: "Part of totality blocked" },
+             icon: "alert-triangle", text: Catalogue.TOTALITY_TEXT.partial },
   blocked: { box: "bg-red-900/40 border-red-600/40", tone: "text-red-300",
-             icon: "eye-off", text: "Totality not visible" },
+             icon: "eye-off", text: Catalogue.TOTALITY_TEXT.blocked },
   below:   { box: "bg-slate-900/40 border-slate-600/40", tone: "text-slate-300",
              icon: "moon", text: "Sun below horizon" },
 };

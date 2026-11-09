@@ -33,6 +33,7 @@ export function matchesAccess(s, want) {
   const acc = s.access || "none";
   const sub = s.accessSub || "";
   if (want === "drive") return acc === "sealed" || acc === "track";
+  if (want === "road") return acc === "sealed" || sub === "gravel_road";   // a normal car
   if (want === "sealed") return acc === "sealed";
   if (want === "gravel_road") return sub === "gravel_road";
   if (want === "track") return acc === "track";
@@ -95,3 +96,23 @@ export function compareSpots(a, b) {
 }
 
 export const rankSpots = (list) => [...list].sort(compareSpots);
+
+// Keep the first spot in each screen cell, so pass a ranked list. `project` gives a spot's
+// { x, y } in pixels at the current zoom.
+export function declutter(list, project, cellPx) {
+  const taken = new Set();
+  return list.filter((s) => {
+    const { x, y } = project(s);
+    const cell = `${Math.floor(x / cellPx)},${Math.floor(y / cellPx)}`;
+    if (taken.has(cell)) return false;
+    taken.add(cell);
+    return true;
+  });
+}
+
+// The headline for a totality-scope verdict, the same wherever a place is shown.
+export const TOTALITY_TEXT = {
+  clear: "Clear through totality",
+  partial: "Part of totality blocked",
+  blocked: "Totality not visible",
+};
