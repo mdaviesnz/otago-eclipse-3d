@@ -44,6 +44,10 @@ The terrain point that sets the horizon on a bearing.
 **Horizon profile**:
 The horizon across the band of bearings the eclipsed sun passes through, stored for presets.
 
+**Skyline strip**:
+The simulator's main control: the horizon drawn as a silhouette with the sun's path across it. Moving the sun along the path sets the time.
+_Avoid_: timeline, scrubber, chart
+
 **Clearance**:
 The sun's apparent altitude minus the horizon on the sun's bearing, at one contact. Positive means the sun's centre is above the skyline.
 _Avoid_: margin, headroom

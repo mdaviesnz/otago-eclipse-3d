@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Otago Eclipse 2028 — will you see the total solar eclipse?</title>
   <meta name="description" content="Check whether mountains will block your view of the 22 July 2028 total solar eclipse in Otago, New Zealand. The sun is only ~8° above the horizon at totality, so terrain matters. 3D terrain, per-location timings and a catalogue of the best viewing spots." />
-  <meta name="theme-color" content="#0f172a" />
+  <meta name="theme-color" content="#0A1016" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Otago Eclipse" />
@@ -26,6 +26,9 @@
        head without `defer` nothing appears until it has arrived. Deferred scripts and modules
        run in document order, before DOMContentLoaded. -->
 
+  <!-- A link to a particular place skips the opening question. Set before the first paint. -->
+  <script>if (/[?&]lat=/.test(location.search)) document.documentElement.classList.add("has-place");</script>
+
   <!-- CesiumJS v1.118 -->
   <script defer src="https://cesium.com/downloads/cesiumjs/releases/1.118/Build/Cesium/Cesium.js"></script>
   <link href="https://cesium.com/downloads/cesiumjs/releases/1.118/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
@@ -41,186 +44,359 @@
   <script defer src="https://cdn.jsdelivr.net/npm/astronomy-engine@2/astronomy.browser.min.js"></script>
 
   <style>
+    :root { --p-bg: var(--ridge); --p-fg: var(--corona); --p-dim: #AAB7BC; --p-line: rgba(239,243,241,.16); --no: #FF9AA6; --strip-h: 300px; }
     html, body, #cesiumContainer { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; }
-    body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-    /* Hide Cesium credit clutter but keep attribution accessible */
+    body { font-family: Overpass, "Segoe UI", system-ui, sans-serif; background: var(--ridge); color: var(--p-fg);
+      font-size: 15px; line-height: 1.42; font-variant-numeric: tabular-nums lining-nums; }
     .cesium-widget-credits { display: none !important; }
-    .panel {
-      backdrop-filter: blur(12px);
-      background: rgba(15, 23, 42, 0.84);
-      border: 1px solid rgba(148, 163, 184, 0.24);
-      scrollbar-width: thin;
-      scrollbar-color: rgba(100, 116, 139, 0.5) transparent;
-    }
-    .panel::-webkit-scrollbar, #topSpots::-webkit-scrollbar, #rightStack::-webkit-scrollbar { width: 5px; height: 5px; }
-    .panel::-webkit-scrollbar-thumb, #topSpots::-webkit-scrollbar-thumb, #rightStack::-webkit-scrollbar-thumb {
-      background: rgba(100, 116, 139, 0.5); border-radius: 9999px;
-    }
-    .scrub { -webkit-appearance: none; appearance: none; height: 6px; border-radius: 9999px;
-             background: linear-gradient(90deg, #f59e0b 0%, #f59e0b var(--fill,0%), rgba(148,163,184,0.35) var(--fill,0%)); }
-    .scrub::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px;
-             border-radius: 9999px; background: #fbbf24; border: 2px solid #fff; cursor: pointer; box-shadow: 0 0 8px rgba(251,191,36,0.8); position: relative; z-index: 2; }
-    .scrub::-moz-range-thumb { width: 18px; height: 18px; border-radius: 9999px; background: #fbbf24; border: 2px solid #fff; cursor: pointer; position: relative; z-index: 2; }
-    @keyframes pulse-totality { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
-    .totality-on { animation: pulse-totality 1.4s ease-in-out infinite; }
+    [hidden] { display: none !important; }
+    button { font: inherit; color: inherit; }
+    a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--corona); outline-offset: 2px; }
 
-    /* Audience modes: casual visitors vs. eclipse chasers. */
-    body[data-mode="simple"] .expert-only { display: none !important; }
-    body[data-mode="expert"] .simple-only { display: none !important; }
+    /* Nothing below shows until a place has been chosen. */
+    body:not([data-ui="on"]) #verdictBlock, body:not([data-ui="on"]) #verdictScrim,
+    body:not([data-ui="on"]) #siteNav, body:not([data-ui="on"]) #strip { display: none; }
 
-    @keyframes fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-    .narrate { animation: fade-up 0.5s ease-out; }
+    /* ---- the opening question ---- */
+    #question { position: fixed; inset: 0; z-index: 60; overflow-y: auto; color: var(--corona);
+      background:
+        radial-gradient(ellipse 70% 60% at 76% 92%, rgba(185,138,66,.5), transparent 70%),
+        radial-gradient(circle at 76% 30%, rgba(44,74,82,.75), transparent 46%),
+        #05080C; }
+    .has-place #question { display: none; }
+    .q-moon { position: absolute; left: 76%; top: 30%; width: clamp(68px, 9vw, 120px); aspect-ratio: 1; border-radius: 50%;
+      transform: translate(-50%, -50%); background: #05080C;
+      box-shadow: 0 0 0 2px rgba(239,243,241,.95), 0 0 34px 12px rgba(239,243,241,.55), 0 0 110px 44px rgba(239,243,241,.16); }
+    .q-ridge { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 34vh; }
+    .q-inner { position: relative; box-sizing: border-box; max-width: 780px; min-height: 100%; display: flex; flex-direction: column;
+      justify-content: center; padding: 40px max(24px, 7vw); }
+    #questionTitle { font-family: Piazzolla, Georgia, serif; font-weight: 500; letter-spacing: -0.012em; line-height: 1.06;
+      font-size: clamp(2.3rem, 5.4vw, 4.4rem); margin: 0; max-width: 15em; text-wrap: balance; }
+    .q-why { margin: 16px 0 0; font-size: 1.14rem; max-width: 34em; }
+    .q-back { align-self: flex-start; margin-top: 24px; background: var(--corona); color: var(--ridge); font-weight: 700;
+      border: 0; border-radius: 3px; padding: 11px 18px 9px; cursor: pointer; }
+    .q-form { position: relative; margin-top: 24px; max-width: 480px; }
+    #questionInput { width: 100%; box-sizing: border-box; font: inherit; font-size: 1.14rem; color: var(--corona);
+      background: rgba(5,8,12,.55); border: 0; border-bottom: 2px solid var(--corona); padding: 10px 4px 7px; }
+    #questionInput::placeholder { color: var(--p-dim); }
+    .q-towns { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 20px; }
+    .q-towns button { background: none; border: 0; padding: 6px 0 2px; font-weight: 700; font-size: 1.07rem; color: var(--corona); cursor: pointer;
+      text-decoration: underline; text-decoration-color: rgba(239,243,241,.45); text-underline-offset: 4px; }
+    .q-status { margin: 14px 0 0; min-height: 1.4em; }
+    .q-map { color: var(--corona); margin-top: 10px; align-self: flex-start; text-underline-offset: 3px; font-size: .96rem; }
+    .suggestions { position: absolute; left: 0; right: 0; top: 100%; margin-top: 4px; z-index: 5; background: #151C24;
+      border: 1px solid var(--p-line); border-radius: 3px; overflow: hidden; }
+    .suggest-item { display: block; width: 100%; text-align: left; background: none; color: var(--corona); border: 0;
+      border-bottom: 1px solid var(--p-line); padding: 9px 10px 7px; cursor: pointer; }
+    .suggest-item:last-child { border-bottom: 0; }
+    .suggest-item:hover, .suggest-item.active { background: rgba(239,243,241,.1); }
 
-    #topBar { padding-top: max(0.5rem, env(safe-area-inset-top)); }
-    #bottomBar { padding-bottom: max(0.625rem, env(safe-area-inset-bottom)); }
+    #splash { display: none; position: fixed; inset: 0; z-index: 60; align-items: center; justify-content: center; flex-direction: column;
+      background: #05080C; text-align: center; padding: 24px; }
+    .has-place #splash { display: flex; }
+    #splash[data-done="1"] { display: none; }
 
-    /* Desktop side panels: constrain height so they never collide with the bottom timeline bar */
-    @media (min-width: 768px) and (min-height: 521px) {
-      #presetPanel { max-height: calc(100vh - 11.25rem); display: flex; flex-direction: column; }
-      #presetPanel > .panel { overflow-y: auto; max-height: 100%; }
-      #rightStack { max-height: calc(100vh - 11.25rem); overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(100, 116, 139, 0.5) transparent; }
-    }
+    /* ---- the verdict ---- */
+    #verdictScrim { position: fixed; left: 0; top: 0; width: min(1000px, 86vw); height: 62vh; z-index: 20; pointer-events: none;
+      background: radial-gradient(ellipse 100% 100% at 0 0, rgba(5,8,12,.82), rgba(5,8,12,.5) 45%, transparent 75%); transition: opacity .6s; }
+    #verdictBlock { position: fixed; z-index: 25; left: max(28px, env(safe-area-inset-left, 0px)); top: max(24px, env(safe-area-inset-top, 0px));
+      width: min(620px, 58vw); transition: opacity .6s; }
+    #verdictSentence { margin: 0; font-family: Piazzolla, Georgia, serif; font-weight: 620; letter-spacing: -0.012em; line-height: 1.04;
+      font-size: clamp(2.1rem, 4.4vw, 3.8rem); text-wrap: balance; }
+    #placeButton { background: none; border: 0; padding: 0; font: inherit; letter-spacing: inherit; cursor: pointer; text-align: left;
+      text-decoration: underline; text-decoration-thickness: .05em; text-decoration-color: rgba(239,243,241,.55); text-underline-offset: .12em; }
+    #verdictReason { margin: 12px 0 0; font-size: 1.2rem; line-height: 1.36; max-width: 30em; }
+    #goNearest { display: block; margin-top: 14px; background: var(--corona); color: var(--ridge); font-weight: 700; text-align: left;
+      border: 0; border-radius: 3px; padding: 10px 15px 8px; cursor: pointer; }
+    #goNearest small { display: block; font-size: .88rem; font-weight: 500; }
+    #openDetails { display: block; margin-top: 12px; background: none; border: 0; padding: 0; font-weight: 600; cursor: pointer;
+      text-decoration: underline; text-decoration-color: rgba(239,243,241,.5); text-underline-offset: 3px; }
+    #siteNav { position: fixed; z-index: 25; right: max(24px, env(safe-area-inset-right, 0px)); top: max(20px, env(safe-area-inset-top, 0px));
+      display: flex; gap: 18px; font-weight: 600; transition: opacity .6s; background: rgba(5,8,12,.55); padding: 7px 12px 4px; border-radius: 3px; }
+    #siteNav a, #siteNav button { color: var(--corona); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: none; }
+    #siteNav a:hover, #siteNav button:hover { text-decoration: underline; text-underline-offset: 3px; }
 
-    /* ---------------------------------------------------------------------------------
-       Mobile (and phone landscape): the side panels are fixed-width overlays that, on a
-       phone, cover the globe and each other. Below 768px width or 520px height they become
-       drawers opened one at a time from the top bar, leaving the 3D view visible by default.
-       --------------------------------------------------------------------------------- */
-    #mobileTabs, .drawer-header, #mobileVerdictWrap { display: none; }
+    #timeLeft { display: none; position: fixed; z-index: 25; left: 0; right: 0; bottom: calc(var(--strip-h) + 14px); text-align: center;
+      text-shadow: 0 1px 12px #000; pointer-events: none; }
+    #timeLeft b { display: block; font-family: Piazzolla, Georgia, serif; font-weight: 450; font-size: clamp(2.6rem, 5.4vw, 4.4rem); line-height: 1; }
+    #timeLeft span { display: block; margin-top: 4px; }
+
+    /* During totality everything steps back. Moving the pointer brings it forward again. */
+    body[data-quiet="1"]:not([data-awake="1"]) #verdictBlock, body[data-quiet="1"]:not([data-awake="1"]) #verdictScrim,
+    body[data-quiet="1"]:not([data-awake="1"]) #siteNav, body[data-quiet="1"]:not([data-awake="1"]) #stripControls,
+    body[data-quiet="1"]:not([data-awake="1"]) .contact, body[data-quiet="1"]:not([data-awake="1"]) #stripReadout,
+    body[data-quiet="1"]:not([data-awake="1"]) #stripShort { opacity: 0; pointer-events: none; }
+    body[data-quiet="1"]:not([data-awake="1"]) #timeLeft { display: block; }
+    body[data-cinematic="1"] #verdictBlock, body[data-cinematic="1"] #verdictScrim, body[data-cinematic="1"] #siteNav { opacity: 0; pointer-events: none; }
+
+    /* ---- narration, set like subtitles ---- */
+    #narration { position: fixed; z-index: 30; left: 50%; transform: translateX(-50%); bottom: calc(var(--strip-h) + 14px); width: min(92vw, 620px);
+      text-align: center; pointer-events: none; background: rgba(5,8,12,.72); padding: 11px 16px 9px; border-radius: 3px; }
+    #narrationText { margin: 0; font-weight: 700; font-size: 1.1rem; line-height: 1.28; }
+    #narrationSub { margin: 3px 0 0; color: var(--p-dim); }
+    #narrationActions { display: flex; justify-content: center; gap: 8px; margin-top: 10px; pointer-events: auto; }
+    #narrationGo { background: var(--corona); color: var(--ridge); font-weight: 700; border: 0; border-radius: 3px; padding: 8px 13px 6px; cursor: pointer; }
+    #narrationDismiss { background: none; color: var(--corona); border: 1px solid rgba(239,243,241,.45); border-radius: 3px; padding: 7px 12px 5px; cursor: pointer; }
+
+    /* ---- the skyline strip ---- */
+    #strip { position: fixed; z-index: 24; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; height: var(--strip-h);
+      padding-bottom: env(safe-area-inset-bottom, 0px); background: linear-gradient(transparent, rgba(5,8,12,.42) 26%); }
+    #stripChart { position: relative; flex: 1; min-height: 0; cursor: ew-resize; touch-action: none; user-select: none; }
+    #stripSvg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible; font-family: inherit; }
+    #timeScrub { position: absolute; left: 0; top: 0; width: 1px; height: 1px; opacity: 0; margin: 0; }
+    #timeScrub:focus-visible ~ #stripSvg .sun-mark { stroke: var(--corona); stroke-width: 4; }
+    .contact { position: absolute; transform: translate(-50%, -100%); margin-top: -9px; white-space: nowrap; font-size: .88rem; font-weight: 600; cursor: pointer;
+      color: var(--corona); background: rgba(10,16,22,.8); border: 0; border-radius: 2px; padding: 3px 6px 1px; transition: opacity .6s; }
+    .contact[hidden] { display: none; }
+    #stripShort { position: absolute; margin: 0; font-size: .88rem; font-weight: 600; color: var(--no); white-space: nowrap; pointer-events: none; transition: opacity .6s; }
+    #drawSkyline { position: absolute; right: max(16px, env(safe-area-inset-right, 0px)); bottom: 30px; background: var(--corona); color: var(--ridge);
+      font-weight: 700; border: 0; border-radius: 3px; padding: 8px 14px 6px; cursor: pointer; white-space: nowrap; }
+    #drawSkyline small { display: block; font-weight: 500; font-size: .8rem; }
+    #stripBusy { position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%); margin: 0; pointer-events: none; white-space: nowrap;
+      background: rgba(10,16,22,.8); padding: 4px 9px 2px; border-radius: 2px; }
+    #stripReadout { position: absolute; right: max(16px, env(safe-area-inset-right, 0px)); top: 4px; margin: 0; pointer-events: none; transition: opacity .6s;
+      background: rgba(10,16,22,.72); padding: 4px 8px 2px; border-radius: 2px; }
+    #clockReadout { font-weight: 700; }
+    #phaseReadout { color: var(--p-dim); margin-left: 6px; }
+    #stripControls { display: flex; align-items: center; gap: 10px; padding: 8px max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px));
+      background: var(--ridge); transition: opacity .6s; }
+    #playPause { width: 38px; height: 38px; flex: none; display: inline-flex; align-items: center; justify-content: center; background: none;
+      border: 1px solid rgba(239,243,241,.45); border-radius: 3px; cursor: pointer; }
+    #playPause svg { width: 16px; height: 16px; }
+    #watchIt { background: var(--corona); color: var(--ridge); font-weight: 700; border: 0; border-radius: 3px; padding: 10px 14px 8px; cursor: pointer; }
+    #viewToggle { background: none; border: 0; padding: 4px 2px; font-weight: 600; color: var(--p-dim); cursor: pointer; }
+    #viewToggle strong { color: var(--corona); font-weight: 700; }
+    #dataCredit { margin: 0 0 0 auto; font-size: .78rem; color: var(--p-dim); text-align: right; max-width: 62ch; line-height: 1.25; }
+
+    /* ---- the two sheets ---- */
+    .sheet { display: none; flex-direction: column; position: fixed; z-index: 40; top: 0; bottom: 0; width: min(400px, 100vw); background: var(--ridge); box-shadow: 0 0 34px rgba(0,0,0,.5); }
+    #placesPanel { left: 0; }
+    #detailsPanel { right: 0; }
+    body[data-panel="places"] #placesPanel, body[data-panel="details"] #detailsPanel { display: flex; }
+    .sheet-head { display: flex; align-items: baseline; justify-content: space-between; padding: 20px 20px 10px; }
+    .sheet-head h2 { font-family: Piazzolla, Georgia, serif; font-weight: 620; font-size: 1.7rem; line-height: 1.05; margin: 0; }
+    .sheet-head button { background: none; border: 0; padding: 0; font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+    .sheet-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 20px calc(24px + env(safe-area-inset-bottom, 0px)); scrollbar-width: thin; }
+    .sheet-body h3 { margin: 20px 0 8px; font-size: 1rem; }
+    .search-wrap { position: relative; }
+    #customInput, .sheet select { width: 100%; box-sizing: border-box; font: inherit; font-size: 16px; color: var(--corona); background: var(--ridge);
+      border: 1px solid rgba(239,243,241,.45); border-radius: 3px; padding: 9px 10px 7px; }
+    .sheet select { margin-bottom: 7px; }
+    .search-actions { display: flex; gap: 6px; margin-top: 7px; }
+    .search-actions button { flex: 1; background: none; border: 1px solid rgba(239,243,241,.45); border-radius: 3px; padding: 8px 4px 6px; font-weight: 600; cursor: pointer; font-size: .92rem; }
+    .search-actions button[aria-pressed="true"] { background: var(--corona); color: var(--ridge); }
+    #customStatus { margin: 8px 0 0; color: var(--p-dim); }
+    #customStatus[data-type="error"] { color: var(--no); }
+    #presetButtons { display: flex; flex-direction: column; }
+    .place-btn { display: flex; justify-content: space-between; background: none; border: 0; border-top: 1px solid var(--p-line); padding: 9px 2px 7px; font-weight: 700; cursor: pointer; text-align: left; }
+    .place-btn[aria-current="true"] { text-decoration: underline; text-underline-offset: 3px; }
+    .spot-btn { display: block; width: 100%; background: none; border: 0; border-top: 1px solid var(--p-line); padding: 10px 2px 8px; cursor: pointer; text-align: left; }
+    .spot-btn[aria-current="true"] .spot-name { text-decoration: underline; text-underline-offset: 3px; }
+    .spot-btn:hover, .place-btn:hover { background: rgba(239,243,241,.06); }
+    .spot-name { display: block; font-weight: 700; }
+    .spot-sub { display: block; color: var(--p-dim); font-size: .93rem; }
+    .spot-flag { color: var(--no); }
+    #topSpotsNote { margin: 10px 0 0; color: var(--p-dim); font-size: .86rem; }
+
+    .detail-head { margin: 0; font-weight: 700; font-size: 1.14rem; }
+    .detail-head[data-no="1"] { color: var(--no); }
+    .contacts { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    .contacts th { font-weight: 500; color: var(--p-dim); text-align: right; font-size: .86rem; padding-bottom: 3px; }
+    .contacts th:first-child { text-align: left; }
+    .contacts td { padding: 5px 0 3px; border-top: 1px solid var(--p-line); text-align: right; white-space: nowrap; }
+    .contacts td:first-child { text-align: left; }
+    .contacts tr[data-judged="1"] td { font-weight: 700; }
+    .contacts .no { color: var(--no); }
+    .facts { margin: 16px 0 0; }
+    .facts div { display: flex; justify-content: space-between; gap: 18px; padding: 5px 0 3px; border-top: 1px solid var(--p-line); }
+    .facts dt { color: var(--p-dim); white-space: nowrap; }
+    .facts dd { margin: 0; text-align: right; min-width: 0; }
+    .note { margin: 12px 0 0; }
+    .note[data-warn="1"] { color: var(--no); }
+    .fine { margin: 14px 0 0; color: var(--p-dim); font-size: .86rem; }
+    .detail-actions { display: grid; gap: 7px; margin-top: 16px; }
+    .detail-actions a { display: block; text-align: center; color: var(--corona); font-weight: 700; text-decoration: none; border: 1px solid rgba(239,243,241,.45); border-radius: 3px; padding: 9px 8px 7px; }
+
+    /* The About dialog keeps the shared markup, in this page's colours. */
+    #aboutOverlay .panel { background: var(--ridge); border: 1px solid var(--p-line); }
+    #aboutOverlay svg, #aboutOverlay .text-amber-300, #aboutOverlay .text-amber-400 { color: var(--corona); }
+    #aboutOverlay .text-amber-200\/90 { color: var(--corona); }
+    #aboutOverlay .bg-amber-900\/25 { background: rgba(239,243,241,.08); border-color: var(--p-line); }
+    #aboutOverlay a.bg-amber-500 { background: var(--corona); color: var(--ridge); }
+    #aboutOverlay a.bg-amber-500 svg { color: var(--ridge); }
 
     @media (max-width: 767px), (max-height: 520px) {
-      #mobileTabs { display: flex; }
-      .drawer-header { display: flex; }
-      #mobileVerdictWrap {
-        display: flex;
-        top: var(--top-bar-offset, 4.25rem);
-      }
-      body[data-panel="places"] #mobileVerdictWrap,
-      body[data-panel="info"] #mobileVerdictWrap,
-      body[data-cinematic="1"] #mobileVerdictWrap {
-        display: none !important;
-      }
-
-      #presetPanel, #rightStack {
-        position: fixed;
-        left: 0.5rem;
-        right: 0.5rem;
-        width: auto;
-        top: var(--top-bar-offset, 4.25rem);
-        bottom: var(--bottom-bar-offset, 8.25rem);
-        max-height: none;
-        overflow-y: auto;
-        overscroll-behavior: contain;
-        z-index: 40;
-        display: none;
-      }
-      body[data-panel="places"] #presetPanel { display: block; }
-      body[data-panel="info"] #rightStack { display: flex; }
-
-      /* Single unified scroll container in the mobile Places drawer */
-      #topSpots { max-height: none; }
-
-      /* Give the scrubber a bigger hit area for thumbs. */
-      .scrub { height: 10px; }
-      .scrub::-webkit-slider-thumb { width: 24px; height: 24px; }
-      .scrub::-moz-range-thumb { width: 24px; height: 24px; }
-
-      #narration { top: calc(var(--top-bar-offset, 4.25rem) + 0.25rem); }
-
-      /* Name, clock and phase share the first row, so the phase never wraps onto a row alone. */
-      #topBar .panel > :nth-child(1), #topBar .panel > :nth-child(2), #totalityBadge { order: -1; }
-
-      /* The active tab turns amber, which would swallow its amber icon. */
-      body[data-panel="places"] #tabPlaces svg, body[data-panel="info"] #tabInfo svg { color: #0f172a; }
+      :root { --strip-h: 262px; }
+      #verdictBlock { left: 16px; right: 16px; width: auto; top: max(14px, env(safe-area-inset-top, 0px)); }
+      #verdictSentence { font-size: clamp(1.9rem, 8.6vw, 2.5rem); padding-right: 92px; }
+      #verdictReason { font-size: 1.02rem; margin-top: 8px; }
+      #verdictScrim { width: 100%; height: 52vh; background: linear-gradient(rgba(5,8,12,.82), rgba(5,8,12,.42) 60%, transparent); }
+      #siteNav { top: max(12px, env(safe-area-inset-top, 0px)); right: 10px; flex-direction: column; align-items: flex-end; gap: 5px; font-size: .9rem; padding: 6px 9px 3px; }
+      .contact-word { display: none; }
+      #dataCredit { display: none; }
+      #stripControls { justify-content: space-between; }
+      #watchIt { flex: 1; }
+      #stripReadout { top: auto; bottom: 100%; margin-bottom: 4px; }
+      .sheet { top: auto; left: 0; right: 0; bottom: 0; width: auto; height: 78dvh; border-radius: 12px 12px 0 0; }
+      .q-moon { left: 80%; top: 12%; }
+      .q-inner { justify-content: flex-start; padding-top: max(19vh, 120px); }
+      .q-ridge { height: 22vh; }
     }
   </style>
 </head>
-<body class="bg-slate-900 text-slate-100">
+<body>
 
   <div id="cesiumContainer"></div>
 
-  <!-- ============================= SPLASH / LOADING ============================= -->
-  <div id="splash" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950 p-4">
-    <div class="text-center max-w-sm">
-      <i data-lucide="eclipse" class="block w-12 h-12 text-amber-400 mx-auto mb-4"></i>
-      <h1 class="text-2xl font-bold tracking-tight mb-1">Otago Eclipse 3D</h1>
-      <p class="text-sm text-slate-400 mb-6">Total Solar Eclipse &middot; 22 July 2028 &middot; 4:17 PM NZST</p>
-      <p id="splashStatus" class="text-xs text-slate-500 flex items-center justify-center gap-2">
-        <i data-lucide="loader" class="w-3.5 h-3.5 animate-spin"></i> Loading terrain&hellip;
-      </p>
-      <p id="splashError" class="hidden mt-4 text-sm text-red-400"></p>
+  <!-- ============================= THE OPENING QUESTION ============================= -->
+  <div id="question" role="dialog" aria-labelledby="questionTitle">
+    <div class="q-moon" aria-hidden="true"></div>
+    <svg class="q-ridge" viewBox="0 0 1000 300" preserveAspectRatio="none" aria-hidden="true"><path d="M0 300 L0 101 L20 97 L39 91 L59 87 L78 81 L98 73 L118 68 L137 64 L157 62 L176 61 L196 61 L216 60 L235 61 L255 63 L275 71 L294 78 L314 75 L333 75 L353 74 L373 69 L392 68 L412 70 L431 74 L451 71 L471 69 L490 67 L510 72 L529 73 L549 78 L569 84 L588 88 L608 95 L627 102 L647 108 L667 112 L686 112 L706 113 L725 117 L745 123 L765 128 L784 132 L804 128 L824 124 L843 121 L863 117 L882 115 L902 110 L922 109 L941 108 L961 106 L980 115 L1000 117 L1000 300Z" fill="#0A1016"/></svg>
+    <div class="q-inner">
+      <h1 id="questionTitle">Where will you be standing at 4:16&nbsp;pm on 22&nbsp;July&nbsp;2028?</h1>
+      <p class="q-why">The sun will be one fist above the horizon, and a single hill can hide it.</p>
+      <button id="questionBack" type="button" class="q-back" hidden></button>
+      <form id="questionForm" class="q-form" role="search">
+        <input id="questionInput" type="search" autocomplete="off" placeholder="Type a town or an address"
+          aria-label="Type a town, an address or coordinates" />
+        <div id="questionSuggestions" class="suggestions" hidden></div>
+      </form>
+      <div class="q-towns">
+        <button type="button" data-town="Queenstown">Queenstown</button>
+        <button type="button" data-town="Arrowtown">Arrowtown</button>
+        <button type="button" data-town="Wānaka">Wānaka</button>
+        <button type="button" data-town="Cromwell">Cromwell</button>
+        <button type="button" data-town="Dunedin">Dunedin</button>
+      </div>
+      <p id="questionStatus" class="q-status" role="status"></p>
+      <a class="q-map" href="map.html">Or browse every viewing spot on the map</a>
+    </div>
+    <!-- simulator.js arrives after Cesium's 1.5 MB, so hold on to anything chosen before then. -->
+    <script>
+      (function () {
+        var form = document.getElementById("questionForm");
+        var status = document.getElementById("questionStatus");
+        function click(e) {
+          var b = e.target.closest && e.target.closest("[data-town]");
+          if (b) { window.__questionAnswer = { town: b.dataset.town }; status.textContent = "One moment…"; }
+        }
+        function submit(e) {
+          e.preventDefault();
+          window.__questionAnswer = { query: document.getElementById("questionInput").value };
+          status.textContent = "One moment…";
+        }
+        document.addEventListener("click", click);
+        form.addEventListener("submit", submit);
+        window.__dropEarlyQuestion = function () {
+          document.removeEventListener("click", click);
+          form.removeEventListener("submit", submit);
+        };
+      })();
+    </script>
+  </div>
+
+  <!-- A shared link knows where it is going, so it gets this instead of the question. -->
+  <div id="splash">
+    <p id="splashStatus">Loading terrain…</p>
+    <p id="splashError" hidden></p>
+  </div>
+
+  <!-- ============================= THE VERDICT ============================= -->
+  <div id="verdictScrim" aria-hidden="true"></div>
+  <section id="verdictBlock" aria-live="polite">
+    <p id="verdictSentence"><button id="placeButton" type="button" title="Change place"><span id="placeName">Choose a place</span></button><span id="verdictRest"></span></p>
+    <p id="verdictReason"></p>
+    <button id="goNearest" type="button" hidden></button>
+    <button id="openDetails" type="button">Times and details</button>
+  </section>
+
+  <nav id="siteNav" aria-label="Site">
+    <a id="navMap" href="map.html">Map</a>
+    <a href="astronomy.html">How it works</a>
+    <button id="aboutBtn" type="button">About</button>
+  </nav>
+
+  <!-- What is left on screen during totality. -->
+  <div id="timeLeft" aria-live="off"><b id="timeLeftValue"></b><span id="timeLeftNote"></span></div>
+
+  <!-- ============================= NARRATION ============================= -->
+  <div id="narration" hidden>
+    <p id="narrationText"></p>
+    <p id="narrationSub"></p>
+    <div id="narrationActions" hidden>
+      <button id="narrationGo" type="button"></button>
+      <button id="narrationDismiss" type="button">Not now</button>
     </div>
   </div>
 
-  <!-- ============================= TOP STATUS BAR ============================= -->
-  <div id="topBar" class="hidden fixed top-0 inset-x-0 z-30 px-2.5 py-1.5 sm:px-4 sm:py-2">
-    <div class="panel rounded-xl px-3 py-1.5 sm:px-4 sm:py-2 flex flex-wrap items-center gap-x-2.5 sm:gap-x-5 gap-y-1.5 shadow-lg">
-      <div class="flex items-center gap-1.5 sm:gap-2 mr-auto">
-        <i data-lucide="eclipse" class="w-5 h-5 text-amber-400 shrink-0"></i>
-        <span class="font-semibold text-sm sm:text-base leading-tight">Otago Eclipse</span>
-        <span class="hidden sm:inline text-xs font-medium text-amber-300 whitespace-nowrap">22 July 2028</span>
-      </div>
-      <div class="flex items-center gap-1.5 text-xs sm:text-sm">
-        <i data-lucide="clock" class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400"></i>
-        <span class="hidden sm:inline text-slate-400">NZST</span>
-        <span id="clockReadout" class="font-mono font-semibold text-amber-300">--:--:--</span>
-      </div>
-      <div class="expert-only hidden md:flex items-center gap-2 text-sm">
-        <i data-lucide="sun" class="w-4 h-4 text-slate-400"></i>
-        <span class="text-slate-400">Alt</span>
-        <span id="sunAlt" class="font-mono font-semibold">--&deg;</span>
-        <span class="text-slate-400 ml-2">Az</span>
-        <span id="sunAz" class="font-mono font-semibold">--&deg;</span>
-      </div>
-      <div class="simple-only hidden md:flex items-center gap-2 text-sm">
-        <i data-lucide="sun" class="w-4 h-4 text-slate-400"></i>
-        <span id="sunPlain" class="text-slate-300">Sun low in the north-west</span>
-      </div>
+  <!-- ============================= THE SKYLINE STRIP ============================= -->
+  <section id="strip" aria-label="The eclipse across your skyline">
+    <div id="stripChart">
+      <!-- The real control for keyboards and screen readers; the chart above it is for pointers. -->
+      <input id="timeScrub" type="range" min="0" max="1000" value="0" aria-label="Time during the eclipse" />
+      <svg id="stripSvg" aria-hidden="true"></svg>
+      <button id="jumpStart" class="contact" type="button"></button>
+      <button id="jumpTotality" class="contact" type="button"></button>
+      <button id="jumpEnd" class="contact" type="button"></button>
+      <p id="stripShort" hidden></p>
+      <button id="drawSkyline" type="button" hidden>Draw the full skyline<small>Downloads about 14 MB of terrain</small></button>
+      <p id="stripBusy" hidden></p>
+      <p id="stripReadout"><span id="clockReadout">--:--</span> <span id="phaseReadout"></span></p>
+    </div>
+    <div id="stripControls">
+      <button id="playPause" type="button" aria-label="Play or pause"></button>
+      <button id="watchIt" type="button">Watch from here</button>
+      <button id="viewToggle" type="button"></button>
+      <p id="dataCredit"></p>
+    </div>
+  </section>
 
-      <!-- Mobile drawer tabs -->
-      <div id="mobileTabs" class="items-center gap-1.5">
-        <button id="tabPlaces" class="inline-flex items-center gap-1.5 min-h-[34px] text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 py-1.5 transition">
-          <i data-lucide="map-pin" class="w-3.5 h-3.5 text-amber-400"></i> Places
-        </button>
-        <button id="tabInfo" class="inline-flex items-center gap-1.5 min-h-[34px] text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 py-1.5 transition">
-          <i data-lucide="info" class="w-3.5 h-3.5 text-amber-400"></i> Details
-        </button>
+  <!-- ============================= CHANGE PLACE ============================= -->
+  <aside id="placesPanel" class="sheet" aria-label="Change place">
+    <header class="sheet-head"><h2>Change place</h2><button id="closePlaces" type="button">Close</button></header>
+    <div class="sheet-body">
+      <div class="search-wrap">
+        <input id="customInput" type="search" autocomplete="off" placeholder="Search a town, address or lat, lon"
+          aria-label="Search for a town, address or coordinates" />
+        <div id="suggestions" class="suggestions" hidden></div>
       </div>
-      <button id="modeToggle" title="Switch between simple and detailed views"
-        class="inline-flex items-center gap-1.5 min-h-[34px] text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 py-1.5 transition">
-        <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5 text-amber-400"></i>
-        <span id="modeLabel">Simple</span>
-      </button>
-      <a href="astronomy.html" title="How the astronomy and sightline checks work"
-        class="inline-flex items-center gap-1.5 min-h-[34px] text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 py-1.5 transition">
-        <i data-lucide="compass" class="w-3.5 h-3.5 text-amber-400"></i>
-        <span class="hidden sm:inline">Astronomy</span>
-      </a>
-      <button id="aboutBtn" title="About this tool"
-        class="inline-flex items-center gap-1.5 min-h-[34px] text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 py-1.5 transition">
-        <i data-lucide="info" class="w-3.5 h-3.5 text-amber-400"></i>
-        <span class="hidden sm:inline">About</span>
-      </button>
-      <div id="totalityBadge" class="flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full bg-slate-700 text-slate-400">
-        <span class="w-2 h-2 rounded-full bg-slate-500"></span>
-        <span id="totalityText">PARTIAL</span>
+      <div class="search-actions">
+        <button id="customGo" type="button">Go</button>
+        <button id="customGeo" type="button">Near me</button>
+        <button id="pinToggle" type="button">Pin on the 3D view</button>
+      </div>
+      <p id="customStatus" role="status" hidden></p>
+
+      <h3>Towns</h3>
+      <div id="presetButtons"></div>
+
+      <div id="topSpotsSection" hidden>
+        <h3>Best viewing spots</h3>
+        <select id="accessFilter" aria-label="How you will get there">
+          <option value="any" selected>Any access</option>
+          <option value="drive">Drivable (road or track)</option>
+          <option value="sealed">Sealed road only</option>
+          <option value="track">Unsealed road or 4WD track</option>
+          <option value="foot">Walking track only</option>
+        </select>
+        <select id="distFilter" aria-label="How far from here">
+          <option value="0" selected>Anywhere in the path</option>
+          <option value="10">Within 10 km of here</option>
+          <option value="25">Within 25 km of here</option>
+          <option value="50">Within 50 km of here</option>
+          <option value="100">Within 100 km of here</option>
+        </select>
+        <div id="topSpots"></div>
+        <p id="topSpotsNote"></p>
       </div>
     </div>
-  </div>
+  </aside>
 
-  <!-- ============================= MOBILE COMPACT VERDICT PILL ============================= -->
-  <div id="mobileVerdictWrap" class="hidden fixed inset-x-0 z-30 px-2.5 pointer-events-none justify-center">
-    <button id="mobileVerdictBtn" type="button" title="Tap to view the horizon chart and full details"
-      class="pointer-events-auto panel rounded-full px-3.5 py-1.5 shadow-xl flex items-center gap-2 max-w-full text-xs transition hover:bg-slate-800/90">
-      <span id="mobileVerdictLoc" class="font-semibold text-amber-300 truncate max-w-[9rem]">Dunedin</span>
-      <span class="text-slate-600">&middot;</span>
-      <span id="mobileVerdictState" class="inline-flex items-center gap-1 font-medium text-slate-300 truncate">
-        <i data-lucide="loader" class="w-3.5 h-3.5 text-amber-400 shrink-0"></i>
-        <span>Checking&hellip;</span>
-      </span>
-      <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-slate-400 shrink-0"></i>
-    </button>
-  </div>
+  <!-- ============================= TIMES AND DETAILS ============================= -->
+  <aside id="detailsPanel" class="sheet" aria-label="Times and details">
+    <header class="sheet-head"><h2>Times and details</h2><button id="closeDetails" type="button">Close</button></header>
+    <div class="sheet-body" id="detailBody"></div>
+  </aside>
 
   <!-- ============================= ABOUT DIALOG ============================= -->
   <div id="aboutOverlay" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-3 sm:p-6"
@@ -318,267 +494,14 @@
     </div>
   </div>
 
-  <!-- ============================= NARRATION (cinematic playback) ============================= -->
-  <div id="narration" class="hidden fixed left-1/2 -translate-x-1/2 top-24 z-40 max-w-md w-[min(90vw,28rem)] text-center pointer-events-none">
-    <div class="panel rounded-xl px-5 py-3 shadow-2xl">
-      <p id="narrationText" class="text-sm text-slate-100 leading-snug"></p>
-      <p id="narrationSub" class="text-[11px] text-slate-400 mt-1"></p>
-      <div id="narrationActions" class="hidden mt-2.5 flex items-center justify-center gap-2 pointer-events-auto">
-        <button id="narrationGo" type="button"
-          class="text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg px-3 py-1.5 transition"></button>
-        <button id="narrationDismiss" type="button"
-          class="text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-1.5 transition">Not now</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ============================= LEFT PRESET PANEL ============================= -->
-  <div id="presetPanel" class="hidden fixed left-3 top-20 z-30 w-60">
-    <div class="panel rounded-xl p-3 shadow-lg">
-      <div class="drawer-header items-center justify-between pb-2 mb-2.5 border-b border-slate-700/60">
-        <span class="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
-          <i data-lucide="map-pin" class="w-4 h-4 text-amber-400"></i> Choose a location
-        </span>
-        <button id="closePlacesDrawer" type="button" aria-label="Close places drawer"
-          class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition">
-          <i data-lucide="x" class="w-4 h-4"></i>
-        </button>
-      </div>
-      <p class="text-[11px] uppercase tracking-wide text-slate-400 mb-1.5 flex items-center gap-1.5">
-        <i data-lucide="navigation" class="w-3.5 h-3.5"></i> Fly to
-      </p>
-      <div id="presetButtons" class="flex flex-col gap-1"></div>
-
-      <div id="topSpotsSection" class="hidden mt-2.5 pt-2.5 border-t border-slate-700/60">
-        <p class="text-[11px] uppercase tracking-wide text-slate-400 mb-1.5 flex items-center justify-between gap-1.5">
-          <span class="flex items-center gap-1.5"><i data-lucide="award" class="w-3.5 h-3.5"></i> Best viewing spots</span>
-          <a href="map.html" title="See all spots on an overview map"
-             class="inline-flex items-center gap-1 text-amber-400 hover:text-amber-300 normal-case tracking-normal">
-            <i data-lucide="map" class="w-3.5 h-3.5"></i> Map
-          </a>
-        </p>
-        <select id="accessFilter"
-          class="w-full text-base sm:text-xs bg-slate-800/80 border border-slate-600 rounded-lg px-2 py-1.5 sm:py-1 mb-1.5 focus:outline-none focus:ring-2 focus:ring-amber-400 cursor-pointer">
-          <option value="any" selected>Any access</option>
-          <option value="drive">Drivable (road or track)</option>
-          <option value="sealed">Sealed road only</option>
-          <option value="track">Unsealed road or 4WD track</option>
-          <option value="foot">Walking track only</option>
-        </select>
-        <select id="distFilter"
-          class="w-full text-base sm:text-xs bg-slate-800/80 border border-slate-600 rounded-lg px-2 py-1.5 sm:py-1 mb-1.5 focus:outline-none focus:ring-2 focus:ring-amber-400 cursor-pointer">
-          <option value="0" selected>Anywhere in the path</option>
-          <option value="10">Within 10 km of here</option>
-          <option value="25">Within 25 km of here</option>
-          <option value="50">Within 50 km of here</option>
-          <option value="100">Within 100 km of here</option>
-        </select>
-        <div id="topSpots" class="flex flex-col gap-1 max-h-52 overflow-y-auto pr-0.5"></div>
-        <p id="topSpotsNote" class="text-[10px] text-slate-500 mt-1.5 leading-snug"></p>
-      </div>
-
-      <div class="mt-2.5 pt-2.5 border-t border-slate-700/60">
-        <p class="text-[11px] uppercase tracking-wide text-slate-400 mb-1.5 flex items-center gap-1.5">
-          <i data-lucide="map-pin" class="w-3.5 h-3.5"></i> Custom location
-        </p>
-        <div class="relative">
-          <input id="customInput" type="text" autocomplete="off" placeholder="Address or lat, lon"
-            class="w-full text-base sm:text-xs bg-slate-800/80 border border-slate-600 rounded-lg px-2.5 py-1.5 mb-1.5 focus:outline-none focus:ring-2 focus:ring-amber-400" />
-          <div id="suggestions" class="hidden absolute left-0 right-0 top-full -mt-0.5 z-40 panel rounded-lg overflow-hidden max-h-56 overflow-y-auto shadow-xl"></div>
-        </div>
-        <div class="flex gap-1.5">
-          <button id="customGo"
-            class="flex-1 inline-flex items-center justify-center gap-1.5 text-xs font-medium bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg px-2 py-2 sm:py-1.5 transition">
-            <i data-lucide="search" class="w-3.5 h-3.5"></i> Go
-          </button>
-          <button id="customGeo" title="Use my current location"
-            class="shrink-0 inline-flex items-center justify-center bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-2 sm:px-2.5 sm:py-1.5 transition">
-            <i data-lucide="locate-fixed" class="w-4 h-4 sm:w-3.5 sm:h-3.5 text-amber-400"></i>
-          </button>
-        </div>
-        <button id="pinToggle" title="Toggle, then click the map to set the location"
-          class="mt-1.5 w-full inline-flex items-center justify-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2 py-2 sm:py-1.5 transition">
-          <i data-lucide="map-pinned" class="w-3.5 h-3.5 text-amber-400"></i> Pin on map
-        </button>
-        <p id="customStatus" class="hidden mt-1.5 text-[11px]"></p>
-      </div>
-    </div>
-  </div>
-
-  <!-- ============================= RIGHT-SIDE STACK ============================= -->
-  <div id="rightStack" class="hidden fixed right-3 top-20 z-30 w-72 flex flex-col gap-2.5">
-
-    <!-- Mobile drawer header -->
-    <div class="drawer-header panel rounded-xl px-3.5 py-2.5 shadow-lg items-center justify-between shrink-0">
-      <span class="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
-        <i data-lucide="info" class="w-4 h-4 text-amber-400"></i> Sightline &amp; eclipse details
-      </span>
-      <button id="closeInfoDrawer" type="button" aria-label="Close details drawer"
-        class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition">
-        <i data-lucide="x" class="w-4 h-4"></i>
-      </button>
-    </div>
-
-    <!-- Eclipse magnitude / progress card -->
-    <div class="panel rounded-xl p-3.5 shadow-lg shrink-0">
-      <div class="flex items-center justify-between mb-2.5">
-        <p class="text-sm font-semibold flex items-center gap-1.5">
-          <i data-lucide="eclipse" class="w-4 h-4 text-amber-400"></i> Eclipse progress
-        </p>
-        <span id="eclipseMag" class="expert-only text-[11px] font-mono text-slate-400">mag 0.00</span>
-      </div>
-      <div class="flex items-center gap-3.5">
-        <svg id="eclipseSvg" viewBox="0 0 120 120" class="w-24 h-24 shrink-0" aria-label="Eclipse diagram">
-          <defs>
-            <radialGradient id="svgSunGrad" cx="45%" cy="45%" r="55%">
-              <stop offset="0%" stop-color="#fffbeb" />
-              <stop offset="65%" stop-color="#fbbf24" />
-              <stop offset="100%" stop-color="#d97706" />
-            </radialGradient>
-            <radialGradient id="svgCoronaOuter" cx="50%" cy="50%" r="50%">
-              <stop offset="50%" stop-color="#f8fafc" stop-opacity="0.9" />
-              <stop offset="68%" stop-color="#fde68a" stop-opacity="0.45" />
-              <stop offset="86%" stop-color="#93c5fd" stop-opacity="0.16" />
-              <stop offset="100%" stop-color="#0b1220" stop-opacity="0" />
-            </radialGradient>
-            <radialGradient id="svgDiamondGrad" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stop-color="#ffffff" stop-opacity="1" />
-              <stop offset="35%" stop-color="#fef08a" stop-opacity="0.9" />
-              <stop offset="100%" stop-color="#f59e0b" stop-opacity="0" />
-            </radialGradient>
-          </defs>
-          <circle cx="60" cy="60" r="59" fill="#060b16" stroke="#1e293b" stroke-width="1" />
-          <circle id="eclCoronaHalo" cx="60" cy="60" r="56" fill="url(#svgCoronaOuter)" opacity="0" />
-          <circle id="eclCorona" cx="60" cy="60" r="32" fill="none" stroke="#fef3c7" stroke-width="0" opacity="0" />
-          <circle id="eclChromo" cx="60" cy="60" r="31" fill="none" stroke="#fb7185" stroke-width="0" opacity="0" />
-          <circle id="eclSun" cx="60" cy="60" r="30" fill="url(#svgSunGrad)" />
-          <circle id="eclMoon" cx="60" cy="60" r="30" fill="#090e1a" stroke="#334155" stroke-width="0.8" />
-          <circle id="eclDiamond" cx="60" cy="60" r="10" fill="url(#svgDiamondGrad)" opacity="0" />
-        </svg>
-        <div class="flex-1 min-w-0">
-          <p class="text-[11px] uppercase tracking-wide text-slate-400">Obscuration</p>
-          <p id="eclipseObsc" class="text-2xl font-bold text-amber-300 leading-tight">0%</p>
-          <p id="eclipsePhaseLabel" class="text-xs text-slate-500 mt-0.5">No eclipse</p>
-        </div>
-      </div>
-      <div class="mt-2.5 h-1.5 rounded-full bg-slate-700 overflow-hidden">
-        <div id="eclipseBar" class="h-full bg-amber-400 transition-all duration-150" style="width:0%"></div>
-      </div>
-      <p id="eclipseLocalTimes" class="mt-2 text-[11px] text-slate-400 leading-snug"></p>
-    </div>
-
-    <!-- Horizon profile chart -->
-    <div id="horizonCard" class="hidden panel rounded-xl p-3.5 shadow-lg shrink-0">
-      <p class="text-sm font-semibold flex items-center gap-1.5 mb-0.5">
-        <i data-lucide="mountain" class="w-4 h-4 text-amber-400"></i> Horizon profile
-      </p>
-      <p class="text-[11px] text-slate-400 mb-1.5">Terrain silhouette vs the sun's track</p>
-      <svg id="horizonSvg" viewBox="0 0 280 150" class="w-full" aria-label="Horizon profile chart"></svg>
-      <div class="flex items-center gap-3 mt-1 text-[10px] text-slate-400">
-        <span class="flex items-center gap-1"><span class="inline-block w-3 h-2 rounded-sm bg-slate-500"></span> terrain</span>
-        <span class="flex items-center gap-1"><span class="inline-block w-3 h-0.5 bg-amber-400"></span> sun track</span>
-        <span id="horizonTotalityLegend" class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full bg-red-400"></span> totality</span>
-      </div>
-    </div>
-
-    <!-- POI details card -->
-    <div id="poiCard" class="hidden panel rounded-xl p-3.5 shadow-lg shrink-0">
-      <div class="flex items-start justify-between gap-2 mb-2">
-        <div class="min-w-0">
-          <p class="text-[10px] uppercase tracking-wide text-amber-400 font-semibold flex items-center gap-1">
-            <i id="poiCardIcon" data-lucide="map-pin" class="w-3.5 h-3.5"></i>
-            <span id="poiCardKind">Viewpoint</span>
-          </p>
-          <h3 id="poiCardTitle" class="text-sm font-bold text-slate-100 leading-snug"></h3>
-        </div>
-        <div class="flex items-center gap-1.5 shrink-0">
-          <span id="poiCardElev" class="text-xs font-mono bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded border border-slate-700/60"></span>
-          <button id="closePoiCard" type="button" aria-label="Dismiss POI info" title="Close POI details"
-            class="inline-flex items-center justify-center w-6 h-6 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition">
-            <i data-lucide="x" class="w-3.5 h-3.5"></i>
-          </button>
-        </div>
-      </div>
-      <table class="w-full text-xs text-slate-300 mb-2.5">
-        <tbody id="poiCardTable" class="divide-y divide-slate-800/80">
-        </tbody>
-      </table>
-      <div id="poiCardWarning" class="hidden mb-2.5 text-[11px] text-red-300 bg-red-950/40 border border-red-700/40 rounded-lg p-2 leading-snug"></div>
-      <a id="poiCardGmaps" href="#" target="_blank" rel="noopener"
-        class="w-full inline-flex items-center justify-center gap-1.5 text-xs font-semibold bg-slate-800 hover:bg-slate-700 border border-slate-600/80 text-amber-300 rounded-lg px-2.5 py-2 transition shadow-sm">
-        <i data-lucide="map-pin" class="w-3.5 h-3.5 text-amber-400"></i> Open in Google Maps &nearr;
-      </a>
-    </div>
-
-    <!-- Sightline / educational panel -->
-    <div id="infoPanel" class="panel rounded-xl p-3.5 shadow-lg shrink-0">
-      <div class="flex items-center justify-between mb-2">
-        <p class="text-sm font-semibold flex items-center gap-1.5">
-          <i data-lucide="info" class="w-4 h-4 text-amber-400"></i> Sightline
-        </p>
-        <span id="activeLocation" class="text-[11px] text-amber-300/90 font-medium truncate max-w-[10rem]">Dunedin</span>
-      </div>
-      <div id="resultBox" class="text-sm text-slate-300 leading-relaxed">
-        <p class="text-slate-400">
-          At totality the sun is only ~8&deg; high in the north-west, so a nearby hill can hide it.
-          Checking the view from here&hellip;
-        </p>
-      </div>
-    </div>
-  </div>
-
-  <!-- ============================= BOTTOM CONTROL BAR ============================= -->
-  <div id="bottomBar" class="hidden fixed bottom-0 inset-x-0 z-30 px-2.5 py-2 sm:px-4 sm:py-2.5">
-    <div class="panel rounded-xl px-3 py-2 sm:px-4 sm:py-2.5 shadow-lg">
-      <div class="flex items-center gap-2.5 sm:gap-3 mb-2">
-        <button id="playPause" title="Play / Pause"
-          class="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-lg bg-slate-700 hover:bg-slate-600 transition">
-          <i data-lucide="play" class="w-4 h-4"></i>
-        </button>
-        <span class="text-xs text-slate-400 font-mono shrink-0">15:00</span>
-        <div class="relative flex-1 flex items-center">
-          <div id="scrubTotalityBand" title="Totality window"
-            class="hidden absolute h-2.5 rounded-full bg-red-400/80 ring-2 ring-amber-300/60 pointer-events-none z-[1]"
-            style="left:51%;width:2%"></div>
-          <input id="timeScrub" type="range" min="0" max="1000" value="0" class="scrub w-full cursor-pointer" />
-        </div>
-        <span class="text-xs text-slate-400 font-mono shrink-0">17:30</span>
-      </div>
-      <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
-        <span class="hidden sm:inline text-[10px] uppercase tracking-wide text-slate-500">Jump</span>
-        <button id="jumpStart" title="First contact — the eclipse begins"
-          class="inline-flex items-center justify-center gap-1 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2 sm:px-2.5 py-1.5 transition">
-          <i data-lucide="sunrise" class="w-3.5 h-3.5 text-amber-400"></i> Start<span id="jumpStartT" class="hidden sm:inline text-slate-400 font-mono"></span>
-        </button>
-        <button id="jumpTotality" title="Maximum eclipse"
-          class="inline-flex items-center justify-center gap-1 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2 sm:px-2.5 py-1.5 transition">
-          <i data-lucide="target" class="w-3.5 h-3.5 text-amber-400"></i> <span id="jumpMaxLabel">Totality</span><span id="jumpMaxT" class="hidden sm:inline text-slate-400 font-mono"></span>
-        </button>
-        <button id="jumpEnd" title="Last contact — the eclipse ends"
-          class="inline-flex items-center justify-center gap-1 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2 sm:px-2.5 py-1.5 transition">
-          <i data-lucide="sunset" class="w-3.5 h-3.5 text-amber-400"></i> End<span id="jumpEndT" class="hidden sm:inline text-slate-400 font-mono"></span>
-        </button>
-        <button id="viewToggle" title="Switch between elevated overview and observer eye-level view"
-          class="inline-flex items-center justify-center gap-1 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2 sm:px-2.5 py-1.5 transition ml-auto sm:ml-0">
-          <i data-lucide="eye" class="w-3.5 h-3.5 text-amber-400"></i> <span id="viewToggleLabel">Eye level</span>
-        </button>
-        <div class="w-full sm:w-auto sm:ml-auto flex items-center gap-1.5 sm:gap-2">
-          <button id="watchIt"
-            class="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold bg-sky-500 hover:bg-sky-400 text-slate-900 rounded-lg px-3 md:px-4 py-1.5 transition">
-            <i data-lucide="clapperboard" class="w-4 h-4"></i> <span class="hidden sm:inline">Watch it happen</span><span class="sm:hidden">Watch</span>
-          </button>
-        </div>
-      </div>
-      <p id="dataCredit" class="hidden sm:block mt-1.5 text-[10px] text-slate-500 leading-tight"></p>
-    </div>
-  </div>
-
   <!-- The sightline verdict and the catalogue rules. Modules, so tests/unit can import them
        without a browser; handed to the classic script below on window. -->
   <script type="module">
     import * as Verdict from "./verdict.js";
     import * as Catalogue from "./catalogue.js";
     import * as Places from "./places.js";
+    import * as Skyline from "./skyline.js";
+    window.Skyline = Skyline;
     window.Verdict = Verdict;
     window.Catalogue = Catalogue;
     window.Places = Places;

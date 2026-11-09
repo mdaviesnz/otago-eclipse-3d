@@ -78,24 +78,27 @@ do the map's own `?near=lat,lon&place=…` and `?spot=lat,lon`.
 Without `viewpoints.json` the simulator still works — the *Best viewing spots* panel simply
 stays hidden — but the map page has nothing to show.
 
-## Two audiences
+## Two audiences, one screen
 
 The app serves both a casual visitor ("what will it look like from my town?") and an eclipse
-chaser ("where exactly should I stand?"). A **Simple / Detailed** toggle switches between them;
-the choice is remembered.
+chaser ("where exactly should I stand?"). The screen answers the first in one sentence, with
+the distance measured by hand: a fist at arm's length spans about 10° of sky, a finger about 2°.
+**Times and details**, opened from the verdict, answers the second with every contact, sun
+altitude and clearance in degrees.
 
-| | Simple (default) | Detailed |
-|---|---|---|
-| Sun position | "about one fist above the horizon, to the north-west" | altitude/azimuth in degrees |
-| Sightline result | plain-language verdict and what to do about it | per-phase table with clearance in degrees |
-| Magnitude | hidden | shown |
-| Horizon profile | shown | shown |
+The first visit opens on a question, "Where will you be standing?", which paints before Cesium
+has loaded. A link to a place skips it, and a returning visitor is offered the place they left.
 
-The fist analogy is deliberate: an outstretched fist spans roughly 10° of sky, so a low 8° sun
-is about one fist up — a measure you can use in the field.
+The main control is the **skyline strip**: the place's real horizon with the sun's real path
+across it. Drag the sun to set the time, or use the slider underneath from the keyboard, where
+Page Up and Page Down step between contacts. During totality everything steps back except the
+time left, until you move the pointer.
 
-On screens under 768px the side panels become drawers, opened one at a time from **Places** and
-**Details** in the top bar, so the globe is never buried under fixed overlays.
+| Place | What the strip shows |
+|---|---|
+| Preset town | The full skyline, instantly, from `viewpoints.json` |
+| Catalogue spot | The sun's path and the horizon at totality, with **Draw the full skyline** on request |
+| Anywhere else | The live check runs on arrival and draws the skyline |
 
 ### Arriving at a location
 
@@ -128,21 +131,16 @@ render close to black.
 - **Custom location** — coordinates (`-44.70, 169.13`), address search with autocomplete
   (↑/↓ to highlight, Enter to choose, Esc to dismiss), browser geolocation, or **Pin on map**
   to click a point on the terrain.
-- **Timeline** with play/pause and **Start / Totality / End** jump buttons labelled with *this
-  location's own* contact times.
+- **Contact times** labelled on the strip with *this location's own* times; tap one to jump there.
 - **Sightline verdict** — answers on arrival. Inside the path it judges totality; the partial
   phases are reported underneath. Presets and catalogue spots read a stored answer, and anywhere
   else runs a live check automatically.
-- **Horizon profile chart** — terrain silhouette across ±20° of azimuth plotted against the
-  sun's track, totality segment highlighted.
-- **Eclipse progress card** — the moon crossing the sun, with live magnitude, obscuration %,
-  phase and this location's totality window.
 - **Eclipse lighting** — the landscape darkens as totality approaches. CesiumJS models sun
   *direction* but has no concept of occultation, so the scene is dimmed from live obscuration
   (light intensity, imagery brightness/saturation, atmosphere). The curve is deliberately
   non-linear — barely perceptible at 80% obscured, plunging past 97% — which is why totality
   feels so sudden.
-- **Watch it happen** — a guided playback that runs the partial phases at 60×, slows to 12×
+- **Watch from here** — a guided playback that runs the partial phases at 60×, slows to 12×
   through totality, and narrates each phase.
 - **Best viewing spots** — the precomputed catalogue, filterable by access tier and by distance
   from wherever you currently are.
@@ -150,7 +148,7 @@ render close to black.
 ## How the sightline check works
 
 From the selected point (ground level + eye height), the app fans out a set of bearings — the
-sun's own azimuth at full radial resolution, plus a coarser sweep ±20° either side —
+sun's own azimuth at full radial resolution, plus a coarser sweep either side —
 batch-samples terrain via `sampleTerrainMostDetailed`, and reduces each bearing to its horizon
 angle, correcting for earth curvature and standard terrestrial refraction (`k = 0.13`,
 `drop = d² / 2R_eff`). If the **terrain angle on the sun's bearing ≥ the sun's refracted

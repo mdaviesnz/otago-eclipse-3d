@@ -256,36 +256,22 @@ test("catalogue spots are answered from precomputed data", async ({ page }) => {
   expect(r.phaseKeys).toEqual(["totalBegin", "peak", "totalEnd"]);
   expect(r.nullSafe).toBeNull();
 
-  // POI info card updates and renders a valid Google Maps link when a POI is active
-  const poiCardTest = await page.evaluate(() => {
+  // A catalogue spot's facts, and a working Google Maps link.
+  const facts = await page.evaluate(() => {
     const p = catalogue.pois[0];
-    updatePoiCard(p);
-    const card = document.getElementById("poiCard");
-    const isShown = !card.classList.contains("hidden");
-    const title = document.getElementById("poiCardTitle").textContent;
-    const gmapsHref = document.getElementById("poiCardGmaps").getAttribute("href");
-    const tableHtml = document.getElementById("poiCardTable")?.innerHTML || "";
-    updatePoiCard(null);
-    const isHiddenAfterNull = card.classList.contains("hidden");
-
-    // Also test sampleCloudClimatology
-    const dunedinCloud = sampleCloudClimatology(-45.8788, 170.5028);
-    const oobCloud = sampleCloudClimatology(0, 0);
-
     return {
-      isShown, title, gmapsHref, isHiddenAfterNull,
-      expectedTitle: p.name, lat: p.lat, lon: p.lon,
-      tableHtml, dunedinCloud, oobCloud,
+      html: spotFactsHtml({ ...p, isPoi: true }), none: spotFactsHtml(null),
+      gmaps: gmapsUrl(p.lat, p.lon), lat: p.lat, lon: p.lon,
+      dunedinCloud: sampleCloudClimatology(-45.8788, 170.5028),
+      oobCloud: sampleCloudClimatology(0, 0),
     };
   });
-  expect(poiCardTest.isShown).toBe(true);
-  expect(poiCardTest.title).toBe(poiCardTest.expectedTitle);
-  expect(poiCardTest.tableHtml).toContain("July cloud cover");
-  expect(poiCardTest.gmapsHref).toBe(`https://www.google.com/maps/search/?api=1&query=${poiCardTest.lat},${poiCardTest.lon}`);
-  expect(poiCardTest.isHiddenAfterNull).toBe(true);
-  expect(poiCardTest.dunedinCloud).toBeTruthy();
-  expect(poiCardTest.dunedinCloud.cloud).toBeGreaterThan(50);
-  expect(poiCardTest.oobCloud).toBeNull();
+  expect(facts.html).toContain("Getting there");
+  expect(facts.none).toBe("");
+  expect(facts.gmaps).toBe(`https://www.google.com/maps/search/?api=1&query=${facts.lat},${facts.lon}`);
+  expect(facts.dunedinCloud).toBeTruthy();
+  expect(facts.dunedinCloud.cloud).toBeGreaterThan(50);
+  expect(facts.oobCloud).toBeNull();
 
   expect(errs, "no JS errors while reading the catalogue").toEqual([]);
 });
@@ -352,12 +338,20 @@ test("verdict cards render the shared verdict", async ({ page }) => {
     () => typeof viewer !== "undefined" && !!viewer && typeof catalogue !== "undefined" && !!catalogue,
     null, { timeout: 30000 }).then(() => true, () => false);
   test.skip(!ready, "3D viewer did not initialise (no WebGL in this runner)");
-  const card = page.locator("#resultBox");
+  const card = page.locator("#detailBody");
+  await page.evaluate(() => { document.getElementById("question").hidden = true; revealUI(); });
 
-  // Preset card, through the stored-profile adapter. First contact clears Queenstown's skyline
-  // but totality does not, and totality is what the headline answers.
+  // Preset, through the stored-profile adapter. First contact clears Queenstown's skyline but
+  // totality does not, and totality is what the sentence answers.
   await page.evaluate(() => selectLocation(LOCATIONS.find((l) => l.name === "Queenstown"), false));
-  await expect(card).toContainText("Totality not visible", { timeout: 30000 });
+  await expect(page.locator("#verdictSentence")).toHaveText("Queenstown loses totality.", { timeout: 30000 });
+  await expect(page.locator("#verdictReason")).toContainText("about one fist above the sun");
+  await expect(page.locator("#goNearest")).toContainText("Halfway Remarkables");
+  await expect(card).toContainText("Totality not visible");
+  // The strip draws the real skyline, and says how far short the sun falls.
+  await expect(page.locator("#stripSvg path").first()).toBeAttached();
+  await expect(page.locator("#stripShort")).toContainText("short");
+  await expect(page.locator("#drawSkyline")).toBeHidden();
 
   // Catalogue card, stored totality-scope verdict: Taieri Mouth Road lookout clears second
   // contact and maximum but third contact sits exactly on the skyline (0.00 deg).
@@ -367,6 +361,15 @@ test("verdict cards render the shared verdict", async ({ page }) => {
   });
   await expect(card).toContainText("Part of totality blocked", { timeout: 30000 });
   await expect(card).toContainText("grazes the ridge");
+  await expect(page.locator("#verdictSentence")).toContainText("loses part of totality");
+  // A catalogue spot has no stored skyline, so it offers to draw one.
+  await expect(page.locator("#drawSkyline")).toBeVisible();
+
+  // Times and details open from the verdict.
+  await page.locator("#openDetails").click();
+  await expect(page.locator("body")).toHaveAttribute("data-panel", "details");
+  await expect(card.locator("table.contacts")).toContainText("Totality begins");
+  await page.locator("#closeDetails").click();
 
   expect(errs, "no JS errors while rendering verdict cards").toEqual([]);
 });
@@ -377,7 +380,7 @@ test("simulator loads without JS errors and wires up its controls", async ({ pag
 
   // Present in the markup regardless of whether WebGL initialises in CI.
   for (const id of ["timeScrub", "jumpTotality", "accessFilter",
-                    "distFilter", "modeToggle", "watchIt"]) {
+                    "distFilter", "watchIt", "stripSvg", "verdictSentence", "question"]) {
     await expect(page.locator(`#${id}`)).toHaveCount(1);
   }
   // No ion token must ever ship.
@@ -385,6 +388,46 @@ test("simulator loads without JS errors and wires up its controls", async ({ pag
   expect(html).not.toMatch(/eyJ[A-Za-z0-9_-]{10,}\.eyJ/);
 
   expect(errs, "no JS errors on the simulator page").toEqual([]);
+});
+
+test("the opening question comes first, and a link to a place skips it", async ({ page }) => {
+  const errs = errors(page);
+  await page.goto("/index.html");
+  await expect(page.locator("#questionTitle")).toContainText("Where will you be standing");
+  await expect(page.locator("#question")).toBeVisible();
+  await expect(page.locator("#splash")).toBeHidden();
+  // The way out needs no 3D at all.
+  await expect(page.locator('#question a[href="map.html"]')).toBeVisible();
+
+  // A returning visitor is offered the place they left.
+  await page.evaluate(() => localStorage.setItem("eclipseLastPlace",
+    JSON.stringify({ name: "Cromwell", lat: -45.0382, lon: 169.203 })));
+  await page.reload();
+  await expect(page.locator("#questionBack")).toHaveText("Back to Cromwell");
+
+  // A link to a place goes straight there; one outside New Zealand asks instead.
+  await page.goto("/index.html?lat=-45.0312&lon=168.6626&name=Queenstown");
+  await expect(page.locator("#question")).toBeHidden();
+  await page.goto("/index.html?lat=-33.8688&lon=151.2093");
+  await expect(page.locator("#question")).toBeVisible();
+  await expect(page.locator("#questionStatus")).toContainText("outside New Zealand");
+
+  // Coordinates typed into the question are checked the same way.
+  await page.waitForFunction(() => typeof askByText === "function");
+  await page.evaluate(() => askByText("-33.8688, 151.2093"));
+  await expect(page.locator("#questionStatus")).toContainText("within New Zealand");
+
+  // A place chosen sends the map's link along with it, unless it is the visitor's own position.
+  const links = await page.evaluate(() => {
+    syncMapLink({ name: "Queenstown", lat: -45.0312, lon: 168.6626 });
+    const named = document.getElementById("navMap").getAttribute("href");
+    syncMapLink({ name: "My location", lat: -45.0312, lon: 168.6626 });
+    return { named, located: document.getElementById("navMap").getAttribute("href") };
+  });
+  expect(links.named).toBe("map.html?near=-45.0312,168.6626&place=Queenstown");
+  expect(links.located).toBe("map.html");
+
+  expect(errs, "no JS errors around the opening question").toEqual([]);
 });
 
 // Cesium is 1.5 MB. One script in the head without `defer` holds back the whole first paint.
@@ -454,15 +497,15 @@ test("mobile viewport UX: drawers, floating verdict pill, and map filter collaps
   // 2. Simulator mobile drawers open/close via tabs and close buttons
   await page.goto("/index.html");
   await expect(page.locator("body")).toHaveAttribute("data-panel", "none");
-  await page.evaluate(() => revealUI());
-  await page.locator("#tabPlaces").click();
+  await page.evaluate(() => { document.getElementById("question").hidden = true; revealUI(); });
+  await page.locator("#placeButton").click();
   await expect(page.locator("body")).toHaveAttribute("data-panel", "places");
-  await page.locator("#closePlacesDrawer").click();
+  await page.locator("#closePlaces").click();
   await expect(page.locator("body")).toHaveAttribute("data-panel", "none");
 
-  await page.locator("#mobileVerdictBtn").click();
-  await expect(page.locator("body")).toHaveAttribute("data-panel", "info");
-  await page.locator("#closeInfoDrawer").click();
+  await page.locator("#openDetails").click();
+  await expect(page.locator("body")).toHaveAttribute("data-panel", "details");
+  await page.locator("#closeDetails").click();
   await expect(page.locator("body")).toHaveAttribute("data-panel", "none");
 
   expect(errs, "no JS errors during mobile UX interactions").toEqual([]);
@@ -602,20 +645,28 @@ test("usage metrics: browser interactions emit anonymous events, POI names, and 
   await page.goto("/index.html");
   await expect.poll(() => events.some((e) => e.event === "page_view" && e.detail === "simulator")).toBe(true);
 
-  // Clicking a preset records the preset name in both detail and spot
-  await page.locator('#presetButtons button[data-name="Dunedin"]').click();
+  // Answering the opening question records the town's name in both detail and spot
+  await page.waitForFunction(() => typeof wireQuestion === "function" && !window.__questionAnswer);
+  await page.locator('[data-town="Dunedin"]').click();
   await expect.poll(() =>
     events.some((e) => e.event === "preset_select" && e.detail === "Dunedin" && e.spot === "Dunedin")
   ).toBe(true);
 
-  await page.locator('#presetButtons button[data-name="Wānaka"]').click();
+  // Clicked from script: arriving in Dunedin can close the panel at any moment here.
+  await page.evaluate(() => {
+    document.getElementById("question").hidden = true;
+    revealUI();
+    document.querySelector('#presetButtons button[data-name="Wānaka"]').click();
+  });
   await expect.poll(() =>
     events.some((e) => e.event === "preset_select" && e.detail === "Wānaka" && e.spot === "Wānaka")
   ).toBe(true);
 
   // Entering coordinates records only { event: "custom_search", detail: "coords", spot: "" } — never the numbers
-  await page.locator("#customInput").fill("-45.0312, 168.6626");
-  await page.locator("#customGo").click();
+  await page.evaluate(() => {
+    document.getElementById("customInput").value = "-45.0312, 168.6626";
+    document.getElementById("customGo").click();
+  });
   await expect.poll(() =>
     events.some((e) => e.event === "custom_search" && e.detail === "coords" && e.spot === "")
   ).toBe(true);
@@ -647,10 +698,8 @@ test("NZ bounds, partial-only eclipse UI (Christchurch), and map eclipse path ov
   const state = await page.evaluate(async () => {
     // Call selectLocation directly so the test passes even if headless CI has no WebGL context
     await selectLocation({ name: "Christchurch", lat: -43.53095, lon: 172.63643 }, false);
-    const jumpLabel = document.getElementById("jumpMaxLabel")?.textContent;
-    const localTimes = document.getElementById("eclipseLocalTimes")?.textContent;
-    const coronaOpacity = document.getElementById("eclCorona")?.getAttribute("opacity");
-    const phaseLabel = document.getElementById("eclipsePhaseLabel")?.textContent;
+    const jumpLabel = document.getElementById("jumpTotality")?.textContent;
+    const phaseLabel = document.getElementById("phaseReadout")?.textContent;
 
     const boundsChecks = {
       chch: inNzBounds(-43.53095, 172.63643),
@@ -667,18 +716,14 @@ test("NZ bounds, partial-only eclipse UI (Christchurch), and map eclipse path ov
 
     // Switching to Dunedin (inside totality) restores "Totality" label
     await selectLocation({ name: "Dunedin", lat: -45.8742, lon: 170.5036 }, false);
-    const dunedinJumpLabel = document.getElementById("jumpMaxLabel")?.textContent;
-    const dunedinLocalTimes = document.getElementById("eclipseLocalTimes")?.textContent;
+    const dunedinJumpLabel = document.getElementById("jumpTotality")?.textContent;
 
     return {
       jumpLabel,
-      localTimes,
-      coronaOpacity,
       phaseLabel,
       boundsChecks,
       customStatus,
       dunedinJumpLabel,
-      dunedinLocalTimes,
     };
   });
 
@@ -689,13 +734,10 @@ test("NZ bounds, partial-only eclipse UI (Christchurch), and map eclipse path ov
     sydney: false,
     london: false,
   });
-  expect(state.jumpLabel).toBe("Maximum");
-  expect(state.localTimes).toMatch(/Partial only from here · max 93% at 16:19:\d\d/);
-  expect(state.coronaOpacity).toBe("0");
-  expect(state.phaseLabel).toContain("Partial phase");
+  expect(state.jumpLabel).toMatch(/4:19 pm, maximum/);
+  expect(state.phaseLabel).toContain("covered");
   expect(state.customStatus).toContain("within New Zealand");
-  expect(state.dunedinJumpLabel).toBe("Totality");
-  expect(state.dunedinLocalTimes).toContain("Totality here:");
+  expect(state.dunedinJumpLabel).toMatch(/4:17 pm, totality/);
 
   expect(errs, "no JS errors during NZ bounds and partial-only UI checks").toEqual([]);
 });

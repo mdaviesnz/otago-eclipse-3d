@@ -65,6 +65,16 @@ const compassIndex = (az) => Math.round((((az % 360) + 360) % 360) / 22.5) % 16;
 export const compassName = (az) => COMPASS[compassIndex(az)];
 export const compassShort = (az) => COMPASS_SHORT[compassIndex(az)];
 
+// An angle as a hand held at arm's length: a finger is about 2 degrees, three fingers about 5
+// and a fist about 10.
+export function handMeasure(deg) {
+  if (deg < 0.75) return "less than a finger";
+  if (deg < 3) return "about one finger";
+  if (deg < 7) return "about three fingers";
+  if (deg < 14) return "about one fist";
+  return `about ${Math.round(deg / 10)} fists`;
+}
+
 // Height described the way you'd actually judge it in the field: an outstretched fist
 // spans roughly 10 degrees of sky.
 export function heightPhrase(alt) {

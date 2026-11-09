@@ -31,7 +31,7 @@ sys.path.insert(0, str(ROOT / "precompute"))
 import verdict  # noqa: E402  (precompute/verdict.py: standard library only)
 
 SITE_FILES = ["index.html", "map.html", "astronomy.html", "methods.html", "app.css",
-              "viewpoints.json", "verdict.js", "catalogue.js", "places.js", "contours.js",
+              "viewpoints.json", "verdict.js", "catalogue.js", "places.js", "contours.js", "skyline.js",
               "simulator.js", "map.js",
               "social-card.svg", "icon.svg", "manifest.webmanifest", "sw.js", "_headers",
               "font-piazzolla-latin.woff2", "font-piazzolla-latin-ext.woff2",

@@ -3,7 +3,7 @@
 import { test, expect } from "@playwright/test";
 import {
   inNzBounds, photonUrl, photonLabel, photonFeatures, parseCoords,
-  compassName, compassShort, heightPhrase,
+  compassName, compassShort, heightPhrase, handMeasure,
 } from "../../places.js";
 
 test("New Zealand bounds accept the country and refuse its neighbours", () => {
@@ -46,6 +46,14 @@ test("bearings become compass directions", () => {
   expect(compassShort(312)).toBe("NW");
   expect(compassName(359)).toBe("north");
   expect(compassName(-90)).toBe("west");
+});
+
+test("angles are measured with a hand at arm's length", () => {
+  expect(handMeasure(0.3)).toBe("less than a finger");
+  expect(handMeasure(1.5)).toBe("about one finger");
+  expect(handMeasure(5)).toBe("about three fingers");
+  expect(handMeasure(10.8)).toBe("about one fist");
+  expect(handMeasure(21)).toBe("about 2 fists");
 });
 
 test("heights are described in fists", () => {

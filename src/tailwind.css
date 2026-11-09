@@ -1,4 +1,4 @@
-/* Build input for the Tailwind CLI. Output is app.css, which both pages link.
+/* Build input for the Tailwind CLI. Output is app.css, which every page links.
    The page-specific CSS (panels, mobile drawers, scrubber, animations) stays inline in the
    HTML — it is plain CSS and does not need building. */
 @tailwind base;
