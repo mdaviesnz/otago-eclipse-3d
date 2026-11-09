@@ -300,9 +300,9 @@ test("the verdict answers totality inside the path and agrees with the catalogue
     const towns = {};
     for (const n of ["Queenstown", "Arrowtown"]) {
       const p = catalogue.presets.find((x) => x.name === n);
-      towns[n] = nearestClearSpot(p.lat, p.lon);
+      towns[n] = Catalogue.nearestClearSpot(catalogue, p.lat, p.lon);
     }
-    const names = thinNearby(catalogue.pois).map((s) => s.name);
+    const names = Catalogue.thinNearby(catalogue.pois).map((s) => s.name);
     return { presets, chch, towns, names, button: !!document.getElementById("runSightline") };
   });
 
@@ -374,6 +374,36 @@ test("simulator loads without JS errors and wires up its controls", async ({ pag
   expect(errs, "no JS errors on the simulator page").toEqual([]);
 });
 
+// Cesium is 1.5 MB. One script in the head without `defer` holds back the whole first paint.
+test("no script holds back the first paint of the simulator or the map", async ({ page }) => {
+  for (const path of ["/index.html", "/map.html"]) {
+    await page.goto(path);
+    const blocking = await page.evaluate(() =>
+      [...document.querySelectorAll("script[src]")]
+        .filter((s) => !s.defer && !s.async && s.type !== "module")
+        .map((s) => s.src));
+    expect(blocking, `${path} must defer every script`).toEqual([]);
+  }
+});
+
+test("the Skyline typefaces are self-hosted and cover macrons", async ({ page }) => {
+  const foreign = [];
+  page.on("request", (r) => { if (/fonts\.(googleapis|gstatic)\.com/.test(r.url())) foreign.push(r.url()); });
+  await page.goto("/map.html");
+  const faces = await page.evaluate(async () => {
+    const out = {};
+    for (const family of ["Piazzolla", "Overpass"]) {
+      const loaded = await document.fonts.load(`16px "${family}"`, "Wānaka Tūtoko");
+      out[family] = loaded.map((f) => f.status);
+    }
+    return out;
+  });
+  // One file for the plain letters and one for the macrons, or the macrons fall back.
+  expect(faces.Piazzolla).toEqual(["loaded", "loaded"]);
+  expect(faces.Overpass).toEqual(["loaded", "loaded"]);
+  expect(foreign, "fonts must not come from a third party").toEqual([]);
+});
+
 test("PWA manifest, icon, and service worker are served and valid", async ({ request }) => {
   const mRes = await request.get("/manifest.webmanifest");
   expect(mRes.ok()).toBeTruthy();
@@ -388,6 +418,8 @@ test("PWA manifest, icon, and service worker are served and valid", async ({ req
   expect(swRes.ok()).toBeTruthy();
   const swText = await swRes.text();
   expect(swText).toContain("viewpoints.json");
+  expect(swText).toContain("simulator.js");
+  expect(swText).toContain("font-overpass-latin.woff2");
 });
 
 test("mobile viewport UX: drawers, floating verdict pill, and map filter collapse", async ({ page }) => {

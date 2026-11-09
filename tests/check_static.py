@@ -31,8 +31,14 @@ sys.path.insert(0, str(ROOT / "precompute"))
 import verdict  # noqa: E402  (precompute/verdict.py: standard library only)
 
 SITE_FILES = ["index.html", "map.html", "astronomy.html", "methods.html", "app.css",
-              "viewpoints.json", "verdict.js", "social-card.svg", "icon.svg",
-              "manifest.webmanifest", "sw.js", "_headers"]
+              "viewpoints.json", "verdict.js", "catalogue.js", "simulator.js", "map.js",
+              "social-card.svg", "icon.svg", "manifest.webmanifest", "sw.js", "_headers",
+              "font-piazzolla-latin.woff2", "font-piazzolla-latin-ext.woff2",
+              "font-overpass-latin.woff2", "font-overpass-latin-ext.woff2",
+              "font-licenses.txt"]
+
+# The two app pages keep their code in a companion script.
+PAGE_SCRIPTS = {"index.html": "simulator.js", "map.html": "map.js"}
 
 failures: list[str] = []
 notes: list[str] = []
@@ -62,7 +68,7 @@ def check_no_secrets() -> None:
     hits = 0
     for name in [*SITE_FILES, "src/worker.js"]:
         p = ROOT / name
-        if not p.exists():
+        if not p.exists() or name.endswith(".woff2"):
             continue
         text = p.read_text(encoding="utf-8", errors="replace")
         for m in jwt.findall(text):
@@ -97,7 +103,9 @@ def check_analytics_beacon() -> None:
         else:
             fail(f"{name}: analytics beacon present but carries no valid 32-hex site token")
             bad = True
-        if "/api/metric" not in text:
+        companion = ROOT / PAGE_SCRIPTS[name] if name in PAGE_SCRIPTS else None
+        code = companion.read_text(encoding="utf-8", errors="replace") if companion else text
+        if "/api/metric" not in code:
             fail(f"{name}: Worker usage metric endpoint (/api/metric) is missing")
             bad = True
     if len(tokens) > 1:
@@ -183,6 +191,14 @@ def check_local_references() -> None:
                 continue
             if rel not in site_set:
                 fail(f"{name}: references '{rel}', which exists on disk but is missing from SITE_FILES")
+    # Fonts are referenced from the built stylesheet, which the HTML scan above cannot see.
+    for ref in re.findall(r"url\(([^)\"']+)\)", (ROOT / "app.css").read_text(encoding="utf-8")):
+        if ref.startswith(("http", "data:", "#")):
+            continue
+        if not (ROOT / ref).exists():
+            fail(f"app.css: references missing local file '{ref}'")
+        elif ref not in site_set:
+            fail(f"app.css: references '{ref}', which is missing from SITE_FILES")
     ok("local asset references resolve and are included in SITE_FILES")
 
 
@@ -312,10 +328,10 @@ def check_presets(d: dict, region: dict) -> None:
                  f"({min(pr['angles'])}..{max(pr['angles'])} deg)")
 
     # The app's own list, parsed straight out of the markup it ships with.
-    html = (ROOT / "index.html").read_text(encoding="utf-8")
-    block = re.search(r"const LOCATIONS = \[(.*?)\];", html, re.S)
+    source = (ROOT / "simulator.js").read_text(encoding="utf-8")
+    block = re.search(r"const LOCATIONS = \[(.*?)\];", source, re.S)
     if not block:
-        fail("index.html: could not find the LOCATIONS array to cross-check presets against")
+        fail("simulator.js: could not find the LOCATIONS array to cross-check presets against")
         return
     app = {
         m.group("name"): (float(m.group("lat")), float(m.group("lon")))
@@ -324,22 +340,22 @@ def check_presets(d: dict, region: dict) -> None:
             r'\s*lat:\s*(?P<lat>-?[\d.]+)', block.group(1))
     }
     if not app:
-        fail("index.html: LOCATIONS found but no entries parsed — the format has changed")
+        fail("simulator.js: LOCATIONS found but no entries parsed — the format has changed")
         return
 
     built = {p["name"]: (p["lat"], p["lon"]) for p in presets}
     if set(app) != set(built):
-        fail(f"preset names differ — index.html has {sorted(app)}, "
+        fail(f"preset names differ — simulator.js has {sorted(app)}, "
              f"viewpoints.json has {sorted(built)}")
         return
     # 1e-5 is the rounding the catalogue writes at; anything larger is real drift.
     drifted = [n for n in app
                if abs(app[n][0] - built[n][0]) > 1e-5 or abs(app[n][1] - built[n][1]) > 1e-5]
     if drifted:
-        fail(f"preset coordinates differ between index.html and viewpoints.json: {drifted} — "
+        fail(f"preset coordinates differ between simulator.js and viewpoints.json: {drifted} — "
              f"the app will fall back to a live terrain probe for these")
     else:
-        ok(f"presets: {len(presets)} entries, fields OK, coordinates match index.html")
+        ok(f"presets: {len(presets)} entries, fields OK, coordinates match simulator.js")
 
 
 def check_verdict_cases() -> None:

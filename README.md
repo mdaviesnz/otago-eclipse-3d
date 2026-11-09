@@ -5,8 +5,9 @@ Zealand. Because the sun sits only **~8° above the horizon** at totality, local
 topography can physically block the view. This tool lets you stand anywhere in the path and
 check whether terrain will be in the way.
 
-Static site: `index.html`, `map.html`, `astronomy.html`, `methods.html`, `app.css`,
-`viewpoints.json`, `social-card.svg`. The only build step is the Tailwind stylesheet, and
+Static site: `index.html` and `simulator.js`, `map.html` and `map.js`, `astronomy.html`,
+`methods.html`, `verdict.js`, `catalogue.js`, `app.css`, `viewpoints.json`, the self-hosted
+`font-*.woff2` files and `social-card.svg`. The only build step is the Tailwind stylesheet, and
 `app.css` is committed so a fresh clone runs with no tooling at all.
 
 ```bash
@@ -53,11 +54,13 @@ is not downgraded merely because the sun had set.
 
 | File | What it is |
 |---|---|
-| `index.html` | The 3D simulator — stand somewhere, scrub the eclipse, run sightline checks |
-| `map.html` | Overview map of every catalogued viewing spot |
+| `index.html`, `simulator.js` | The 3D simulator — stand somewhere, scrub the eclipse, get a verdict |
+| `map.html`, `map.js` | Overview map of every catalogued viewing spot |
 | `astronomy.html` | Public-facing guide explaining how the eclipse and terrain sightline checks work |
 | `methods.html` | Full technical specification of astronomical & geodetic methods (for astronomers) |
 | `viewpoints.json` | The precomputed catalogue |
+| `catalogue.js` | The rules for reading it, shared by both app pages: filters, ranking, distance, suggestions |
+| `verdict.js` | The sightline verdict rule |
 
 See [ASTRONOMY.md](ASTRONOMY.md) (or `methods.html` in the app) for the astronomical and geodetic
 methods in review-ready detail, [DEPLOYMENT.md](DEPLOYMENT.md) for hosting and CI, and

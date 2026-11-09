@@ -24,6 +24,13 @@ const PRECACHE_SHELL = [
   "./app.css",
   "./viewpoints.json",
   "./verdict.js",
+  "./catalogue.js",
+  "./simulator.js",
+  "./map.js",
+  "./font-piazzolla-latin.woff2",
+  "./font-piazzolla-latin-ext.woff2",
+  "./font-overpass-latin.woff2",
+  "./font-overpass-latin-ext.woff2",
   "./manifest.webmanifest",
   "./icon.svg",
 ];
