@@ -122,6 +122,12 @@
       .scrub::-moz-range-thumb { width: 24px; height: 24px; }
 
       #narration { top: calc(var(--top-bar-offset, 4.25rem) + 0.25rem); }
+
+      /* Name, clock and phase share the first row, so the phase never wraps onto a row alone. */
+      #topBar .panel > :nth-child(1), #topBar .panel > :nth-child(2), #totalityBadge { order: -1; }
+
+      /* The active tab turns amber, which would swallow its amber icon. */
+      body[data-panel="places"] #tabPlaces svg, body[data-panel="info"] #tabInfo svg { color: #0f172a; }
     }
   </style>
 </head>
@@ -200,13 +206,13 @@
 
   <!-- ============================= MOBILE COMPACT VERDICT PILL ============================= -->
   <div id="mobileVerdictWrap" class="hidden fixed inset-x-0 z-30 px-2.5 pointer-events-none justify-center">
-    <button id="mobileVerdictBtn" type="button" title="Tap to view horizon chart and full sightline details"
+    <button id="mobileVerdictBtn" type="button" title="Tap to view the horizon chart and full details"
       class="pointer-events-auto panel rounded-full px-3.5 py-1.5 shadow-xl flex items-center gap-2 max-w-full text-xs transition hover:bg-slate-800/90">
       <span id="mobileVerdictLoc" class="font-semibold text-amber-300 truncate max-w-[9rem]">Dunedin</span>
       <span class="text-slate-600">&middot;</span>
       <span id="mobileVerdictState" class="inline-flex items-center gap-1 font-medium text-slate-300 truncate">
-        <i data-lucide="scan-eye" class="w-3.5 h-3.5 text-amber-400 shrink-0"></i>
-        <span>Tap to check sightline</span>
+        <i data-lucide="loader" class="w-3.5 h-3.5 text-amber-400 shrink-0"></i>
+        <span>Checking&hellip;</span>
       </span>
       <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-slate-400 shrink-0"></i>
     </button>
@@ -244,7 +250,7 @@
         <div>
           <p class="text-[11px] uppercase tracking-wide text-slate-400 mb-1.5">Using it</p>
           <ul class="space-y-1 text-xs text-slate-400">
-            <li><b class="text-slate-300">Can I see it?</b> &mdash; checks the sightline at the start, middle and end of the eclipse.</li>
+            <li><b class="text-slate-300">The verdict</b> &mdash; choose a place and it tells you whether terrain hides totality there.</li>
             <li><b class="text-slate-300">Watch it happen</b> &mdash; plays the eclipse through, with the landscape darkening.</li>
             <li><b class="text-slate-300">Best viewing spots</b> &mdash; precomputed places across the path of totality, filterable by how you can get there.</li>
             <li><b class="text-slate-300">Map</b> &mdash; all of those spots on one overview map.</li>
@@ -313,6 +319,12 @@
     <div class="panel rounded-xl px-5 py-3 shadow-2xl">
       <p id="narrationText" class="text-sm text-slate-100 leading-snug"></p>
       <p id="narrationSub" class="text-[11px] text-slate-400 mt-1"></p>
+      <div id="narrationActions" class="hidden mt-2.5 flex items-center justify-center gap-2 pointer-events-auto">
+        <button id="narrationGo" type="button"
+          class="text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg px-3 py-1.5 transition"></button>
+        <button id="narrationDismiss" type="button"
+          class="text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-1.5 transition">Not now</button>
+      </div>
     </div>
   </div>
 
@@ -346,7 +358,7 @@
           <option value="any" selected>Any access</option>
           <option value="drive">Drivable (road or track)</option>
           <option value="sealed">Sealed road only</option>
-          <option value="track">4WD track only</option>
+          <option value="track">Unsealed road or 4WD track</option>
           <option value="foot">Walking track only</option>
         </select>
         <select id="distFilter"
@@ -357,7 +369,7 @@
           <option value="50">Within 50 km of here</option>
           <option value="100">Within 100 km of here</option>
         </select>
-        <div id="topSpots" class="flex flex-col gap-1 max-h-40 overflow-y-auto pr-0.5"></div>
+        <div id="topSpots" class="flex flex-col gap-1 max-h-52 overflow-y-auto pr-0.5"></div>
         <p id="topSpotsNote" class="text-[10px] text-slate-500 mt-1.5 leading-snug"></p>
       </div>
 
@@ -504,8 +516,8 @@
       </div>
       <div id="resultBox" class="text-sm text-slate-300 leading-relaxed">
         <p class="text-slate-400">
-          At totality the sun is only ~8&deg; high in the NW. Fly to a town, set the time, then
-          <span class="text-amber-300">Run Sightline Check</span> to see whether terrain blocks the view.
+          At totality the sun is only ~8&deg; high in the north-west, so a nearby hill can hide it.
+          Checking the view from here&hellip;
         </p>
       </div>
     </div>
@@ -550,10 +562,6 @@
           <button id="watchIt"
             class="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold bg-sky-500 hover:bg-sky-400 text-slate-900 rounded-lg px-3 md:px-4 py-1.5 transition">
             <i data-lucide="clapperboard" class="w-4 h-4"></i> <span class="hidden sm:inline">Watch it happen</span><span class="sm:hidden">Watch</span>
-          </button>
-          <button id="runSightline"
-            class="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg px-3 sm:px-3.5 py-1.5 transition">
-            <i data-lucide="scan-eye" class="w-4 h-4"></i> <span class="expert-only">Run Sightline Check</span><span class="simple-only">Can I see it?</span>
           </button>
         </div>
       </div>
@@ -667,11 +675,9 @@
   let activeLoc = LOCATIONS.find((l) => l.name === "Dunedin") || LOCATIONS[0];         // default Dunedin
   let activeGroundCartesian = null;     // observer position (ground + eye height)
   let sightlinePrimitive = null;        // current drawn ray
-  let sightlineRun = false;             // has the user asked for a check at least once?
   let sightlineToken = 0;               // guards against overlapping re-runs
   let locationMarker = null;            // visible marker at the checked location
   let activeCatEntry = null;            // catalogue record the observer is standing on, or null
-  let resultPlaceholder = "";           // the panel's "nothing checked yet" copy, kept for reuse
   let pinMode = false;                  // when true, clicking the map sets the location
   const startJulian = Cesium.JulianDate.fromIso8601(CLOCK_START_UTC);
   const stopJulian  = Cesium.JulianDate.fromIso8601(CLOCK_STOP_UTC);
@@ -914,14 +920,20 @@
     const cv = document.createElement("canvas");
     cv.width = 256; cv.height = 160;
     const ctx = cv.getContext("2d");
-    // Deep coronal indigo halo around the sun centre
-    const halo = ctx.createRadialGradient(128, 80, 5, 128, 80, 120);
+    // Deep coronal indigo halo around the sun centre. Squashed to fit: a circular halo is wider
+    // than this canvas is tall, so it would still be visible where the canvas stops and draw a
+    // hard straight edge across the sky.
+    ctx.save();
+    ctx.translate(128, 80);
+    ctx.scale(1, 78 / 120);
+    const halo = ctx.createRadialGradient(0, 0, 5, 0, 0, 120);
     halo.addColorStop(0, "rgba(148, 163, 184, 0.38)");
     halo.addColorStop(0.35, "rgba(56, 189, 248, 0.16)");
     halo.addColorStop(0.7, "rgba(30, 58, 138, 0.10)");
     halo.addColorStop(1, "rgba(15, 23, 42, 0)");
     ctx.fillStyle = halo;
-    ctx.fillRect(0, 0, 256, 160);
+    ctx.fillRect(-128, -124, 256, 248);
+    ctx.restore();
 
     // Warm 360-degree twilight horizon glow along the lower sky (backlights mountain silhouettes)
     const horiz = ctx.createRadialGradient(128, 155, 8, 128, 155, 130);
@@ -1630,7 +1642,9 @@
   // ====================================================================================
   //  LOCATION SELECTION & CAMERA
   // ====================================================================================
-  let cameraViewMode = "overview";      // "overview" (elevated behind marker) | "eye" (observer ground level)
+  // Eye level by default: it is the view the verdict describes. The raised overview camera can
+  // see over a ridge the observer cannot, so at a blocked place it shows a sun nobody there sees.
+  let cameraViewMode = "eye";           // "eye" (observer ground level) | "overview" (elevated behind marker)
   let sunTrackEntities = [];            // 3D sun path arc and contact labels in the sky
   let sightlineExtras = [];             // ridge marker and dashed continuation line
 
@@ -1752,6 +1766,7 @@
   // Move the observer/checked location WITHOUT moving the camera. Returns ground height.
   async function setObserver(loc) {
     activeLoc = loc;
+    if (!cinematic) hideNarration();     // any offer on screen was about the place we just left
     document.getElementById("activeLocation").textContent = loc.name;
     highlightActiveButtons();
 
@@ -1796,15 +1811,12 @@
       // an older catalogue with no profiles in it.
       if (activeCatEntry.profile) runPresetCheck(activeCatEntry);
       else renderCatalogueVerdict(activeCatEntry);
-    } else if (sightlineRun) {
-      // The recalculation itself is deferred until the camera arrives (see refreshSightline).
-      document.getElementById("resultBox").innerHTML =
-        `<p class="text-slate-400 flex items-center gap-2"><i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Moving to ${loc.name}&hellip;</p>`;
-      updateMobileVerdictPill({ icon: "loader", text: "Checking sightline…", tone: "text-slate-400", spin: true });
-      lucide.createIcons();
     } else {
-      document.getElementById("resultBox").innerHTML = resultPlaceholder;
-      updateMobileVerdictPill({ icon: "scan-eye", text: "Tap to check sightline", tone: "text-amber-300" });
+      // The check itself is deferred until the camera arrives (see checkSightlineOnArrival).
+      document.getElementById("resultBox").innerHTML =
+        `<p class="text-slate-400 flex items-center gap-2"><i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Moving to ${esc(loc.name)}&hellip;</p>`;
+      updateMobileVerdictPill({ icon: "loader", text: "Checking the view…", tone: "text-slate-400", spin: true });
+      lucide.createIcons();
     }
 
     if (viewer && viewer.clock) onTick(viewer.clock); // refresh sun readout and 3D sky for the new observer
@@ -1818,9 +1830,13 @@
   // A catalogue spot is exempt: setObserver has already painted the precomputed verdict, and
   // re-deriving it live would sample ~300 terrain tiles (~10 MB) to restate what we shipped in
   // viewpoints.json. Clicking through ten catalogue spots used to cost ten full probes.
-  function refreshSightlineIfRun() {
-    if (activeCatEntry) return;
-    if (sightlineRun) runSightlineCheck();
+  //
+  // Wait for the catalogue first. The opening location is selected before viewpoints.json has
+  // arrived, so without this every visit to a preset would spend a full probe on a question
+  // the file is about to answer.
+  async function checkSightlineOnArrival() {
+    await catalogueSettled;
+    if (!activeCatEntry) runSightlineCheck();
   }
 
   // Keep the address bar pointing at wherever we actually are, so copying the URL shares this
@@ -1991,12 +2007,9 @@
     const btn = document.getElementById("viewToggle");
     if (!btn) return;
     const isEye = cameraViewMode === "eye";
-    btn.className = isEye
-      ? "inline-flex items-center justify-center gap-1 text-xs font-semibold bg-amber-500 text-slate-900 rounded-lg px-2 sm:px-2.5 py-1.5 transition ml-auto sm:ml-0"
-      : "inline-flex items-center justify-center gap-1 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2 sm:px-2.5 py-1.5 transition ml-auto sm:ml-0";
-    btn.innerHTML = `<i data-lucide="${isEye ? "compass" : "eye"}" class="w-3.5 h-3.5 ${isEye ? "" : "text-amber-400"}"></i> <span id="viewToggleLabel">${isEye ? "Overview" : "Eye level"}</span>`;
+    btn.innerHTML = `<i data-lucide="${isEye ? "compass" : "eye"}" class="w-3.5 h-3.5 text-amber-400"></i> <span id="viewToggleLabel">${isEye ? "Overview" : "Eye level"}</span>`;
     if (locationMarker) locationMarker.show = !isEye;
-    if (sightlinePrimitive && !currentSightlineBlocked) sightlinePrimitive.show = !isEye;
+    if (sightlinePrimitive) sightlinePrimitive.show = !isEye;
     lucide.createIcons();
   }
 
@@ -2007,7 +2020,7 @@
     if (!viewer || !activeLoc || !activeGroundCartesian) return;
     const gh = Cesium.Cartographic.fromCartesian(activeGroundCartesian).height - EYE_HEIGHT;
     const view = await frameForLocation(activeLoc, gh);
-    viewer.camera.flyTo({ ...view, duration: 1.4 });
+    viewer.camera.flyTo({ ...view, duration: flightSeconds(1.4) });
   }
 
   // Re-apply the arrival framing for wherever we already are. Needed because the first framing
@@ -2019,6 +2032,10 @@
     const gh = Cesium.Cartographic.fromCartesian(activeGroundCartesian).height - EYE_HEIGHT;
     viewer.camera.setView(await frameForLocation(activeLoc, gh));
   }
+
+  // Camera moves are the one motion CSS cannot reach.
+  const flightSeconds = (s) =>
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : s;
 
   function isMobileDrawerMode() {
     return window.matchMedia("(max-width: 767px), (max-height: 520px)").matches;
@@ -2063,13 +2080,13 @@
       // an answer for the new spot.
       viewer.camera.flyTo({
         ...view,
-        duration: 2.0,
-        complete: refreshSightlineIfRun,
-        cancel: refreshSightlineIfRun,
+        duration: flightSeconds(2.0),
+        complete: checkSightlineOnArrival,
+        cancel: checkSightlineOnArrival,
       });
     } else {
       viewer.camera.setView(view);
-      refreshSightlineIfRun();
+      checkSightlineOnArrival();
     }
   }
 
@@ -2189,7 +2206,7 @@
       trackMetric("map_pin");
       // Pinning does not move the camera, so there is nothing to wait for.
       setObserver({ name: `${lat.toFixed(4)}, ${lon.toFixed(4)}`, lat, lon })
-        .then(refreshSightlineIfRun);
+        .then(checkSightlineOnArrival);
       setCustomStatus(`Pinned ${lat.toFixed(4)}, ${lon.toFixed(4)}`, "ok");
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
   }
@@ -2383,7 +2400,6 @@
     // stamp each run and let only the newest write to the panel.
     const token = ++sightlineToken;
     const stale = () => token !== sightlineToken;
-    sightlineRun = true;
     // Remember whether we are refining a precomputed verdict, so the result can say how the
     // two compare instead of quietly overwriting one number with a slightly different one.
     const catAtStart = activeCatEntry;
@@ -2473,16 +2489,22 @@
     // The live-terrain adapter for the verdict's horizonAt seam: every contact's bearing was
     // given its own ray above, so the lookup is exact.
     const v = Verdict.evaluateSightline({
-      scope: "eclipse", contacts, totalitySeconds: totalitySeconds(c),
+      scope: verdictScope(c), contacts, totalitySeconds: totalitySeconds(c),
       horizonAt: (az) => horizonByBearing.get(az),
     });
     trackMetric("sightline_check", v.level);
     showSightlineVerdict(v, profile, azLo, azHi, missing / Math.max(1, total), catAtStart);
   }
 
-  // Contacts for an eclipse-scope verdict at the active observer (GLOSSARY.md, "Scope"): first
-  // contact, maximum and last contact — or just "now" outside the eclipse — plus second and
-  // third contact inside the path of totality. `contact` keys are localCircumstances() fields;
+  // Inside the path the question is whether you will see totality; outside it there is no
+  // totality to lose, so the verdict judges what eclipse there is (GLOSSARY.md, "Scope").
+  function verdictScope(c) {
+    return c && c.totalBegin && c.totalEnd ? "totality" : "eclipse";
+  }
+
+  // Contacts at the active observer: first contact, maximum and last contact — or just "now"
+  // outside the eclipse — plus second and third contact inside the path of totality. Which of
+  // them count towards the verdict is the scope's job. `contact` keys are localCircumstances() fields;
   // `alt`/`az` duplicate `sunAlt`/`sunAz` for the chart and card renderers.
   function eclipseContacts(c) {
     const list = c && c.partialBegin
@@ -2515,7 +2537,7 @@
       ? Cesium.JulianDate.secondsDifference(c.totalEnd, c.totalBegin) : 0;
   }
 
-  // Draw an eclipse-scope verdict: the sightline ray, the horizon chart and the result card.
+  // Draw a verdict: the sightline ray, the horizon chart and the result card.
   function showSightlineVerdict(v, profile, azLo, azHi, missingFraction = 0, cat = null, preset = null) {
     const f = v.focus;
     drawSightline(f.dir, !f.blocked && !f.below, {
@@ -2531,16 +2553,20 @@
   // Full literal class strings, not `bg-${colour}-900/40`. Tailwind's scanner reads the source
   // for class names, so anything assembled at runtime is invisible to it and gets stripped from
   // the built stylesheet — the card would lose its colour coding.
-  const LIVE_HEADLINE = {
+  const OUTSIDE_PATH_HEADLINE = {
     below:   { box: "bg-slate-900/40 border-slate-600/40", tone: "text-slate-300",
-               icon: "moon", text: "Sun below horizon" },
-    clear:   { box: "bg-emerald-900/40 border-emerald-600/40", tone: "text-emerald-300",
-               icon: "check-circle", text: "Clear while sun is up" },
+               icon: "moon", text: () => "Sun below horizon" },
+    clear:   { box: "bg-amber-900/40 border-amber-600/40", tone: "text-amber-300", icon: "eclipse",
+               text: (pct) => (pct ? `Partial eclipse only, ${pct} covered` : "No eclipse visible here") },
     blocked: { box: "bg-red-900/40 border-red-600/40", tone: "text-red-300",
-               icon: "eye-off", text: "Not visible" },
+               icon: "eye-off", text: () => "Not visible" },
     partial: { box: "bg-amber-900/40 border-amber-600/40", tone: "text-amber-300",
-               icon: "alert-triangle", text: "Partly visible" },
+               icon: "alert-triangle", text: () => "Partial eclipse, partly hidden by terrain" },
   };
+
+  // Second and third contact sit beside "Start" and "End" in the table, where those two words
+  // would be ambiguous (GLOSSARY.md, "Contact").
+  const TABLE_CONTACT_LABEL = { partialBegin: "Eclipse begins", partialEnd: "Eclipse ends" };
 
   // `preset` set means the horizons came off a stored profile rather than the network — the
   // card is otherwise identical, but it must not claim to be a live terrain reading.
@@ -2560,17 +2586,19 @@
     const gapNote = missingFraction > 0.01
       ? `<p class="text-[11px] text-amber-300 mt-2 flex items-start gap-1.5"><i data-lucide="alert-triangle" class="w-3.5 h-3.5 mt-px shrink-0"></i><span>${Math.round(missingFraction * 100)}% of the terrain samples did not load, so this verdict may be unreliable. Run the check again.</span></p>`
       : "";
-    // The verdict skips contacts where the sun has already set (GLOSSARY.md, "Scope").
-    const headline = LIVE_HEADLINE[v.level];
+    const outside = OUTSIDE_PATH_HEADLINE[v.level];
+    const headline = v.scope === "totality"
+      ? TOTALITY_HEADLINE[v.level]
+      : { ...outside, text: outside.text(peakObsc > 0 ? peakPct : null) };
     updateMobileVerdictPill({ icon: headline.icon, text: headline.text, tone: headline.tone });
-    const peakLabel = hasTotality ? "the peak of the eclipse" : `maximum eclipse (${peakPct} partial)`;
+    const peakLabel = hasTotality ? "totality" : `maximum eclipse (${peakPct} partial)`;
     const plain = focus.below
       ? "At the peak of the eclipse the sun has already set here."
       : focus.blocked
       ? `At ${peakLabel}, high ground about ${(focus.ridgeDist / 1000).toFixed(1)} km to the ${compassName(focus.az)} will be in the way. You would need to move to somewhere more open, or higher up, to see it.`
       : focus.grazing
       ? `At ${peakLabel}, the centre of the sun clears the skyline by ${(focus.alt - focus.horizon).toFixed(1)}&deg;, but because the sun's disc spans ~0.5&deg; its lower edge grazes the ridge. Moving slightly higher will clear the whole disc.`
-      : `You should have a clear view at ${peakLabel}. Look ${heightPhrase(focus.alt)}, to the ${compassName(focus.az)} — the sun clears the skyline by about ${(focus.alt - focus.horizon).toFixed(1)}&deg;.`;
+      : `${v.scope === "totality" && v.level === "clear" ? "You should see the whole of totality." : `You should have a clear view at ${peakLabel}.`} Look ${heightPhrase(focus.alt)}, to the ${compassName(focus.az)} — the sun clears the skyline by about ${(focus.alt - focus.horizon).toFixed(1)}&deg;.`;
     // Refining a catalogue spot: reconcile the two rather than silently replacing one verdict
     // with another. There are two ways they can differ and they are not the same thing.
     const catBits = [];
@@ -2581,13 +2609,6 @@
       if (Number.isFinite(cat.horizon) && Number.isFinite(focus.horizon)
           && Math.abs(cat.horizon - focus.horizon) >= 0.2) {
         catBits.push(`The ${cat.profile ? "precomputed profile" : "catalogue"} put the skyline here at ${cat.horizon.toFixed(1)}&deg; from a ~27 m elevation model; at native terrain resolution it is ${focus.horizon.toFixed(1)}&deg;.`);
-      }
-      // Scope. The catalogue only ever rates totality, so it can call a spot clear while this
-      // check finds first or last contact blocked. Without saying so, that reads as the two
-      // contradicting each other. Presets are exempt — they carry a full profile and already
-      // evaluated all three contacts, so there is no scope gap to explain.
-      if (moments.some((m) => m.blocked) && !focus.blocked && cat.level === "clear" && !cat.profile) {
-        catBits.push(`The catalogue rated this spot on totality alone, which it still clears — what is blocked above is first or last contact, over an hour either side, when the sun is far lower.`);
       }
     }
     const catNote = catBits.length
@@ -2607,7 +2628,13 @@
     const edgeNote = v.nearEdge
       ? `<p class="text-[11px] text-amber-300 mt-2 flex items-start gap-1.5"><i data-lucide="alert-triangle" class="w-3.5 h-3.5 mt-px shrink-0"></i><span>Totality lasts under a minute here (${Math.round(totDur)}s) — this spot is near the edge of the path. A few kilometres towards the centre line buys a lot more.</span></p>`
       : "";
-    const partialTotNote = hasTotality && !focus.blocked && v.partialTotality
+    // The verdict only judges totality, so a place can be clear and still lose the far ends of
+    // the partial eclipse, when the sun is much lower. Say so rather than leave it to the table.
+    const lostEnds = hasTotality && v.level === "clear" ? moments.filter((m) => m.blocked) : [];
+    const partialPhaseNote = lostEnds.length
+      ? `<p class="text-[11px] text-slate-400 mt-2 flex items-start gap-1.5"><i data-lucide="info" class="w-3.5 h-3.5 mt-px shrink-0 text-slate-500"></i><span>Totality itself is clear, but terrain hides the sun at ${lostEnds.map((m) => (m.contact === "partialBegin" ? "the start" : "the end")).join(" and ")} of the partial eclipse, over an hour away from totality.</span></p>`
+      : "";
+    const partialTotNote = hasTotality && !focus.blocked && v.level === "partial"
       ? `<p class="text-[11px] text-amber-300 mt-2 flex items-start gap-1.5"><i data-lucide="alert-triangle" class="w-3.5 h-3.5 mt-px shrink-0"></i><span>The sun clears the skyline at maximum, but terrain cuts in before totality ends (or at its start), so part of totality is blocked here.</span></p>`
       : "";
     const partialOnlyNote = !hasTotality && c && c.peak
@@ -2619,7 +2646,9 @@
       ? `<p class="text-[11px] text-slate-400 mt-2 flex items-start gap-1.5"><i data-lucide="info" class="w-3.5 h-3.5 mt-px shrink-0 text-slate-500"></i><span>The sun sets before the eclipse finishes here, so the final phase happens below the horizon.</span></p>`
       : "";
 
-    const rows = moments
+    // Every contact, in the order they happen, so the two that decide the verdict are visible.
+    const rows = [...v.contacts]
+      .sort((a, b) => Cesium.JulianDate.compare(a.j, b.j))
       .map((m) => {
         const state = m.below
           ? `<span class="text-slate-500">sun below horizon</span>`
@@ -2627,7 +2656,7 @@
           ? `<span class="text-red-300">blocked by ${(m.horizon - m.alt).toFixed(1)}&deg;</span>`
           : `<span class="text-emerald-300">clear by ${(m.alt - m.horizon).toFixed(1)}&deg;</span>`;
         return `<tr>
-          <td class="py-1 pr-2 text-slate-300 whitespace-nowrap">${m.label}</td>
+          <td class="py-1 pr-2 text-slate-300 whitespace-nowrap">${TABLE_CONTACT_LABEL[m.contact] || m.label}</td>
           <td class="py-1 pr-2 font-mono text-slate-400 whitespace-nowrap">${formatNZST(m.j).slice(0, 5)}</td>
           <td class="py-1 pr-2 font-mono text-slate-400 whitespace-nowrap">${m.alt.toFixed(1)}&deg;</td>
           <td class="py-1">${state}</td>
@@ -2676,6 +2705,7 @@
       ${cloudNote}
       ${partialOnlyNote}
       ${partialTotNote}
+      ${partialPhaseNote}
       ${edgeNote}
       ${setNote}
       ${catNote}
@@ -2816,6 +2846,7 @@
       const ridgePos = Cesium.Matrix4.multiplyByPoint(enuToFixed, ridgeOffset, new Cesium.Cartesian3());
 
       sightlinePrimitive = viewer.entities.add({
+        show: cameraViewMode !== "eye",   // from the observer's own eye this is a vertical pole
         polyline: {
           positions: [activeGroundCartesian, ridgePos],
           width: 4.5,
@@ -2865,7 +2896,7 @@
         ? Cesium.Color.fromCssColorString("#34d399").withAlpha(0.82)
         : Cesium.Color.fromCssColorString("#f87171").withAlpha(0.85);
       sightlinePrimitive = viewer.entities.add({
-        show: !clear || cameraViewMode !== "eye",
+        show: cameraViewMode !== "eye",
         polyline: {
           positions: [activeGroundCartesian, skyEnd],
           width: 3.5,
@@ -2890,6 +2921,10 @@
   // ====================================================================================
   let catalogue = null;
 
+  // Resolves once the catalogue has loaded or failed, whichever happens.
+  let settleCatalogue = () => {};
+  const catalogueSettled = new Promise((resolve) => { settleCatalogue = resolve; });
+
   async function loadCatalogue() {
     try {
       const res = await fetch("viewpoints.json", { cache: "no-cache" });
@@ -2910,7 +2945,7 @@
       // The catalogue arrives after the opening location has been selected, so a deep link
       // (?lat=&lon=, which is how the overview map hands off) misses the match on the way in.
       // Retry it once the data is here.
-      if (activeLoc && !activeCatEntry && !sightlineRun) {
+      if (activeLoc && !activeCatEntry) {
         activeCatEntry = findCatalogueEntry(activeLoc.lat, activeLoc.lon);
         if (activeCatEntry?.profile) runPresetCheck(activeCatEntry);
         else if (activeCatEntry) renderCatalogueVerdict(activeCatEntry);
@@ -2920,6 +2955,8 @@
       }
     } catch (e) {
       /* no catalogue shipped — the live search still works */
+    } finally {
+      settleCatalogue();
     }
   }
 
@@ -2968,6 +3005,39 @@
       }
     }
     return best;
+  }
+
+  // The one place to suggest when the answer here is no. Deliberately conservative: we are
+  // sending someone there, so it must be a named public lookout or picnic area on a sealed road
+  // with a comfortable margin and a good length of totality.
+  const SUGGESTABLE_KINDS = new Set(["viewpoint", "tower", "picnic"]);
+  function nearestClearSpot(lat, lon) {
+    if (!catalogue) return null;
+    let best = null, bestM = Infinity;
+    for (const s of catalogue.pois || []) {
+      if (s.publicAccess !== true || s.access !== "sealed" || s.level !== "clear") continue;
+      if (!SUGGESTABLE_KINDS.has(s.kind) || s.clearance < 3 || s.totality < 120) continue;
+      if (!s.name || /^Lookout \(/.test(s.name)) continue;   // named after its own coordinates
+      const m = haversineM(lat, lon, s.lat, s.lon);
+      if (m < bestM) { bestM = m; best = s; }
+    }
+    return best && { spot: best, km: bestM / 1000,
+                     direction: compassName(bearingDeg(lat, lon, best.lat, best.lon)) };
+  }
+
+  // Some catalogue entries are two names for one place, such as a lookout and the rest area
+  // beside it, and they would otherwise fill a short list. The list is already ranked, so the
+  // first of each cluster is the one to keep.
+  function thinNearby(list) {
+    const kept = [];
+    for (const s of list) {
+      const dup = kept.some((k) => {
+        const m = haversineM(s.lat, s.lon, k.lat, k.lon);
+        return m < 500 || (k.name === s.name && m < 2000);
+      });
+      if (!dup) kept.push(s);
+    }
+    return kept;
   }
 
   // Bilinear interpolation across the 48-year July CM SAF CLARA-A3 cloud cover grid.
@@ -3023,15 +3093,16 @@
 
   // Full literal class strings — Tailwind's scanner reads the source, so anything assembled
   // at runtime is stripped from the built stylesheet. Same reasoning as the live result card.
-  // Worded for what the catalogue actually measured — totality — rather than borrowing the
-  // live card's "Clear while sun is up", which claims a wider window than this data covers.
-  const CAT_HEADLINE = {
+  // Totality scope, whichever way the verdict was reached: stored or checked live.
+  const TOTALITY_HEADLINE = {
     clear:   { box: "bg-emerald-900/40 border-emerald-600/40", tone: "text-emerald-300",
                icon: "check-circle", text: "Clear through totality" },
     partial: { box: "bg-amber-900/40 border-amber-600/40", tone: "text-amber-300",
                icon: "alert-triangle", text: "Part of totality blocked" },
     blocked: { box: "bg-red-900/40 border-red-600/40", tone: "text-red-300",
                icon: "eye-off", text: "Totality not visible" },
+    below:   { box: "bg-slate-900/40 border-slate-600/40", tone: "text-slate-300",
+               icon: "moon", text: "Sun below horizon" },
   };
 
   // The full sightline card for a preset, with no terrain fetched.
@@ -3042,13 +3113,17 @@
   // runSightlineCheck does, through the stored-profile adapter instead of live rays, and hands
   // the verdict to exactly the same renderers. The result is the complete card, chart
   // included, that used to need a 234-tile probe.
-  function runPresetCheck(p) {
-    sightlineToken++;                 // any in-flight live probe no longer owns the panel
+  function presetVerdict(p) {
     const c = localCircumstances(activeGroundCartesian);
-    const v = Verdict.evaluateSightline({
-      scope: "eclipse", contacts: eclipseContacts(c), totalitySeconds: totalitySeconds(c),
+    return Verdict.evaluateSightline({
+      scope: verdictScope(c), contacts: eclipseContacts(c), totalitySeconds: totalitySeconds(c),
       horizonAt: Verdict.horizonFromProfile(p.profile),
     });
+  }
+
+  function runPresetCheck(p) {
+    sightlineToken++;                 // any in-flight live probe no longer owns the panel
+    const v = presetVerdict(p);
     const moments = v.contacts.filter(isListedContact);
 
     // Plot the profile at its stored 1 deg resolution rather than the live check's 4 deg —
@@ -3068,7 +3143,7 @@
     const v = catalogueVerdict(s);
     if (!v) return;
     const box = document.getElementById("resultBox");
-    const headline = CAT_HEADLINE[v.level];
+    const headline = TOTALITY_HEADLINE[v.level];
     updateMobileVerdictPill({ icon: headline.icon, text: headline.text, tone: headline.tone });
 
     // Contact times come from this observer's own live circumstances, not the catalogue.
@@ -3170,7 +3245,7 @@
   const POI_LABEL = { viewpoint: "viewpoint", peak: "summit", picnic: "picnic area",
     campsite: "campsite", rest_area: "rest area", tower: "lookout tower" };
   const ACCESS_ICON = { sealed: "car", track: "truck", foot: "footprints", none: "mountain" };
-  const ACCESS_TIP = { sealed: "sealed road", track: "4WD track", foot: "walking track",
+  const ACCESS_TIP = { sealed: "sealed road", track: "unsealed road or 4WD track", foot: "walking track",
     none: "no mapped access — off-track" };
   const ACCESS_SUB_LABEL = {
     sealed_road: "Sealed road",
@@ -3291,9 +3366,9 @@
                _bearing: compassShort(bearingDeg(here.lat, here.lon, s.lat, s.lon)) };
     });
 
-    const matching = withDist.filter((s) =>
+    const matching = thinNearby(withDist.filter((s) =>
       matchesAccess(s, want) &&
-      (!radiusKm || !here || s._km <= radiusKm));
+      (!radiusKm || !here || s._km <= radiusKm)));
     const list = matching.slice(0, 40);
 
     const wrap = document.getElementById("topSpots");
@@ -3332,11 +3407,9 @@
               ${nearEdge ? `<i data-lucide="timer" class="w-3 h-3 text-amber-400 shrink-0" title="Under a minute of totality: near the edge of the path"></i>` : ""}
               <span class="text-emerald-300 font-mono text-[11px] ml-auto shrink-0">+${s.clearance.toFixed(1)}&deg;</span>
             </span>
-            <span class="flex items-center justify-between gap-2 text-[10px] text-slate-400 mt-0.5">
-              <span class="truncate text-slate-500">${esc(subLeft)}${
-                partial ? " · partial" : ""}${nearEdge ? " · near edge" : ""}</span>
-              <span class="shrink-0 font-mono text-slate-400">${subRight}</span>
-            </span>
+            <span class="block truncate text-[10px] text-slate-500 mt-0.5">${esc(subLeft)}${
+              partial ? " · partial" : ""}${nearEdge ? " · near edge" : ""}</span>
+            <span class="block font-mono text-[10px] text-slate-400">${subRight}</span>
           </button>`;
         }).join("")
       : `<p class="text-[11px] text-slate-500">No viewpoints or sites match${
@@ -3345,7 +3418,7 @@
     const shown = list.length === matching.length
       ? `${matching.length}`
       : `${list.length} of ${matching.length}`;
-    const tier = { sealed: " on sealed roads", track: " on 4WD tracks",
+    const tier = { sealed: " on sealed roads", track: " on unsealed roads or 4WD tracks",
       foot: " reachable on foot", drive: " you can drive to" }[want] || "";
     const near = radiusKm ? ` within ${radiusKm} km` : "";
     document.getElementById("topSpotsNote").textContent = list.length
@@ -3394,10 +3467,30 @@
       btn.className = "flex-1 sm:flex-initial justify-center inline-flex items-center gap-1.5 text-xs font-semibold bg-amber-400 text-slate-900 rounded-lg px-2.5 sm:px-3 py-1.5 transition shadow ring-2 ring-amber-200";
       btn.innerHTML = '<i data-lucide="square" class="w-3.5 h-3.5 shrink-0"></i> <span>Stop</span>';
     } else {
-      btn.className = "flex-1 sm:flex-initial justify-center inline-flex items-center gap-1.5 text-xs font-semibold bg-sky-500 hover:bg-sky-400 text-slate-900 rounded-lg px-2.5 sm:px-3 py-1.5 transition shadow";
-      btn.innerHTML = '<i data-lucide="sparkles" class="w-3.5 h-3.5 shrink-0"></i> <span class="hidden sm:inline">Watch it happen</span><span class="sm:hidden">Watch</span>';
+      btn.className = "flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold bg-sky-500 hover:bg-sky-400 text-slate-900 rounded-lg px-3 md:px-4 py-1.5 transition";
+      btn.innerHTML = '<i data-lucide="clapperboard" class="w-4 h-4"></i> <span class="hidden sm:inline">Watch it happen</span><span class="sm:hidden">Watch</span>';
     }
     lucide.createIcons();
+  }
+
+  function hideNarration() {
+    document.getElementById("narration").classList.add("hidden");
+    document.getElementById("narrationActions").classList.add("hidden");
+  }
+
+  // Blocked from here: finish on somewhere that isn't, rather than on a dark hillside.
+  function offerNearestClearSpot() {
+    if (!currentSightlineBlocked || !activeLoc) return false;
+    const near = nearestClearSpot(activeLoc.lat, activeLoc.lon);
+    if (!near) return false;
+    const { spot, km, direction } = near;
+    narrate(`Totality is hidden from ${activeLoc.name}.`,
+      `${spot.name}, ${km.toFixed(km < 10 ? 1 : 0)} km to the ${direction}, has a clear view of all of it.`);
+    const go = document.getElementById("narrationGo");
+    go.textContent = `Go to ${spot.name}`;
+    go.onclick = () => selectLocation({ name: spot.name, lat: spot.lat, lon: spot.lon, cat: spot }, true);
+    document.getElementById("narrationActions").classList.remove("hidden");
+    return true;
   }
 
   function narrate(text, sub) {
@@ -3415,6 +3508,7 @@
 
   async function startCinematic() {
     closeMobileDrawers();
+    hideNarration();
     const c = localCircumstances(activeGroundCartesian);
     if (!c || !c.peak) { narrate("No eclipse is visible from this spot.", ""); return; }
     trackMetric("watch_playback");
@@ -3424,9 +3518,9 @@
     cinematicEnd = Cesium.JulianDate.addSeconds(c.totalEnd || c.peak, 120, new Cesium.JulianDate());
 
     // Frame the sun cleanly below the narration banner. If this spot has a clear sightline,
-    // swoop down near ground level looking across the horizon; if the ground point is blocked
-    // by a nearby hill (like Queenstown town centre), frame from the overview vantage so the
-    // eclipse remains visible above the ridge while showing the blocked sightline below.
+    // swoop down near ground level looking across the horizon. If it is blocked by a nearby
+    // hill (like Queenstown town centre), keep whichever view is selected: at eye level that
+    // is the truth of it, a dark ridge with a ring marking where the sun is hidden.
     const s = sunAltAz(c.peak, activeGroundCartesian);
     const ground = Cesium.Cartographic.fromCartesian(activeGroundCartesian);
     if (!currentSightlineBlocked) {
@@ -3439,11 +3533,11 @@
           pitch: Cesium.Math.toRadians(pitchDeg),
           roll: 0,
         },
-        duration: 2.0,
+        duration: flightSeconds(2.0),
       });
     } else if (activeLoc) {
       const view = await frameForLocation(activeLoc, ground.height - EYE_HEIGHT);
-      viewer.camera.flyTo({ ...view, duration: 2.0 });
+      viewer.camera.flyTo({ ...view, duration: flightSeconds(2.0) });
     }
 
     viewer.clock.multiplier = CINE_FAST;
@@ -3456,19 +3550,19 @@
     narrate("Keep your eyes on the north-western sky…", "The eclipse is already under way");
   }
 
-  function stopCinematic() {
+  function stopCinematic(finished = false) {
     cinematic = false;
     document.body.dataset.cinematic = "0";
     viewer.clock.shouldAnimate = false;
     viewer.clock.multiplier = 30;
     syncPlayIcon();
     syncWatchButton();
-    document.getElementById("narration").classList.add("hidden");
+    if (!(finished && offerNearestClearSpot())) hideNarration();
   }
 
   function updateNarration(t, e) {
     if (!cinematic) return;
-    if (cinematicEnd && Cesium.JulianDate.greaterThan(t, cinematicEnd)) { stopCinematic(); return; }
+    if (cinematicEnd && Cesium.JulianDate.greaterThan(t, cinematicEnd)) { stopCinematic(true); return; }
     const o = e.obscuration;
     const c = localCircumstances(activeGroundCartesian);
     const hasTotality = Boolean(c && c.totalBegin);
@@ -3563,7 +3657,6 @@
     document.getElementById("closeInfoDrawer").addEventListener("click", closeMobileDrawers);
     document.getElementById("mobileVerdictBtn").addEventListener("click", () => {
       if (document.body.dataset.panel !== "info") setPanel("info");
-      if (!activeCatEntry && !sightlineRun) runSightlineCheck();
     });
 
     // Build the contact address at runtime rather than shipping it in the markup. This stops
@@ -3613,16 +3706,7 @@
     document.getElementById("jumpTotality").addEventListener("click", jump((c) => c.peak));
     document.getElementById("jumpEnd").addEventListener("click", jump((c) => c.partialEnd));
 
-    document.getElementById("runSightline").addEventListener("click", () => {
-      // On tablet portrait where rightStack is not a drawer, or if the user isn't in mobile
-      // drawer mode, run the sightline check directly. In mobile drawer mode, let the user see
-      // the 3D ray and floating verdict pill on the globe without covering the screen, unless
-      // they already have the Details drawer open.
-      if (!isMobileDrawerMode() && window.innerWidth <= 1024 && document.body.dataset.panel !== "info") {
-        setPanel("info");
-      }
-      runSightlineCheck();
-    });
+    document.getElementById("narrationDismiss").addEventListener("click", hideNarration);
 
     document.getElementById("customGo").addEventListener("click", goToCustom);
     document.getElementById("customGeo").addEventListener("click", useMyLocation);
@@ -3730,15 +3814,13 @@
   //  BOOT
   // ====================================================================================
   window.addEventListener("DOMContentLoaded", () => {
-    // Keep the "nothing checked yet" copy so leaving a spot can restore it rather than
-    // stranding a verdict that describes somewhere the user has left.
-    resultPlaceholder = document.getElementById("resultBox").innerHTML;
     let saved = null;
     try { saved = localStorage.getItem("eclipseMode"); } catch (e) {}
     setMode(saved || "simple");   // casual visitors are the larger audience — start plain
     document.body.dataset.panel = "none";   // on mobile, start with the globe unobstructed
     buildPresetButtons();
     wireControls();
+    syncViewToggleUI();
     lucide.createIcons();
     trackMetric("page_view", "simulator");
     start();

@@ -277,6 +277,59 @@ test("catalogue spots are answered from precomputed data", async ({ page }) => {
   expect(errs, "no JS errors while reading the catalogue").toEqual([]);
 });
 
+// Pure logic again, so it runs without a GPU. These pin the promise that a place reads the same
+// wherever you see it: the map shows the stored level, the simulator judges the same contacts.
+test("the verdict answers totality inside the path and agrees with the catalogue", async ({ page }) => {
+  const errs = errors(page);
+  await page.goto("/index.html");
+  await page.waitForFunction(() => typeof loadCatalogue === "function", null, { timeout: 20000 });
+  await page.evaluate(() => (typeof catalogue !== "undefined" && catalogue ? null : loadCatalogue()));
+  await page.waitForFunction(() => typeof catalogue !== "undefined" && !!catalogue, null, { timeout: 20000 });
+
+  const r = await page.evaluate(() => {
+    const standAt = (lat, lon, elev) => {
+      activeGroundCartesian = Cesium.Cartesian3.fromDegrees(lon, lat, elev + EYE_HEIGHT);
+      return localCircumstances(activeGroundCartesian);
+    };
+    const presets = catalogue.presets.map((p) => {
+      const c = standAt(p.lat, p.lon, p.elev);
+      const v = presetVerdict(p);
+      return { name: p.name, stored: p.level, live: v.level, scope: verdictScope(c) };
+    });
+    const chch = verdictScope(standAt(-43.53095, 172.63643, 10));
+    const towns = {};
+    for (const n of ["Queenstown", "Arrowtown"]) {
+      const p = catalogue.presets.find((x) => x.name === n);
+      towns[n] = nearestClearSpot(p.lat, p.lon);
+    }
+    const names = thinNearby(catalogue.pois).map((s) => s.name);
+    return { presets, chch, towns, names, button: !!document.getElementById("runSightline") };
+  });
+
+  for (const p of r.presets) {
+    expect(p.scope, `${p.name} is inside the path`).toBe("totality");
+    expect(p.live, `${p.name} must read the same in the simulator and on the map`).toBe(p.stored);
+  }
+  expect(r.presets.find((p) => p.name === "Queenstown").live).toBe("blocked");
+  expect(r.chch, "Christchurch is outside the path").toBe("eclipse");
+  expect(r.button, "presets answer on arrival, so there is no check button").toBe(false);
+
+  // "Go to..." only ever names a public, sealed-road lookout or picnic area.
+  expect(r.towns.Queenstown.spot.name).toBe("Halfway Remarkables");
+  expect(r.towns.Arrowtown.spot.name).toBe("The Zig Zag");
+  for (const { spot } of Object.values(r.towns)) {
+    expect(spot.publicAccess).toBe(true);
+    expect(spot.access).toBe("sealed");
+    expect(spot.level).toBe("clear");
+  }
+
+  // Two names for one place are thinned out of the list.
+  expect(r.names).toContain("Halfway Remarkables");
+  expect(r.names).not.toContain("Halfway Remarkables lookout");
+
+  expect(errs, "no JS errors while judging presets").toEqual([]);
+});
+
 // End to end through the real cards. Needs the 3D viewer, which needs WebGL; skipped, with
 // the reason, on a runner that cannot provide it. The rule itself is covered by tests/unit.
 test("verdict cards render the shared verdict", async ({ page }) => {
@@ -288,10 +341,10 @@ test("verdict cards render the shared verdict", async ({ page }) => {
   test.skip(!ready, "3D viewer did not initialise (no WebGL in this runner)");
   const card = page.locator("#resultBox");
 
-  // Preset card, eclipse scope through the stored-profile adapter: first contact clears
-  // Queenstown's skyline, maximum and last contact do not.
+  // Preset card, through the stored-profile adapter. First contact clears Queenstown's skyline
+  // but totality does not, and totality is what the headline answers.
   await page.evaluate(() => selectLocation(LOCATIONS.find((l) => l.name === "Queenstown"), false));
-  await expect(card).toContainText("Partly visible", { timeout: 30000 });
+  await expect(card).toContainText("Totality not visible", { timeout: 30000 });
 
   // Catalogue card, stored totality-scope verdict: Taieri Mouth Road lookout clears second
   // contact and maximum but third contact sits exactly on the skyline (0.00 deg).
@@ -310,7 +363,7 @@ test("simulator loads without JS errors and wires up its controls", async ({ pag
   await page.goto("/index.html");
 
   // Present in the markup regardless of whether WebGL initialises in CI.
-  for (const id of ["timeScrub", "jumpTotality", "runSightline", "accessFilter",
+  for (const id of ["timeScrub", "jumpTotality", "accessFilter",
                     "distFilter", "modeToggle", "watchIt"]) {
     await expect(page.locator(`#${id}`)).toHaveCount(1);
   }

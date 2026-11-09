@@ -4,3 +4,14 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Every page links this file, so one rule covers them all. Camera flights in the simulator are
+   handled in its script, since CSS cannot reach them. */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -97,10 +97,12 @@ view that is usable without touching the camera:
 - **The clock jumps to ~50% obscuration**, found by bisecting between first contact and
   maximum. There is still plenty of light on the landscape there, and **Totality** is then one
   click away with no camera adjustment needed.
-- **The camera sits behind the observer**, looking along the sun's bearing at totality, so the
-  location marker is in the foreground and the low sun is in the same frame. Standing directly
-  over the point hid the marker and gave nothing to orient by.
-- **Pitch is computed from the live frustum and the measured UI chrome.** Cesium's 60° FOV is
+- **The camera stands at eye level**, looking along the sun's bearing at totality, because that
+  is the view the verdict describes. A raised camera can see over a ridge the observer cannot,
+  which at Queenstown showed a full corona above a skyline that hides it from the street.
+  **Overview** is one tap away and sits behind the observer, with the location marker in the
+  foreground and the low sun in the same frame.
+- **Overview's pitch is computed from the live frustum and the measured UI chrome.** Cesium's 60° FOV is
   the *horizontal* angle, so on a 1.89 aspect the usable vertical span is only 34° — a fixed
   pitch put the sun off the top edge. The status bar and timeline are measured too, because
   they are very different proportions on a phone (bottom bar ~29% of the screen) than on a
@@ -120,7 +122,9 @@ render close to black.
   to click a point on the terrain.
 - **Timeline** with play/pause and **Start / Totality / End** jump buttons labelled with *this
   location's own* contact times.
-- **Sightline check** — reports whether terrain blocks the sun, at all three of those moments.
+- **Sightline verdict** — answers on arrival. Inside the path it judges totality; the partial
+  phases are reported underneath. Presets and catalogue spots read a stored answer, and anywhere
+  else runs a live check automatically.
 - **Horizon profile chart** — terrain silhouette across ±20° of azimuth plotted against the
   sun's track, totality segment highlighted.
 - **Eclipse progress card** — the moon crossing the sun, with live magnitude, obscuration %,
@@ -190,8 +194,8 @@ Scoring POIs on visibility rather than just listing them matters: many OSM viewp
 look *at* something specific (a waterfall, a bird colony, a steep street) and sit in gullies
 with poor horizons. Those fall to the bottom automatically.
 
-**Filters.** Access tiers are **exclusive**, not inclusive-downward: *Sealed road only*, *4WD
-track only*, *Walking track only*, plus *Drivable* and *Any*. That matters — because ranking
+**Filters.** Access tiers are **exclusive**, not inclusive-downward: *Sealed road only*, *Unsealed
+road or 4WD track*, *Walking track only*, plus *Drivable* and *Any*. That matters — because ranking
 puts sealed-road spots first, an inclusive "road or track" filter returned the same all-sealed
 top 40 as "sealed" and appeared to do nothing. A **distance filter** (10/25/50/100 km) narrows
 to spots near wherever you are standing, and each entry shows its distance and bearing.
