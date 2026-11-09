@@ -144,7 +144,7 @@
         conservative worst-case bound of &plusmn;1 arcminute across several centuries, its actual relative
         Sun&ndash;Moon positional accuracy in the 2028 epoch is ~1&ndash;3 arcseconds. Since the Moon's
         topocentric synodic motion is ~0.55&Prime;/s, a 1&prime; along-track error would displace contact
-        times by ~110 s; in validation (§9), <code>astronomy-engine</code> matches published Fred Espenak /
+        times by ~110 s; in validation (§8), <code>astronomy-engine</code> matches published Fred Espenak /
         NASA GSFC predictions at Dunedin to within 0&ndash;3 s.
       </p>
       <p>
@@ -297,7 +297,7 @@ horizon  = max_d angle(d),    clearance = alt_sun - horizon</div>
         <li><b>Inner cutoff (<var>d</var><sub>min</sub> = 100 m):</b> Chosen from the ~30 m DEM vertical uncertainty (<var>&sigma;</var><sub>z</sub> &approx; 5 m), which produces an angular noise floor arctan(<var>&sigma;</var><sub>z</sub> / <var>d</var>) of &plusmn;32&deg; at 8 m, &plusmn;5.7&deg; at 50 m, and &plusmn;2.9&deg; at 100 m (~3.3 pixels).</li>
         <li><b>Great-circle geodesics:</b> Both code paths trace true great-circle bearings (via the local ENU tangent frame in JS and spherical forward geodesics in Python).</li>
         <li><b>Solar centre vs. lower limb (<var>s</var><sub>&#9737;</sub> &approx; 0.26&deg;):</b> Because <code>clearance</code> is measured from the solar centre, clearances in (0&deg;, 0.26&deg;) mean the lower limb of the solar/lunar disc intersects the ridge and are explicitly flagged as <i>grazing</i>.</li>
-        <li><b>Dual-resolution preset profiles:</b> The four town presets use zoom 13 (~6.8 m/px) within 9 km and zoom 11 (~27 m/px) out to 45 km across a 1&deg;-stepped azimuth profile, reducing worst-case raster-vs-mesh error across all 12 town/contact bearings to 0.13&deg;.</li>
+        <li><b>Dual-resolution preset profiles:</b> The five town presets use zoom 13 (~6.8 m/px) within 9 km and zoom 11 (~27 m/px) out to 45 km across a 1&deg;-stepped azimuth profile. This reduced worst-case raster-vs-mesh error to 0.13&deg; across the 12 town/contact bearings measured for Queenstown, Arrowtown, Cromwell and Dunedin; W&amacr;naka was added later with the same method and was not part of that comparison.</li>
       </ul>
     </section>
 
@@ -373,7 +373,7 @@ horizon  = max_d angle(d),    clearance = alt_sun - horizon</div>
       <h3>9.2 Mathematical Formulation &amp; Probability Metrics</h3>
       <p>
         For each grid point (<var>&phi;</var>, <var>&lambda;</var>), the multi-decadal climatological mean
-        daytime cloud fraction is computed across the <var>N</var> = 49 July months:
+        daytime cloud fraction is computed across the <var>N</var> = 48 July months:
       </p>
       <div class="math-block">C_day(φ, λ) = (1 / N) · ∑_{y=1979}^{2026} CFC_day,y(φ, λ)
 P_clear(φ, λ) = 100% - C_day(φ, λ)</div>

@@ -219,6 +219,15 @@ def check_catalogue() -> None:
     else:
         ok("catalogue has no OSM coverage gaps")
 
+    grid = d.get("cloudGrid") or {}
+    if grid:
+        first, last = grid["years"]
+        if grid.get("count") == last - first + 1:
+            ok(f"cloud climatology has one July per year, {first}-{last}")
+        else:
+            fail(f"viewpoints.json: cloudGrid has {grid.get('count')} months for {first}-{last} — "
+                 "a non-July file was probably averaged in")
+
     required = {"lat", "lon", "elev", "sunAlt", "clearance", "clearBegin", "clearEnd",
                 "totality", "access", "level"}
     region = d.get("region") or {}

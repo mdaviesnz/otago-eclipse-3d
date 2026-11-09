@@ -20,7 +20,8 @@ VIEWPOINTS_FILE = ROOT / "viewpoints.json"
 
 def load_july_climatology():
     """Load all July monthly mean NetCDF files and compute multi-decadal means."""
-    files = sorted(glob.glob(str(CMSAF_DIR / "*0701*.nc")))
+    # Anchored on the date field: a bare *0701* also matches January 2007 (CFCmm200701...).
+    files = sorted(glob.glob(str(CMSAF_DIR / "CFCmm????0701*.nc")))
     if not files:
         raise FileNotFoundError(f"No July NetCDF files found in {CMSAF_DIR}")
 
