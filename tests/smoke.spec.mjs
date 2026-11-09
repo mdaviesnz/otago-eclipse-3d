@@ -297,12 +297,10 @@ test("the verdict answers totality inside the path and agrees with the catalogue
     });
     const chch = verdictScope(standAt(-43.53095, 172.63643, 10));
     const towns = {};
-    for (const n of ["Queenstown", "Arrowtown"]) {
-      const p = catalogue.presets.find((x) => x.name === n);
-      towns[n] = Catalogue.nearestClearSpot(catalogue, p.lat, p.lon);
-    }
+    for (const p of catalogue.presets) towns[p.name] = betterPlaceFor(p, p);
     const names = Catalogue.thinNearby(catalogue.pois).map((s) => s.name);
-    return { presets, chch, towns, names, button: !!document.getElementById("runSightline") };
+    return { presets, chch, towns, names, button: !!document.getElementById("runSightline"),
+      comfortable: Catalogue.COMFORTABLE_CLEARANCE };
   });
 
   for (const p of r.presets) {
@@ -313,13 +311,20 @@ test("the verdict answers totality inside the path and agrees with the catalogue
   expect(r.chch, "Christchurch is outside the path").toBe("eclipse");
   expect(r.button, "presets answer on arrival, so there is no check button").toBe(false);
 
-  // "Go to..." only ever names a public, sealed-road lookout or picnic area.
-  expect(r.towns.Queenstown.spot.name).toBe("Halfway Remarkables");
-  expect(r.towns.Arrowtown.spot.name).toBe("The Zig Zag");
-  for (const { spot } of Object.values(r.towns)) {
-    expect(spot.publicAccess).toBe(true);
-    expect(spot.access).toBe("sealed");
-    expect(spot.level).toBe("clear");
+  // Each town but Wānaka has its own fixed suggestion. The app doesn't need the catalogue to show
+  // it, but a rebuilt catalogue must still agree that each one is a public, sealed-road spot with
+  // a comfortable clear view, or the choice needs revisiting.
+  const picks = Object.fromEntries(Object.entries(r.towns).map(([n, t]) => [n, t && `${t.name} (${t.why})`]));
+  expect(picks).toEqual({
+    Queenstown: "Halfway Remarkables (clear)", Arrowtown: "The Zig Zag (clear)", "Wānaka": null,
+    Cromwell: "Bruce Jackson Lookout (margin)", Dunedin: "Signal Hill Lookout (margin)",
+  });
+  for (const t of Object.values(r.towns).filter(Boolean)) {
+    expect(t.cat && t.cat.name, `${t.name} is in the catalogue at its own coordinates`).toBe(t.name);
+    expect(t.cat.publicAccess).toBe(true);
+    expect(t.cat.access).toBe("sealed");
+    expect(t.cat.level).toBe("clear");
+    expect(t.cat.clearance).toBeGreaterThanOrEqual(r.comfortable);
   }
 
   // Two names for one place are thinned out of the list.

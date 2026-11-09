@@ -2,8 +2,8 @@
 
 import { test, expect } from "@playwright/test";
 import {
-  haversineM, bearingDeg, matchesAccess, thinNearby, nearestClearSpot, compareSpots, rankSpots,
-  declutter,
+  haversineM, bearingDeg, matchesAccess, thinNearby, nearestClearSpot, betterSpotNearby, compareSpots,
+  rankSpots, declutter,
 } from "../../catalogue.js";
 
 const spot = (over) => ({
@@ -121,6 +121,34 @@ test.describe("nearestClearSpot", () => {
   });
   test("copes with no catalogue", () => {
     expect(nearestClearSpot(null, -45, 169)).toBeNull();
+  });
+});
+
+test.describe("betterSpotNearby", () => {
+  const cat = (...pois) => ({ pois });
+  const at = (km, over) => spot({ name: `${km} km`, lat: -45 - km / 111.19, ...over });
+  const better = (here, ...pois) => betterSpotNearby(cat(...pois), here, -45, 169);
+
+  test("from a blocked place, the nearest clear spot", () => {
+    const r = better({ level: "blocked", clearance: -8, totality: 178 }, at(9), at(4));
+    expect([r.spot.name, r.why]).toEqual(["4 km", "clear"]);
+  });
+  test("from outside the path, a spot with totality at all", () => {
+    expect(better({ level: "clear", clearance: 6, totality: 0 }, at(40)).why).toBe("clear");
+  });
+  test("from a tight margin, the nearest spot with room to spare", () => {
+    const here = { level: "clear", clearance: 1.4, totality: 174 };
+    const r = better(here, at(1, { clearance: 2.9 }), at(2, { clearance: 5, totality: 174 }));
+    expect([r.spot.name, r.why]).toEqual(["2 km", "margin"]);
+  });
+  test("from a comfortable margin, the nearest spot with a longer totality", () => {
+    const here = { level: "clear", clearance: 7.5, totality: 150 };
+    const r = better(here, at(1, { totality: 152 }), at(38, { totality: 177 }));
+    expect([r.spot.name, r.why]).toEqual(["38 km", "longer"]);
+  });
+  test("nothing, when the only gains are a few seconds or a better chance of clear sky", () => {
+    const here = { level: "clear", clearance: 8, totality: 178, clearProb: 43 };
+    expect(better(here, at(1, { totality: 177, clearProb: 60 }), at(2, { clearance: 12 }))).toBeNull();
   });
 });
 

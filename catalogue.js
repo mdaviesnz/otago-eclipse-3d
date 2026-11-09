@@ -60,20 +60,46 @@ export function thinNearby(list) {
 
 const SUGGESTABLE_KINDS = new Set(["viewpoint", "tower", "picnic"]);
 
-// The one place to suggest when the answer here is no. Deliberately conservative: we are
-// sending someone there, so it must be a named public lookout or picnic area on a sealed road
-// with a comfortable margin and a good length of totality. Returns { spot, km, bearing } or null.
-export function nearestClearSpot(catalogue, lat, lon) {
-  let best = null, bestM = Infinity;
-  for (const s of (catalogue && catalogue.pois) || []) {
-    if (s.publicAccess !== true || s.access !== "sealed" || s.level !== "clear") continue;
-    if (!SUGGESTABLE_KINDS.has(s.kind) || s.clearance < COMFORTABLE_CLEARANCE || s.totality < 120) continue;
-    if (!s.name || /^Lookout \(/.test(s.name)) continue;   // named after its own coordinates
-    const m = haversineM(lat, lon, s.lat, s.lon);
-    if (m < bestM) { bestM = m; best = s; }
-  }
-  return best && { spot: best, km: bestM / 1000, bearing: bearingDeg(lat, lon, best.lat, best.lon) };
+// Deliberately conservative: we are sending someone there, so it must be a named public lookout
+// or picnic area on a sealed road with a comfortable margin and a good length of totality.
+function suggestable(s) {
+  if (s.publicAccess !== true || s.access !== "sealed" || s.level !== "clear") return false;
+  if (!SUGGESTABLE_KINDS.has(s.kind) || s.clearance < COMFORTABLE_CLEARANCE || s.totality < 120) return false;
+  return Boolean(s.name) && !/^Lookout \(/.test(s.name);   // not named after its own coordinates
 }
+
+// Why a spot is worth the trip from here, or null if it isn't clearly better:
+//   "clear"  here loses some or all of totality, or is outside the path
+//   "margin" here clears the skyline by less than COMFORTABLE_CLEARANCE
+//   "longer" totality lasts at least one 15 s step longer there
+// A better chance of clear sky on its own does not count: past Julys differ by a point or two
+// between neighbouring spots, too little to drive for.
+function improvement(s, here) {
+  const tierHere = here.totality > 0 ? marginTier(here) : 3;
+  const tierThere = marginTier(s);
+  if (tierThere < tierHere) return tierHere === 3 ? "clear" : "margin";
+  if (tierThere === tierHere && Math.round(s.totality / 15) > Math.round(here.totality / 15)) return "longer";
+  return null;
+}
+
+// The nearest suggestable spot that is clearly better than `here` ({ level, clearance, totality }),
+// with the reason. Returns { spot, km, bearing, why } or null. The simulator's five towns have
+// their own fixed suggestions instead (LOCATIONS in simulator.js).
+export function betterSpotNearby(catalogue, here, lat, lon) {
+  let best = null, bestM = Infinity, why = null;
+  for (const s of (catalogue && catalogue.pois) || []) {
+    if (!suggestable(s)) continue;
+    const reason = improvement(s, here);
+    if (!reason) continue;
+    const m = haversineM(lat, lon, s.lat, s.lon);
+    if (m < bestM) { bestM = m; best = s; why = reason; }
+  }
+  return best && { spot: best, km: bestM / 1000, bearing: bearingDeg(lat, lon, best.lat, best.lon), why };
+}
+
+// The one place to suggest when the answer here is no.
+export const nearestClearSpot = (catalogue, lat, lon) =>
+  betterSpotNearby(catalogue, { level: "blocked", totality: 0 }, lat, lon);
 
 // Past this much clearance, more does not improve the view.
 export const COMFORTABLE_CLEARANCE = 3;

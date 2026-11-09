@@ -34,12 +34,25 @@ const TOTALITY_END_UTC  = "2028-07-22T04:18:36Z"; // 16:18:36 NZST
 const PARTIAL_BEG_UTC   = "2028-07-22T03:08:58Z"; // 15:08:58 NZST
 const PARTIAL_END_UTC   = "2028-07-22T05:17:00Z"; // 17:17:00 NZST
 
+// `goTo` is each town's own "Go to..." suggestion, chosen by hand and fixed, so the most-visited
+// places never depend on a rule or a catalogue rebuild; every other place is matched by the rule
+// in catalogue.js. `why` is the improvement: "clear" where the town loses totality, "margin"
+// where it clears the skyline by too little. Coordinates are the catalogue's, so the spot is
+// answered from viewpoints.json on arrival.
+//   Dunedin: Signal Hill rather than the nearer picnic area in South Dunedin, as the lookout
+//     people know.
+//   Wānaka: none. Its only gain is half a minute more totality 38 km away over the Crown Range,
+//     a winter pass, under cloudier skies.
 const LOCATIONS = [
-  { name: "Queenstown", lon: 168.6626, lat: -45.0312, icon: "mountain" },
-  { name: "Arrowtown",  lon: 168.8306, lat: -44.9385, icon: "trees" },
-  { name: "Wānaka",     lon: 169.1365, lat: -44.6942, icon: "sailboat" },
-  { name: "Cromwell",   lon: 169.2030, lat: -45.0382, icon: "grape" },
-  { name: "Dunedin",    lon: 170.5028, lat: -45.8788, icon: "waves" },
+  { name: "Queenstown", lon: 168.6626, lat: -45.0312, icon: "mountain",
+    goTo: { name: "Halfway Remarkables", lat: -45.025714, lon: 168.7775044, why: "clear" } },
+  { name: "Arrowtown",  lon: 168.8306, lat: -44.9385, icon: "trees",
+    goTo: { name: "The Zig Zag", lat: -44.9737572, lon: 168.8646803, why: "clear" } },
+  { name: "Wānaka",     lon: 169.1365, lat: -44.6942, icon: "sailboat", goTo: null },
+  { name: "Cromwell",   lon: 169.2030, lat: -45.0382, icon: "grape",
+    goTo: { name: "Bruce Jackson Lookout", lat: -45.051203, lon: 169.21452, why: "margin" } },
+  { name: "Dunedin",    lon: 170.5028, lat: -45.8788, icon: "waves",
+    goTo: { name: "Signal Hill Lookout", lat: -45.8587785, lon: 170.5467251, why: "margin" } },
 ];
 
 const { inNzBounds, compassName, compassShort, heightPhrase, handMeasure, photonUrl, photonFeatures } = Places;
@@ -1461,7 +1474,10 @@ function clockText(j, seconds = false) {
 }
 
 const secondsIn = (j) => Cesium.JulianDate.secondsDifference(j, startJulian);
-const minutesText = (s) => `${Math.floor(s / 60)} min ${String(Math.round(s % 60)).padStart(2, "0")} s`;
+const minutesText = (s) => {
+  const r = Math.round(s);   // round first, or 179.6 s reads "2 min 60 s"
+  return `${Math.floor(r / 60)} min ${String(r % 60).padStart(2, "0")} s`.replace(" ", " ");
+};
 
 function percentCovered(c) {
   if (!c || !c.peak) return "0%";
@@ -1728,18 +1744,48 @@ function renderVerdictBlock() {
   $("verdictReason").textContent = Skyline.verdictReason(v);
   $("openDetails").hidden = false;
 
+  // Somewhere nearby that is clearly better: clear where this place is blocked, with more room
+  // above the skyline where this one is tight, or with longer totality.
   const go = $("goNearest");
-  const near = v.level !== "clear" || v.scope !== "totality"
-    ? Catalogue.nearestClearSpot(catalogue, activeLoc.lat, activeLoc.lon) : null;
+  const s = v.stored;
+  const here = {
+    level: v.scope === "totality" ? v.level : "blocked",
+    clearance: s && Number.isFinite(s.clearance) ? s.clearance : v.focus.alt - v.focus.horizon,
+    totality: v.scope === "totality" ? v.totalitySeconds || 0 : 0,
+  };
+  const near = betterPlaceFor(activeLoc, here);
   go.hidden = !near;
   if (near) {
     const km = near.km.toFixed(near.km < 10 ? 1 : 0);
-    go.innerHTML = `Go to ${esc(near.spot.name)}<small>${km} km to the ${compassName(near.bearing)}, sealed road, clear for all ${minutesText(near.spot.totality)}</small>`;
+    const c = near.cat;
+    // The numbers come from the catalogue; a town's own choice still reads sensibly without it.
+    const gain = {
+      clear: c ? `clear for all ${minutesText(c.totality)}` : "clear for all of totality",
+      margin: c ? `the sun clears the skyline by ${handMeasure(c.clearance)}` : "more room above the skyline",
+      longer: c ? `${minutesText(c.totality)} of totality instead of ${minutesText(here.totality)}` : "a longer totality",
+    }[near.why];
+    go.innerHTML = `Go to ${esc(near.name)}<small>${km} km to the ${compassName(near.bearing)}, sealed road, ${gain}</small>`;
     go.onclick = () => {
-      trackMetric("catalogue_select", "poi", near.spot.name);
-      selectLocation({ name: near.spot.name, lat: near.spot.lat, lon: near.spot.lon, cat: near.spot }, true);
+      trackMetric("catalogue_select", "poi", near.name);
+      selectLocation({ name: near.name, lat: near.lat, lon: near.lon, cat: c || undefined }, true);
     };
   }
+}
+
+// The "Go to..." suggestion for a place: a town's own fixed choice (`goTo` in LOCATIONS), or
+// else the nearest clearly better spot in the catalogue. Returns
+// { name, lat, lon, km, bearing, why, cat } or null; `cat` is the catalogue record, if loaded.
+function betterPlaceFor(loc, here) {
+  const town = LOCATIONS.find((l) => Catalogue.haversineM(l.lat, l.lon, loc.lat, loc.lon) < 50);
+  if (town) {
+    const g = town.goTo;
+    if (!g) return null;
+    return { name: g.name, lat: g.lat, lon: g.lon, why: g.why, cat: findCatalogueEntry(g.lat, g.lon),
+      km: Catalogue.haversineM(loc.lat, loc.lon, g.lat, g.lon) / 1000,
+      bearing: Catalogue.bearingDeg(loc.lat, loc.lon, g.lat, g.lon) };
+  }
+  const r = catalogue && Catalogue.betterSpotNearby(catalogue, here, loc.lat, loc.lon);
+  return r ? { ...r, name: r.spot.name, lat: r.spot.lat, lon: r.spot.lon, cat: r.spot } : null;
 }
 
 // The facts about a catalogue spot that belong beside its verdict.
@@ -2607,15 +2653,16 @@ function hideNarration() {
 // Blocked from here: finish on somewhere that isn't, rather than on a dark hillside.
 function offerNearestClearSpot() {
   if (!currentSightlineBlocked || !activeLoc) return false;
-  const near = Catalogue.nearestClearSpot(catalogue, activeLoc.lat, activeLoc.lon);
-  if (!near) return false;
-  const { spot, km } = near;
+  // The same suggestion as the verdict's button, so a town offers its own choice here too.
+  const near = betterPlaceFor(activeLoc, { level: "blocked", totality: 0 });
+  if (!near || near.why !== "clear") return false;
+  const { km } = near;
   const direction = compassName(near.bearing);
   narrate(`Totality is hidden from ${activeLoc.name}.`,
-    `${spot.name}, ${km.toFixed(km < 10 ? 1 : 0)} km to the ${direction}, has a clear view of all of it.`);
+    `${near.name}, ${km.toFixed(km < 10 ? 1 : 0)} km to the ${direction}, has a clear view of all of it.`);
   const go = document.getElementById("narrationGo");
-  go.textContent = `Go to ${spot.name}`;
-  go.onclick = () => selectLocation({ name: spot.name, lat: spot.lat, lon: spot.lon, cat: spot }, true);
+  go.textContent = `Go to ${near.name}`;
+  go.onclick = () => selectLocation({ name: near.name, lat: near.lat, lon: near.lon, cat: near.cat || undefined }, true);
   $("narrationActions").hidden = false;
   return true;
 }
