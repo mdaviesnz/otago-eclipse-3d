@@ -374,8 +374,13 @@ azimuth across the north-western sky (and $\approx 0.6^\circ$ between C2 and C3 
   the east coast) are reported as `"sun below horizon"` rather than counting as terrain
   obstructions.
 - **Precomputed catalogue (`spots` and `pois`):** Evaluates full-resolution rays at **C2
-  (`clearBegin`)**, **Maximum (`clearance`)**, and **C3 (`clearEnd`)**, setting
-  `wholeTotality = (clearBegin > 0) and (clearance > 0) and (clearEnd > 0)`.
+  (`clearBegin`)**, **Maximum (`clearance`)**, and **C3 (`clearEnd`)**, and stores a
+  totality-scope verdict `level`: `clear` when all three clearances are $> 0^\circ$, `blocked`
+  when none is, `partial` otherwise (a clearance of exactly $0^\circ$ counts as blocked), plus
+  `grazing: true` when an unblocked contact clears by less than the solar semi-diameter
+  ($0.26^\circ$). The rule lives in `precompute/verdict.py` and, for the live check, in
+  `verdict.js`; `tests/fixtures/verdict-cases.json` holds both to the same cases (see
+  `docs/adr/0001-precomputed-verdicts.md`).
 - **Precomputed town presets (`presets`):** Evaluates a $1^\circ$-stepped horizon profile across
   the full C1–C4 azimuth range padded by $\pm 12^\circ$, using a **dual-resolution DEM** ($z=13$,
   $\approx 6.8\text{ m/px}$ within $9\text{ km}$; $z=11$, $\approx 27\text{ m/px}$ from $9\text{ km}$

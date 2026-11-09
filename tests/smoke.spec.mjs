@@ -117,6 +117,29 @@ test("overview map plots spots and filters them", async ({ page }) => {
   expect(await page.evaluate(() => layer.getLayers().length)).toBe(countBeforeCloud);
   expect(await page.locator("#cloudVal").textContent()).toBe("Any");
 
+  // Town markers and the whole-totality filter read the stored verdict level rather than
+  // judging clearances themselves (docs/adr/0001-precomputed-verdicts.md).
+  const towns = await page.evaluate(() => {
+    const out = {};
+    townLayer.eachLayer((l) => {
+      const html = l.getPopup().getContent();
+      const name = (html.match(/font-weight:700;color:#fbbf24">([^<]+) \(town centre\)/) || [])[1];
+      if (name) out[name] = html;
+    });
+    return out;
+  });
+  expect(towns["Queenstown"], "Queenstown's town centre cannot see totality").toContain("Blocked by");
+  expect(towns["Dunedin"]).toContain("clear");
+  const shownWithWholeOnly = async (on) => page.evaluate((checked) => {
+    const el = document.getElementById("wholeOnly");
+    el.checked = checked;
+    el.dispatchEvent(new Event("input"));
+    return layer.getLayers().length;
+  }, on);
+  const allShown = await shownWithWholeOnly(false);
+  expect(await shownWithWholeOnly(true), "whole-totality filter must drop partial spots").toBeLessThan(allShown);
+  expect(await shownWithWholeOnly(false)).toBe(allShown);
+
   expect(errs, "no JS errors on the map page").toEqual([]);
 });
 
@@ -164,7 +187,7 @@ test("catalogue spots are answered from precomputed data", async ({ page }) => {
 
   const r = await page.evaluate(() => {
     const p = catalogue.pois[0];
-    const partial = [...catalogue.pois, ...catalogue.spots].find((s) => s.wholeTotality === false);
+    const partial = [...catalogue.pois, ...catalogue.spots].find((s) => s.level === "partial");
     // Every "Fly to" button must resolve to a preset row carrying a full horizon profile, or
     // it falls back to a live probe (no match) or a totality-only verdict (no profile).
     const presetHits = LOCATIONS.map((l) => {
@@ -173,20 +196,12 @@ test("catalogue spots are answered from precomputed data", async ({ page }) => {
       const pr = hit.profile;
       const lo = pr && pr.azFrom;
       const hi = pr && lo + (pr.angles.length - 1) * pr.azStep;
+      // Profile interpolation itself is unit-tested (horizonFromProfile, tests/unit).
       return {
         name: l.name, matched: hit.name, level: catalogueVerdict(hit).level,
         lens: pr && [pr.angles.length, pr.ridgeDist.length, pr.ridgeElev.length],
         // The app fans HORIZON_SPAN/2 either side of the sun's own azimuth range.
         spansSun: !!pr && lo <= hit.sunAz - 20 && hit.sunAz + 20 <= hi,
-        // A lookup exactly on a stored bearing must return that bearing's own value.
-        exactLookup: pr && profileAt(pr, lo + 3 * pr.azStep).angle,
-        exactStored: pr && pr.angles[3],
-        // ...and one halfway between two must land between them.
-        midBetween: pr && (() => {
-          const m = profileAt(pr, lo + 3.5 * pr.azStep).angle;
-          return m >= Math.min(pr.angles[3], pr.angles[4])
-              && m <= Math.max(pr.angles[3], pr.angles[4]);
-        })(),
       };
     });
     return {
@@ -198,6 +213,8 @@ test("catalogue spots are answered from precomputed data", async ({ page }) => {
       partialLevel: partial && catalogueVerdict(partial).level,
       phaseKeys: catalogueVerdict(p).phases.map((x) => x.key),
       nullSafe: catalogueVerdict(null),
+      // The verdict module reached the classic script through the module bridge.
+      verdictModule: typeof Verdict === "object" && typeof Verdict.evaluateSightline === "function",
       presetHits,
     };
   });
@@ -211,8 +228,6 @@ test("catalogue spots are answered from precomputed data", async ({ page }) => {
     expect(h.lens, `"${h.name}" must carry a horizon profile`).toBeTruthy();
     expect(new Set(h.lens).size, `"${h.name}" profile arrays must agree in length`).toBe(1);
     expect(h.spansSun, `"${h.name}" profile must cover the whole fan the chart draws`).toBe(true);
-    expect(h.exactLookup).toBeCloseTo(h.exactStored, 6);
-    expect(h.midBetween, `"${h.name}" profile interpolation must stay between samples`).toBe(true);
   }
 
   expect(r.exact, "a catalogue entry must match its own coordinates").toBeTruthy();
@@ -220,7 +235,8 @@ test("catalogue spots are answered from precomputed data", async ({ page }) => {
   expect(r.far, "5 km away is a different place").toBeNull();
   expect(r.justOutside, "30 m away is outside the 25 m match radius").toBeNull();
   expect(r.clearLevel).toBe("clear");
-  expect(r.partialLevel, "wholeTotality:false must not read as fully clear").toBe("partial");
+  expect(r.partialLevel, "a stored partial level must not read as fully clear").toBe("partial");
+  expect(r.verdictModule, "verdict.js must load and reach the page script").toBe(true);
   // clearBegin/clearEnd are SECOND and THIRD contact (build_viewpoints.py reads them off
   // EclipseEvent.total_begin/total_end), not the partial phases. Labelling them with
   // partialBegin/partialEnd would sit an 8 deg totality clearance beside a 1 deg sun.
@@ -259,6 +275,34 @@ test("catalogue spots are answered from precomputed data", async ({ page }) => {
   expect(poiCardTest.oobCloud).toBeNull();
 
   expect(errs, "no JS errors while reading the catalogue").toEqual([]);
+});
+
+// End to end through the real cards. Needs the 3D viewer, which needs WebGL; skipped, with
+// the reason, on a runner that cannot provide it. The rule itself is covered by tests/unit.
+test("verdict cards render the shared verdict", async ({ page }) => {
+  const errs = errors(page);
+  await page.goto("/index.html");
+  const ready = await page.waitForFunction(
+    () => typeof viewer !== "undefined" && !!viewer && typeof catalogue !== "undefined" && !!catalogue,
+    null, { timeout: 30000 }).then(() => true, () => false);
+  test.skip(!ready, "3D viewer did not initialise (no WebGL in this runner)");
+  const card = page.locator("#resultBox");
+
+  // Preset card, eclipse scope through the stored-profile adapter: first contact clears
+  // Queenstown's skyline, maximum and last contact do not.
+  await page.evaluate(() => selectLocation(LOCATIONS.find((l) => l.name === "Queenstown"), false));
+  await expect(card).toContainText("Partly visible", { timeout: 30000 });
+
+  // Catalogue card, stored totality-scope verdict: Taieri Mouth Road lookout clears second
+  // contact and maximum but third contact sits exactly on the skyline (0.00 deg).
+  await page.evaluate(() => {
+    const s = catalogue.pois.find((p) => p.name === "Taieri Mouth Road lookout");
+    return selectLocation({ name: s.name, lat: s.lat, lon: s.lon, cat: s }, false);
+  });
+  await expect(card).toContainText("Part of totality blocked", { timeout: 30000 });
+  await expect(card).toContainText("grazes the ridge");
+
+  expect(errs, "no JS errors while rendering verdict cards").toEqual([]);
 });
 
 test("simulator loads without JS errors and wires up its controls", async ({ page }) => {

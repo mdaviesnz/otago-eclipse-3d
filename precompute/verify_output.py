@@ -24,7 +24,7 @@ for tier in ("sealed", "track", "foot"):
         print("  best %s %-7s: %.4f,%.4f  %4d m  +%.1f deg  %3ds  %s"
               % (label, tier, b["lat"], b["lon"], b["elev"], b["clearance"], b["totality"], name))
 print()
-partial = [p for p in d["pois"] if not p["wholeTotality"]]
+partial = [p for p in d["pois"] if p["level"] != "clear"]
 print("POIs blocked for part of totality:", len(partial))
 for p in partial[:5]:
     print("   %-28s clearBegin %+.1f  max %+.1f  clearEnd %+.1f"

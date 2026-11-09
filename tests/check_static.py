@@ -27,9 +27,12 @@ if hasattr(sys.stdout, "reconfigure"):
         pass
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "precompute"))
+import verdict  # noqa: E402  (precompute/verdict.py: standard library only)
+
 SITE_FILES = ["index.html", "map.html", "astronomy.html", "methods.html", "app.css",
-              "viewpoints.json", "social-card.svg", "icon.svg", "manifest.webmanifest",
-              "sw.js", "_headers"]
+              "viewpoints.json", "verdict.js", "social-card.svg", "icon.svg",
+              "manifest.webmanifest", "sw.js", "_headers"]
 
 failures: list[str] = []
 notes: list[str] = []
@@ -154,8 +157,8 @@ def check_cache_not_tracked() -> None:
 
 
 def check_local_references() -> None:
-    """Every same-origin href/src/fetch target in the HTML must exist and be in SITE_FILES."""
-    pattern = re.compile(r"""(?:href|src)=["']([^"'#?]+)["']|fetch\(["']([^"'?]+)["']""")
+    """Every same-origin href/src/fetch/import target in the HTML must exist and be in SITE_FILES."""
+    pattern = re.compile(r"""(?:href|src)=["']([^"'#?]+)["']|(?:fetch\(|import\s[^;"']*?from\s+)["']([^"'?]+)["']""")
     site_set = set(SITE_FILES)
     for name in ("index.html", "map.html", "astronomy.html", "methods.html"):
         p = ROOT / name
@@ -199,8 +202,8 @@ def check_catalogue() -> None:
     else:
         ok("catalogue has no OSM coverage gaps")
 
-    required = {"lat", "lon", "elev", "sunAlt", "clearance", "totality", "access",
-                "wholeTotality"}
+    required = {"lat", "lon", "elev", "sunAlt", "clearance", "clearBegin", "clearEnd",
+                "totality", "access", "level"}
     region = d.get("region") or {}
     for key in ("spots", "pois"):
         rows = d.get(key) or []
@@ -226,7 +229,29 @@ def check_catalogue() -> None:
     if not any(r.get("access") == "foot" for r in (d.get("spots") or [])):
         fail("viewpoints.json: no walk-in spots in 'spots' — the tier quota may have regressed")
 
+    check_stored_verdicts(d)
     check_presets(d, region)
+
+
+def check_stored_verdicts(d: dict) -> None:
+    """The browser trusts the stored `level` and `grazing` rather than judging the catalogue
+    itself, so every row must agree with the rule applied to its own stored clearances. A
+    disagreement means the build and precompute/verdict.py have drifted apart."""
+    wrong = []
+    for key in ("spots", "pois", "presets"):
+        for i, r in enumerate(d.get(key) or []):
+            want = verdict.verdict_fields(r.get("clearBegin"), r.get("clearance"), r.get("clearEnd"))
+            got = {k: r[k] for k in ("level", "grazing") if k in r}
+            if got != want:
+                wrong.append(f"{key}[{i}] {r.get('name', '')}: stored {got}, rule gives {want}")
+            if "wholeTotality" in r:
+                wrong.append(f"{key}[{i}] still carries wholeTotality, which `level` replaces")
+    for w in wrong[:10]:
+        fail(f"viewpoints.json: {w}")
+    if len(wrong) > 10:
+        fail(f"viewpoints.json: ...and {len(wrong) - 10} more stored verdict problems")
+    if not wrong:
+        ok("every stored catalogue and preset verdict agrees with precompute/verdict.py")
 
 
 def check_presets(d: dict, region: dict) -> None:
@@ -243,7 +268,7 @@ def check_presets(d: dict, region: dict) -> None:
     # Presets are deliberately unfiltered, so no clearance assertion here: a blocked town is a
     # legitimate row. Everything the app reads must still be present.
     required = {"name", "lat", "lon", "elev", "sunAlt", "sunAz", "horizon", "clearance",
-                "clearBegin", "clearEnd", "wholeTotality", "totality"}
+                "clearBegin", "clearEnd", "level", "totality"}
     missing = [p.get("name", "?") for p in presets if not required.issubset(p)]
     if missing:
         fail(f"viewpoints.json: presets missing required fields: {missing}")
@@ -315,6 +340,25 @@ def check_presets(d: dict, region: dict) -> None:
              f"the app will fall back to a live terrain probe for these")
     else:
         ok(f"presets: {len(presets)} entries, fields OK, coordinates match index.html")
+
+
+def check_verdict_cases() -> None:
+    """The verdict rule lives twice: verdict.js for the live check, precompute/verdict.py for
+    the catalogue. Both run the same hand-worked cases, so a threshold or boundary changed in
+    one and not the other fails here and in tests/unit/verdict.spec.mjs."""
+    cases = json.loads((ROOT / "tests/fixtures/verdict-cases.json").read_text(encoding="utf-8"))["cases"]
+    run = [c for c in cases if c["scope"] == "totality"]
+    wrong = []
+    for c in run:
+        v = verdict.judge_totality({k["contact"]: k["clearance"] for k in c["contacts"]})
+        got = {"level": v["level"], "grazing": v["grazing"]}
+        want = {"level": c["expect"]["level"], "grazing": c["expect"]["grazing"]}
+        if got != want:
+            wrong.append(f"{c['name']}: got {got}, want {want}")
+    for w in wrong:
+        fail(f"precompute/verdict.py disagrees with the shared verdict cases — {w}")
+    if not wrong:
+        ok(f"precompute/verdict.py passes all {len(run)} shared totality-scope verdict cases")
 
 
 def check_pwa_and_headers() -> None:
@@ -395,6 +439,7 @@ def main() -> int:
     check_worker_metrics()
     check_cache_not_tracked()
     check_local_references()
+    check_verdict_cases()
     check_catalogue()
     check_pwa_and_headers()
 

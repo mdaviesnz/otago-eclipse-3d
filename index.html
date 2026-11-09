@@ -561,6 +561,14 @@
     </div>
   </div>
 
+  <!-- The sightline verdict (GLOSSARY.md). A module, so tests/unit can import it without a
+       browser; handed to the classic script below on window. Modules run before
+       DOMContentLoaded, which is when start() first needs it. -->
+  <script type="module">
+    import * as Verdict from "./verdict.js";
+    window.Verdict = Verdict;
+  </script>
+
   <script>
   // ====================================================================================
   //  CONFIG & CONSTANTS
@@ -612,7 +620,6 @@
   const EARTH_RADIUS = 6371000;        // mean Earth radius, m
   const REFRACTION_K = 0.13;           // standard terrestrial refraction coefficient (effective R = R / (1 - k))
   const EFFECTIVE_EARTH_RADIUS = EARTH_RADIUS / (1 - REFRACTION_K);
-  const SUN_RADIUS_DEG = 0.26;         // apparent solar semi-diameter (~15.7 arcmin)
   const SIGHTLINE_RANGE = 45000;       // m, how far out to probe terrain
   const EYE_HEIGHT = 1.7;              // observer eye height, m
   const HORIZON_SPAN = 20;             // deg either side of the sun to sweep for the profile
@@ -2388,30 +2395,10 @@
     }
 
     const c = localCircumstances(activeGroundCartesian);
-
-    // Check the three moments that matter for this observer: first contact, maximum, last
-    // contact. The sun swings several degrees in azimuth across the ~2 hours between them,
-    // so terrain can block one and not another.
-    const moments = c && c.partialBegin
-      ? [
-          { label: "Start", j: c.partialBegin },
-          { label: "Maximum", j: c.peak },
-          { label: "End", j: c.partialEnd },
-        ]
-      : [{ label: "Now", j: viewer.clock.currentTime.clone() }];
-    // When inside the totality path, also probe second and third contact (start/end of
-    // totality) so we can detect if a sloping ridge cuts into totality near the edge.
-    const totContacts = c && c.totalBegin && c.totalEnd
-      ? [
-          { label: "Totality begins", j: c.totalBegin },
-          { label: "Totality ends", j: c.totalEnd },
-        ]
-      : [];
-    for (const m of [...moments, ...totContacts]) {
-      const s = sunAltAz(m.j, activeGroundCartesian);
-      m.alt = s.altitude; m.az = s.azimuth; m.dir = s.dir;
-    }
-    const focus = moments.find((m) => m.label === "Maximum") || moments[0];
+    // The sun swings several degrees in azimuth across the ~2 hours of the eclipse, so terrain
+    // can block one contact and not another. Each contact gets its own full-resolution ray.
+    const contacts = eclipseContacts(c);
+    const moments = contacts.filter(isListedContact);
 
     box.innerHTML = `<p class="text-slate-400 flex items-center gap-2"><i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Probing terrain at ${moments.length} eclipse times&hellip;</p>`;
     updateMobileVerdictPill({ icon: "loader", text: "Probing terrain…", tone: "text-slate-300", spin: true });
@@ -2425,7 +2412,7 @@
     const azs = moments.map((m) => m.az);
     const azLo = Math.min(...azs) - HORIZON_SPAN / 2;
     const azHi = Math.max(...azs) + HORIZON_SPAN / 2;
-    const rays = [...moments, ...totContacts].map((m) => ({ az: m.az, dists: fine, moment: m }));
+    const rays = contacts.map((m) => ({ az: m.az, dists: fine, moment: m }));
     for (let a = azLo; a <= azHi + 1e-9; a += HORIZON_STEP) {
       if (moments.some((m) => Math.abs(m.az - a) < HORIZON_STEP / 2)) continue;
       rays.push({ az: a, dists: coarse, moment: null });
@@ -2462,6 +2449,7 @@
     // user if enough went missing to make the verdict unreliable.
     const observerHeight = Cesium.Cartographic.fromCartesian(activeGroundCartesian).height;
     const profile = [];
+    const horizonByBearing = new Map();
     let k = 0, missing = 0, total = 0;
     for (const ray of rays) {
       let rayMax = -90, rayDist = 0, rayHeight = 0;
@@ -2473,45 +2461,96 @@
         const angle = Cesium.Math.toDegrees(Math.atan2(h - observerHeight - drop, d));
         if (angle > rayMax) { rayMax = angle; rayDist = d; rayHeight = h; }
       }
-      if (!totContacts.includes(ray.moment)) {
+      if (!ray.moment || isListedContact(ray.moment)) {
         profile.push({ az: ray.az, angle: rayMax });
       }
       if (ray.moment) {
-        ray.moment.horizon = rayMax;
-        ray.moment.ridgeDist = rayDist;
-        ray.moment.ridgeHeight = rayHeight;
-        ray.moment.below = ray.moment.alt <= 0;
-        ray.moment.blocked = !ray.moment.below && rayMax >= ray.moment.alt;
-        ray.moment.grazing = !ray.moment.below && !ray.moment.blocked && (ray.moment.alt - rayMax) < SUN_RADIUS_DEG;
+        horizonByBearing.set(ray.az, { angle: rayMax, ridgeDist: rayDist, ridgeHeight: rayHeight });
       }
     }
     profile.sort((a, b) => a.az - b.az);
-    focus.partialTotality = totContacts.some((m) => m.blocked || m.below);
 
-    drawSightline(focus.dir, !focus.blocked && !focus.below, {
-      horizon: focus.horizon,
-      ridgeDist: focus.ridgeDist,
-      ridgeHeight: focus.ridgeHeight,
-      az: focus.az,
+    // The live-terrain adapter for the verdict's horizonAt seam: every contact's bearing was
+    // given its own ray above, so the lookup is exact.
+    const v = Verdict.evaluateSightline({
+      scope: "eclipse", contacts, totalitySeconds: totalitySeconds(c),
+      horizonAt: (az) => horizonByBearing.get(az),
     });
-    const upMoments = moments.filter((m) => !m.below);
-    const blockedCount = upMoments.filter((m) => m.blocked).length;
-    const checkLevel = upMoments.length === 0 ? "below"
-      : blockedCount === 0 && !focus.partialTotality ? "clear"
-      : blockedCount === upMoments.length ? "blocked"
-      : "partial";
-    trackMetric("sightline_check", checkLevel);
-    renderHorizonChart(profile, moments, azLo, azHi);
-    renderSightlineResults(moments, focus, missing / Math.max(1, total), catAtStart);
+    trackMetric("sightline_check", v.level);
+    showSightlineVerdict(v, profile, azLo, azHi, missing / Math.max(1, total), catAtStart);
   }
+
+  // Contacts for an eclipse-scope verdict at the active observer (GLOSSARY.md, "Scope"): first
+  // contact, maximum and last contact — or just "now" outside the eclipse — plus second and
+  // third contact inside the path of totality. `contact` keys are localCircumstances() fields;
+  // `alt`/`az` duplicate `sunAlt`/`sunAz` for the chart and card renderers.
+  function eclipseContacts(c) {
+    const list = c && c.partialBegin
+      ? [
+          { contact: "partialBegin", label: "Start", j: c.partialBegin },
+          { contact: "peak", label: "Maximum", j: c.peak },
+          { contact: "partialEnd", label: "End", j: c.partialEnd },
+        ]
+      : [{ contact: "now", label: "Now", j: viewer.clock.currentTime.clone() }];
+    if (c && c.totalBegin && c.totalEnd) {
+      list.push({ contact: "totalBegin", label: "Totality begins", j: c.totalBegin },
+                { contact: "totalEnd", label: "Totality ends", j: c.totalEnd });
+    }
+    for (const m of list) {
+      const s = sunAltAz(m.j, activeGroundCartesian);
+      m.sunAlt = m.alt = s.altitude;
+      m.sunAz = m.az = s.azimuth;
+      m.dir = s.dir;
+    }
+    return list;
+  }
+
+  // Second and third contact are judged but not listed: the card and chart show the others.
+  function isListedContact(m) {
+    return m.contact !== "totalBegin" && m.contact !== "totalEnd";
+  }
+
+  function totalitySeconds(c) {
+    return c && c.totalBegin && c.totalEnd
+      ? Cesium.JulianDate.secondsDifference(c.totalEnd, c.totalBegin) : 0;
+  }
+
+  // Draw an eclipse-scope verdict: the sightline ray, the horizon chart and the result card.
+  function showSightlineVerdict(v, profile, azLo, azHi, missingFraction = 0, cat = null, preset = null) {
+    const f = v.focus;
+    drawSightline(f.dir, !f.blocked && !f.below, {
+      horizon: f.horizon,
+      ridgeDist: f.ridgeDist,
+      ridgeHeight: f.ridgeHeight,
+      az: f.az,
+    });
+    renderHorizonChart(profile, v.contacts.filter(isListedContact), azLo, azHi);
+    renderSightlineResults(v, missingFraction, cat, preset);
+  }
+
+  // Full literal class strings, not `bg-${colour}-900/40`. Tailwind's scanner reads the source
+  // for class names, so anything assembled at runtime is invisible to it and gets stripped from
+  // the built stylesheet — the card would lose its colour coding.
+  const LIVE_HEADLINE = {
+    below:   { box: "bg-slate-900/40 border-slate-600/40", tone: "text-slate-300",
+               icon: "moon", text: "Sun below horizon" },
+    clear:   { box: "bg-emerald-900/40 border-emerald-600/40", tone: "text-emerald-300",
+               icon: "check-circle", text: "Clear while sun is up" },
+    blocked: { box: "bg-red-900/40 border-red-600/40", tone: "text-red-300",
+               icon: "eye-off", text: "Not visible" },
+    partial: { box: "bg-amber-900/40 border-amber-600/40", tone: "text-amber-300",
+               icon: "alert-triangle", text: "Partly visible" },
+  };
 
   // `preset` set means the horizons came off a stored profile rather than the network — the
   // card is otherwise identical, but it must not claim to be a live terrain reading.
-  function renderSightlineResults(moments, focus, missingFraction = 0, cat = null, preset = null) {
+  function renderSightlineResults(v, missingFraction = 0, cat = null, preset = null) {
+    const moments = v.contacts.filter(isListedContact);
+    const focus = v.focus;
     const box = document.getElementById("resultBox");
     const c = activeGroundCartesian ? localCircumstances(activeGroundCartesian) : null;
     const hasTotality = Boolean(c && c.totalBegin && c.totalEnd);
-    const totDur = hasTotality ? Cesium.JulianDate.secondsDifference(c.totalEnd, c.totalBegin) : 0;
+    const totDur = totalitySeconds(c);
     const peakObsc = c && c.peak
       ? (Number.isFinite(c.peakObscuration) ? c.peakObscuration : eclipseAt(c.peak, activeGroundCartesian).obscuration)
       : 0;
@@ -2521,26 +2560,8 @@
     const gapNote = missingFraction > 0.01
       ? `<p class="text-[11px] text-amber-300 mt-2 flex items-start gap-1.5"><i data-lucide="alert-triangle" class="w-3.5 h-3.5 mt-px shrink-0"></i><span>${Math.round(missingFraction * 100)}% of the terrain samples did not load, so this verdict may be unreliable. Run the check again.</span></p>`
       : "";
-    // Judge terrain only on moments where the sun is actually up. Across Otago the eclipse
-    // ends at or below the horizon — the sun sets mid-eclipse — so counting "sun already set"
-    // as an obstruction would wrongly downgrade an otherwise perfect site.
-    const up = moments.filter((m) => !m.below);
-    const blocked = up.filter((m) => m.blocked).length;
-    // Full literal class strings, not `bg-${colour}-900/40`. Tailwind's scanner reads the
-    // source for class names, so anything assembled at runtime is invisible to it and gets
-    // stripped from the built stylesheet — the card would lose its colour coding.
-    const headline =
-      up.length === 0
-        ? { box: "bg-slate-900/40 border-slate-600/40", tone: "text-slate-300",
-            icon: "moon", text: "Sun below horizon" }
-        : blocked === 0 && !focus.partialTotality
-        ? { box: "bg-emerald-900/40 border-emerald-600/40", tone: "text-emerald-300",
-            icon: "check-circle", text: "Clear while sun is up" }
-        : blocked === up.length
-        ? { box: "bg-red-900/40 border-red-600/40", tone: "text-red-300",
-            icon: "eye-off", text: "Not visible" }
-        : { box: "bg-amber-900/40 border-amber-600/40", tone: "text-amber-300",
-            icon: "alert-triangle", text: "Partly visible" };
+    // The verdict skips contacts where the sun has already set (GLOSSARY.md, "Scope").
+    const headline = LIVE_HEADLINE[v.level];
     updateMobileVerdictPill({ icon: headline.icon, text: headline.text, tone: headline.tone });
     const peakLabel = hasTotality ? "the peak of the eclipse" : `maximum eclipse (${peakPct} partial)`;
     const plain = focus.below
@@ -2565,7 +2586,7 @@
       // check finds first or last contact blocked. Without saying so, that reads as the two
       // contradicting each other. Presets are exempt — they carry a full profile and already
       // evaluated all three contacts, so there is no scope gap to explain.
-      if (blocked > 0 && !focus.blocked && cat.wholeTotality !== false && !cat.profile) {
+      if (moments.some((m) => m.blocked) && !focus.blocked && cat.level === "clear" && !cat.profile) {
         catBits.push(`The catalogue rated this spot on totality alone, which it still clears — what is blocked above is first or last contact, over an hour either side, when the sun is far lower.`);
       }
     }
@@ -2580,13 +2601,13 @@
     // re-check. Losing the pointer precisely because someone verified the bad news would be
     // the wrong way round.
     const town = preset || (cat && cat.isPreset ? cat : null);
-    const presetNote = town && (focus.blocked || town.wholeTotality === false)
+    const presetNote = town && (focus.blocked || town.level !== "clear")
       ? `<p class="text-[11px] text-slate-400 mt-2 flex items-start gap-1.5"><i data-lucide="info" class="w-3.5 h-3.5 mt-px shrink-0 text-slate-500"></i><span>This is the town centre. <b class="text-slate-300">Best viewing spots</b> lists places with a clear view — set a distance filter to find the closest ones to here.</span></p>`
       : "";
-    const edgeNote = hasTotality && totDur > 0 && totDur < 60
+    const edgeNote = v.nearEdge
       ? `<p class="text-[11px] text-amber-300 mt-2 flex items-start gap-1.5"><i data-lucide="alert-triangle" class="w-3.5 h-3.5 mt-px shrink-0"></i><span>Totality lasts under a minute here (${Math.round(totDur)}s) — this spot is near the edge of the path. A few kilometres towards the centre line buys a lot more.</span></p>`
       : "";
-    const partialTotNote = hasTotality && !focus.blocked && focus.partialTotality
+    const partialTotNote = hasTotality && !focus.blocked && v.partialTotality
       ? `<p class="text-[11px] text-amber-300 mt-2 flex items-start gap-1.5"><i data-lucide="alert-triangle" class="w-3.5 h-3.5 mt-px shrink-0"></i><span>The sun clears the skyline at maximum, but terrain cuts in before totality ends (or at its start), so part of totality is blocked here.</span></p>`
       : "";
     const partialOnlyNote = !hasTotality && c && c.peak
@@ -2978,8 +2999,9 @@
     };
   }
 
-  // Pure: reduce a catalogue record to a verdict. No DOM, no Cesium, no clock — so it can be
-  // tested directly and cannot drift from what the panel renders.
+  // A catalogue record's verdict. The level and grazing flag are precomputed by
+  // precompute/verdict.py and read as stored (docs/adr/0001-precomputed-verdicts.md); only the
+  // per-phase states for the table are derived here, from the same rule in verdict.js.
   //
   // Note the scope. clearBegin/clearEnd are SECOND and THIRD contact — the start and end of
   // totality (build_viewpoints.py takes them from EclipseEvent.total_begin/total_end). The
@@ -2992,17 +3014,11 @@
       { key: "totalBegin", label: "Totality begins", clear: s.clearBegin },
       { key: "peak",       label: "Maximum",         clear: s.clearance },
       { key: "totalEnd",   label: "Totality ends",   clear: s.clearEnd },
-    ].filter((p) => Number.isFinite(p.clear));
-    const blocked = phases.filter((p) => p.clear < 0).length;
-    // wholeTotality is stricter than clearance at maximum: the sun can clear the skyline at
-    // the peak and still be cut off before third contact, which costs you part of the two and
-    // a half minutes that are the entire point.
-    const partialTotality = s.wholeTotality === false;
-    const level = phases.length && blocked === phases.length ? "blocked"
-      : blocked > 0 || partialTotality ? "partial"
-      : "clear";
-    return { phases, blocked, partialTotality, level,
-             nearEdge: Number.isFinite(s.totality) && s.totality < 60 };
+    ].filter((p) => Number.isFinite(p.clear))
+     .map((p) => ({ ...p, state: Verdict.contactState({ clearance: p.clear }) }));
+    return { phases, level: s.level, scope: "totality", grazing: s.grazing === true,
+             nearEdge: Number.isFinite(s.totality) && s.totality > 0
+               && s.totality < Verdict.NEAR_EDGE_S };
   }
 
   // Full literal class strings — Tailwind's scanner reads the source, so anything assembled
@@ -3018,50 +3034,22 @@
                icon: "eye-off", text: "Totality not visible" },
   };
 
-  // Read a stored profile at an arbitrary bearing. Angles interpolate; the ridge that set the
-  // angle is a discrete feature, so that comes from the nearer sample rather than a blend of
-  // two different hillsides.
-  function profileAt(pr, az) {
-    const i = (az - pr.azFrom) / pr.azStep;
-    const last = pr.angles.length - 1;
-    const lo = Math.max(0, Math.min(last, Math.floor(i)));
-    const hi = Math.max(0, Math.min(last, lo + 1));
-    const t = Math.max(0, Math.min(1, i - lo));
-    const near = t < 0.5 ? lo : hi;
-    return {
-      angle: pr.angles[lo] * (1 - t) + pr.angles[hi] * t,
-      ridgeDist: pr.ridgeDist[near],
-      ridgeHeight: pr.ridgeElev[near],
-    };
-  }
-
   // The full sightline card for a preset, with no terrain fetched.
   //
-  // Only the horizon needs terrain, and for the four presets it is already on disk across the
+  // Only the horizon needs terrain, and for the presets it is already on disk across the
   // whole azimuth range the eclipse covers. Everything else — contact times, sun altitude and
-  // bearing — is pure astronomy and free in the browser, so this builds exactly the same
-  // `moments` array runSightlineCheck does and hands it to exactly the same renderers. The
-  // result is the complete card, chart included, that used to need a 234-tile probe.
+  // bearing — is pure astronomy and free in the browser, so this judges exactly the contacts
+  // runSightlineCheck does, through the stored-profile adapter instead of live rays, and hands
+  // the verdict to exactly the same renderers. The result is the complete card, chart
+  // included, that used to need a 234-tile probe.
   function runPresetCheck(p) {
     sightlineToken++;                 // any in-flight live probe no longer owns the panel
     const c = localCircumstances(activeGroundCartesian);
-    const moments = c && c.partialBegin
-      ? [
-          { label: "Start", j: c.partialBegin },
-          { label: "Maximum", j: c.peak },
-          { label: "End", j: c.partialEnd },
-        ]
-      : [{ label: "Now", j: viewer.clock.currentTime.clone() }];
-    for (const m of moments) {
-      const s = sunAltAz(m.j, activeGroundCartesian);
-      m.alt = s.altitude; m.az = s.azimuth; m.dir = s.dir;
-      const h = profileAt(p.profile, m.az);
-      m.horizon = h.angle; m.ridgeDist = h.ridgeDist; m.ridgeHeight = h.ridgeHeight;
-      m.below = m.alt <= 0;
-      m.blocked = !m.below && m.horizon >= m.alt;
-      m.grazing = !m.below && !m.blocked && (m.alt - m.horizon) < SUN_RADIUS_DEG;
-    }
-    const focus = moments.find((m) => m.label === "Maximum") || moments[0];
+    const v = Verdict.evaluateSightline({
+      scope: "eclipse", contacts: eclipseContacts(c), totalitySeconds: totalitySeconds(c),
+      horizonAt: Verdict.horizonFromProfile(p.profile),
+    });
+    const moments = v.contacts.filter(isListedContact);
 
     // Plot the profile at its stored 1 deg resolution rather than the live check's 4 deg —
     // it costs nothing here and draws a better silhouette.
@@ -3073,15 +3061,7 @@
       const az = p.profile.azFrom + k * p.profile.azStep;
       if (az >= azLo && az <= azHi) profile.push({ az, angle: p.profile.angles[k] });
     }
-
-    drawSightline(focus.dir, !focus.blocked && !focus.below, {
-      horizon: focus.horizon,
-      ridgeDist: focus.ridgeDist,
-      ridgeHeight: focus.ridgeHeight,
-      az: focus.az,
-    });
-    renderHorizonChart(profile, moments, azLo, azHi);
-    renderSightlineResults(moments, focus, 0, null, p);
+    showSightlineVerdict(v, profile, azLo, azHi, 0, null, p);
   }
 
   function renderCatalogueVerdict(s) {
@@ -3109,7 +3089,7 @@
         <td class="py-1 pr-2 text-slate-300 whitespace-nowrap">${p.label}</td>
         <td class="py-1 pr-2 font-mono text-slate-400 whitespace-nowrap">${
           c && c[p.key] ? formatNZST(c[p.key]).slice(0, 5) : "--:--"}</td>
-        <td class="py-1">${p.clear < 0
+        <td class="py-1">${p.state === "blocked"
           ? `<span class="text-red-300">blocked by ${Math.abs(p.clear).toFixed(1)}&deg;</span>`
           : `<span class="text-emerald-300">clear by ${p.clear.toFixed(1)}&deg;</span>`}</td>
       </tr>`).join("");
@@ -3123,6 +3103,9 @@
 
     const edgeNote = v.nearEdge
       ? `<p class="text-[11px] text-amber-300 mt-2 flex items-start gap-1.5"><i data-lucide="alert-triangle" class="w-3.5 h-3.5 mt-px shrink-0"></i><span>Totality lasts under a minute here — this spot is near the edge of the path. A few kilometres towards the centre line buys a lot more.</span></p>`
+      : "";
+    const grazingNote = v.grazing
+      ? `<p class="text-[11px] text-amber-300 mt-2 flex items-start gap-1.5"><i data-lucide="alert-triangle" class="w-3.5 h-3.5 mt-px shrink-0"></i><span>During totality the sun clears the skyline by less than its own radius (0.26&deg;), so the lower edge of the disc grazes the ridge. Standing a little higher, or a few metres further back, would clear it.</span></p>`
       : "";
 
     const cloudNote = s.cloud != null
@@ -3159,6 +3142,7 @@
       rises to <b>${s.horizon.toFixed(1)}&deg;</b>. Ground elevation ${s.elev} m.</p>
       ${cloudNote}
       ${presetNote}
+      ${grazingNote}
       ${edgeNote}
       <p class="text-[10px] text-slate-500 mt-1.5">Source: precomputed catalogue, ~27 m
       elevation model, totality only. A full check re-probes the terrain at native resolution
@@ -3328,7 +3312,10 @@
           const subLeft = `${POI_LABEL[s.kind] || s.kind} · ${s.elev} m · ${accessName}${landOrTrail ? " · " + landOrTrail : ""}`;
           const clearProbStr = s.clearProb != null ? `${s.clearProb.toFixed(0)}% clear` : "";
           const subRight = [away, dur, clearProbStr].filter(Boolean).join(" · ");
-          const partial = s.wholeTotality === false || s.totality < 60;
+          // Near edge is not a verdict level (GLOSSARY.md): it gets its own marker, and never
+          // the "part of totality blocked" warning.
+          const partial = s.level !== "clear";
+          const nearEdge = s.totality > 0 && s.totality < Verdict.NEAR_EDGE_S;
           const isPrivate = s.publicAccess === false;
           const isActive = activeLoc && haversineM(activeLoc.lat, activeLoc.lon, s.lat, s.lon) < CAT_MATCH_M;
           const cloudTip = s.cloud != null ? `July cloud: ${s.cloud.toFixed(0)}% (${s.clearProb.toFixed(0)}% clear-sky odds)` : "";
@@ -3342,12 +3329,12 @@
               <span class="text-slate-200 font-medium truncate">${esc(title)}</span>
               ${isPrivate ? `<span class="text-[9px] px-1 py-0.2 rounded bg-red-950/60 text-red-400 border border-red-800/50 shrink-0 font-normal">Private</span>` : ""}
               ${partial ? `<i data-lucide="alert-triangle" class="w-3 h-3 text-amber-400 shrink-0" title="Blocked for part of totality"></i>` : ""}
+              ${nearEdge ? `<i data-lucide="timer" class="w-3 h-3 text-amber-400 shrink-0" title="Under a minute of totality: near the edge of the path"></i>` : ""}
               <span class="text-emerald-300 font-mono text-[11px] ml-auto shrink-0">+${s.clearance.toFixed(1)}&deg;</span>
             </span>
             <span class="flex items-center justify-between gap-2 text-[10px] text-slate-400 mt-0.5">
               <span class="truncate text-slate-500">${esc(subLeft)}${
-                s.totality < 60 ? " · near edge"
-                : s.wholeTotality === false ? " · partial" : ""}</span>
+                partial ? " · partial" : ""}${nearEdge ? " · near edge" : ""}</span>
               <span class="shrink-0 font-mono text-slate-400">${subRight}</span>
             </span>
           </button>`;
