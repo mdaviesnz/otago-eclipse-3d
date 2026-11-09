@@ -1261,7 +1261,7 @@ async function toggleCameraViewMode() {
   if (!viewer || !activeLoc || !activeGroundCartesian) return;
   const gh = Cesium.Cartographic.fromCartesian(activeGroundCartesian).height - EYE_HEIGHT;
   const view = await frameForLocation(activeLoc, gh);
-  viewer.camera.flyTo({ ...view, duration: flightSeconds(1.4) });
+  placeCamera(view, { duration: flightSeconds(1.4) });
 }
 
 // Re-apply the arrival framing for wherever we already are. Needed because the first framing
@@ -1271,12 +1271,60 @@ async function reframeCurrent() {
   syncBarOffsets();
   if (!viewer || !activeLoc || !activeGroundCartesian) return;
   const gh = Cesium.Cartographic.fromCartesian(activeGroundCartesian).height - EYE_HEIGHT;
-  viewer.camera.setView(await frameForLocation(activeLoc, gh));
+  placeCamera(await frameForLocation(activeLoc, gh));
 }
 
 // Camera moves are the one motion CSS cannot reach.
 const flightSeconds = (s) =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : s;
+
+// Looking along the ground, Cesium fetches detail all the way out to the horizon: about 22 MB
+// for one eye-level view of Queenstown or Dunedin. Half the screen-space precision halves that,
+// with no difference you can see from the ground. From the overview the town in the foreground
+// does soften, so views from up there keep Cesium's default.
+const GROUND_LEVEL_DETAIL = 4;
+const OVERVIEW_DETAIL = 2;
+
+// Cesium lifts the camera above whatever terrain it has loaded under it. Just after a jump that is
+// a coarse tile, which averages the ridges into the valley floor: over Queenstown it reads 898 m
+// against a true 327 m, so the eye-level camera was pushed 600 m up and left there, showing the
+// sun clear of the ridge that hides it. The app's framings already come from the most detailed
+// terrain, so the push is held off after each move the app makes until the view has loaded.
+let cameraHold = null;
+function holdCameraHeight() {
+  const scene = viewer.scene;
+  if (cameraHold) cameraHold();
+  scene.screenSpaceCameraController.enableCollisionDetection = false;
+  const since = performance.now();
+  const stop = scene.postRender.addEventListener(() => {
+    const waited = performance.now() - since;
+    if ((waited > 500 && scene.globe.tilesLoaded) || waited > 30000) {
+      stop();
+      cameraHold = null;
+      scene.screenSpaceCameraController.enableCollisionDetection = true;
+    }
+  });
+  cameraHold = () => { stop(); cameraHold = null; };
+}
+
+// Every camera move the app makes goes through here. Without `flight` the camera jumps.
+function placeCamera(view, flight) {
+  const height = Cesium.Cartographic.fromCartesian(view.destination).height;
+  const ground = activeGroundCartesian ? Cesium.Cartographic.fromCartesian(activeGroundCartesian).height : height;
+  viewer.scene.globe.maximumScreenSpaceError = height - ground < 100 ? GROUND_LEVEL_DETAIL : OVERVIEW_DETAIL;
+  holdCameraHeight();
+  if (!flight) {
+    viewer.camera.setView(view);
+    return;
+  }
+  viewer.camera.flyTo({
+    ...view,
+    duration: flight.duration,
+    // Flights hold off Cesium's push themselves, then it would act on arrival.
+    complete: () => { holdCameraHeight(); if (flight.complete) flight.complete(); },
+    cancel: flight.cancel,
+  });
+}
 
 
 
@@ -1307,14 +1355,13 @@ async function selectLocation(loc, fly = true) {
     // Recalculate on arrival — and also if the flight is cancelled, which happens when the
     // user grabs the camera mid-flight. The observer has still moved, so they still need
     // an answer for the new spot.
-    viewer.camera.flyTo({
-      ...view,
+    placeCamera(view, {
       duration: flightSeconds(2.0),
       complete: checkSightlineOnArrival,
       cancel: checkSightlineOnArrival,
     });
   } else {
-    viewer.camera.setView(view);
+    placeCamera(view);
     checkSightlineOnArrival();
   }
 }
@@ -2603,18 +2650,17 @@ async function startCinematic() {
   if (!currentSightlineBlocked) {
     const { offsetDeg } = framingBand();
     const pitchDeg = Math.max(2.5, Math.min(7.5, s.altitude * 0.45)) - offsetDeg;
-    viewer.camera.flyTo({
+    placeCamera({
       destination: Cesium.Cartesian3.fromRadians(ground.longitude, ground.latitude, ground.height + 25),
       orientation: {
         heading: Cesium.Math.toRadians(s.azimuth),
         pitch: Cesium.Math.toRadians(pitchDeg),
         roll: 0,
       },
-      duration: flightSeconds(2.0),
-    });
+    }, { duration: flightSeconds(2.0) });
   } else if (activeLoc) {
     const view = await frameForLocation(activeLoc, ground.height - EYE_HEIGHT);
-    viewer.camera.flyTo({ ...view, duration: flightSeconds(2.0) });
+    placeCamera(view, { duration: flightSeconds(2.0) });
   }
 
   viewer.clock.multiplier = CINE_FAST;
@@ -2818,20 +2864,54 @@ function syncMapLink(loc) {
 function answerQuestion(loc) {
   if (!viewerReady) {
     pendingPlace = loc;
-    $("questionStatus").textContent = `Getting the terrain ready for ${loc.name}…`;
+    $("questionStatus").textContent = `Loading the terrain for ${loc.name}…`;
     return;
   }
   arrive(loc);
 }
 
+// The answer is ready well before the landscape: the verdict comes from viewpoints.json, but the
+// terrain arrives coarse first. Shown as it comes, that is stars, then the inside of a low-detail
+// hill, then a smear. A quiet backdrop covers the 3D view until the ground around the observer
+// has loaded. Distant tiles go on sharpening after it lifts.
+function liftVeilWhenGroundLoads() {
+  const veil = $("landscapeVeil");
+  const lift = () => { veil.dataset.state = "off"; };
+  if (!viewer || !activeGroundCartesian) { lift(); return; }
+  const scene = viewer.scene;
+  const ground = Cesium.Cartographic.fromCartesian(activeGroundCartesian);
+  const groundHeight = ground.height - EYE_HEIGHT;
+  const since = performance.now();
+  let groundAt = null;
+  const stop = scene.postRender.addEventListener(() => {
+    const now = performance.now();
+    if (groundAt === null) {
+      // Within the eye-level camera's 10 m: the detailed tile under the observer is in.
+      const h = scene.globe.getHeight(ground);
+      if (h !== undefined && Math.abs(h - groundHeight) < 10) groundAt = now;
+    }
+    if ((now - since > 400 && scene.globe.tilesLoaded) || (groundAt !== null && now - groundAt > 1500) ||
+        now - since > 8000) {
+      stop();
+      lift();
+    }
+  });
+}
+
 async function arrive(loc) {
   pendingPlace = null;
+  $("landscapeStatus").textContent = `Loading the terrain around ${loc.name}…`;
+  $("landscapeVeil").dataset.state = "on";
   $("question").hidden = true;
   $("splash").dataset.done = "1";
   revealUI();
-  await selectLocation(loc, false);
-  await reframeCurrent();
-  if (viewer) onTick(viewer.clock);
+  try {
+    await selectLocation(loc, false);
+    await reframeCurrent();
+    if (viewer) onTick(viewer.clock);
+  } finally {
+    liftVeilWhenGroundLoads();
+  }
 }
 
 async function askByText(raw) {

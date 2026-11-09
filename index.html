@@ -29,6 +29,10 @@
   <!-- A link to a particular place skips the opening question. Set before the first paint. -->
   <script>if (/[?&]lat=/.test(location.search)) document.documentElement.classList.add("has-place");</script>
 
+  <!-- Terrain and imagery are needed the moment a place is chosen; open those connections now. -->
+  <link rel="preconnect" href="https://terrain.reearth.land" crossorigin />
+  <link rel="preconnect" href="https://services.arcgisonline.com" crossorigin />
+
   <!-- CesiumJS v1.118 -->
   <script defer src="https://cesium.com/downloads/cesiumjs/releases/1.118/Build/Cesium/Cesium.js"></script>
   <link href="https://cesium.com/downloads/cesiumjs/releases/1.118/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
@@ -95,6 +99,17 @@
       background: #05080C; text-align: center; padding: 24px; }
     .has-place #splash { display: flex; }
     #splash[data-done="1"] { display: none; }
+
+    /* The question's own sky, so answering it changes only the words until the landscape is in.
+       Appears at once; only the lift fades. */
+    #landscapeVeil { position: fixed; inset: 0; z-index: 10; pointer-events: none; display: flex; align-items: flex-end;
+      justify-content: center; padding: 0 24px calc(var(--strip-h) + 76px);
+      background:
+        radial-gradient(ellipse 70% 60% at 76% 92%, rgba(185,138,66,.5), transparent 70%),
+        radial-gradient(circle at 76% 30%, rgba(44,74,82,.75), transparent 46%),
+        #05080C; }
+    #landscapeVeil[data-state="off"] { opacity: 0; visibility: hidden; transition: opacity .9s ease, visibility 0s linear .9s; }
+    #landscapeStatus { margin: 0; color: var(--p-dim); text-align: center; }
 
     /* ---- the verdict ---- */
     #verdictScrim { position: fixed; left: 0; top: 0; width: min(1000px, 86vw); height: 62vh; z-index: 20; pointer-events: none;
@@ -247,6 +262,8 @@
 <body>
 
   <div id="cesiumContainer"></div>
+  <!-- Covers the 3D view while a new place's terrain loads (liftVeilWhenGroundLoads). -->
+  <div id="landscapeVeil" data-state="off" aria-hidden="true"><p id="landscapeStatus"></p></div>
 
   <!-- ============================= THE OPENING QUESTION ============================= -->
   <div id="question" role="dialog" aria-labelledby="questionTitle">

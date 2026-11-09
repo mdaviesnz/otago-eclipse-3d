@@ -430,6 +430,46 @@ test("the opening question comes first, and a link to a place skips it", async (
   expect(errs, "no JS errors around the opening question").toEqual([]);
 });
 
+test("a chosen place loads behind a backdrop, and the camera stays where the app put it", async ({ page }) => {
+  test.setTimeout(90000);
+  const errs = errors(page);
+  await page.goto("/index.html");
+  const ready = await page.waitForFunction(() => typeof viewerReady !== "undefined" && viewerReady,
+    null, { timeout: 45000 }).then(() => true, () => false);
+  test.skip(!ready, "the 3D view needs WebGL");
+
+  await page.click('[data-town="Dunedin"]');
+  await expect(page.locator("#landscapeVeil")).toHaveAttribute("data-state", "on");
+  await expect(page.locator("#landscapeStatus")).toHaveText("Loading the terrain around Dunedin…");
+
+  // Cesium's push above loaded terrain is held off as each move is made, and a camera near the
+  // ground asks for coarser detail than one looking down from the overview.
+  await page.waitForFunction(() => typeof activeGroundCartesian !== "undefined" && !!activeGroundCartesian);
+  const moves = await page.evaluate(() => {
+    const g = Cesium.Cartographic.fromCartesian(activeGroundCartesian);
+    const at = (h) => ({ destination: Cesium.Cartesian3.fromRadians(g.longitude, g.latitude, g.height + h),
+                         orientation: { heading: 0, pitch: 0, roll: 0 } });
+    const read = () => ({ collide: viewer.scene.screenSpaceCameraController.enableCollisionDetection,
+                          detail: viewer.scene.globe.maximumScreenSpaceError });
+    placeCamera(at(450)); const high = read();
+    placeCamera(at(10)); const low = read();
+    reframeCurrent();
+    return { high, low };
+  });
+  expect(moves.high).toEqual({ collide: false, detail: 2 });
+  expect(moves.low).toEqual({ collide: false, detail: 4 });
+
+  // The backdrop lifts once the ground has loaded, or after 8 s at most.
+  await expect(page.locator("#landscapeVeil")).toHaveAttribute("data-state", "off", { timeout: 20000 });
+  const lift = await page.evaluate(() => {
+    const cam = Cesium.Cartographic.fromCartesian(viewer.camera.positionWC).height;
+    return cam - Cesium.Cartographic.fromCartesian(activeGroundCartesian).height;
+  });
+  expect(lift, "the eye-level camera sits ~8 m above the observer, not on a coarse tile").toBeLessThan(20);
+
+  expect(errs, "no JS errors while arriving").toEqual([]);
+});
+
 // Cesium is 1.5 MB. One script in the head without `defer` holds back the whole first paint.
 test("no script holds back the first paint of the simulator or the map", async ({ page }) => {
   for (const path of ["/index.html", "/map.html"]) {
