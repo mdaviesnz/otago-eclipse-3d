@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Astronomical &amp; Geodetic Methods — Technical Specification · Otago Eclipse 3D</title>
   <meta name="description" content="Complete technical specification of solar/lunar ephemeris, coordinate transformations, atmospheric refraction, and terrain horizon ray-marching in Otago Eclipse 3D." />
-  <meta name="theme-color" content="#0f172a" />
+  <meta name="theme-color" content="#0A1016" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Eclipse 2028" />
@@ -22,174 +22,68 @@
   <link rel="apple-touch-icon" href="icon.svg" />
 
   <link rel="stylesheet" href="app.css" />
-  <script src="https://unpkg.com/lucide@latest"></script>
 
-  <style>
-    body {
-      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-      background: #0f172a;
-      color: #f1f5f9;
-    }
-    .panel {
-      backdrop-filter: blur(10px);
-      background: rgba(15, 23, 42, 0.88);
-      border: 1px solid rgba(148, 163, 184, 0.22);
-    }
-    .page-wrap {
-      max-width: 56rem;
-      margin: 0 auto;
-      padding: calc(7rem + env(safe-area-inset-top, 0px)) 1rem calc(4rem + env(safe-area-inset-bottom, 0px));
-    }
-    @media (min-width: 640px) {
-      .page-wrap {
-        padding: calc(5.5rem + env(safe-area-inset-top, 0px)) 1.25rem 4rem;
-      }
-    }
-    .spec-section {
-      background: rgba(30, 41, 59, 0.55);
-      border: 1px solid rgba(148, 163, 184, 0.2);
-      border-radius: 1rem;
-      padding: 1.25rem;
-      margin-bottom: 1.5rem;
-    }
-    @media (min-width: 640px) {
-      .spec-section { padding: 1.5rem; }
-    }
-    .spec-section h2 {
-      font-size: 1.15rem;
-      font-weight: 700;
-      color: #f8fafc;
-      margin-bottom: 0.75rem;
-      padding-bottom: 0.5rem;
-      border-bottom: 1px solid rgba(148, 163, 184, 0.2);
-    }
-    .spec-section h3 {
-      font-size: 0.95rem;
-      font-weight: 600;
-      color: #fbbf24;
-      margin-top: 1.1rem;
-      margin-bottom: 0.45rem;
-    }
-    .spec-section p {
-      color: #cbd5e1;
-      font-size: 0.9rem;
-      line-height: 1.7;
-      margin-bottom: 0.75rem;
-    }
-    .spec-section p:last-child { margin-bottom: 0; }
-    .spec-section ul {
-      list-style: disc;
-      padding-left: 1.25rem;
-      color: #cbd5e1;
-      font-size: 0.88rem;
-      line-height: 1.65;
-      margin-bottom: 0.75rem;
-    }
-    .spec-section li { margin-bottom: 0.35rem; }
-    .math-block {
-      background: #0b1220;
-      border: 1px solid rgba(148, 163, 184, 0.22);
-      border-radius: 0.6rem;
-      padding: 0.75rem 1rem;
-      margin: 0.75rem 0;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-size: 0.82rem;
-      color: #fde68a;
-      overflow-x: auto;
-      white-space: pre;
-    }
-    .spec-table {
-      width: 100%;
-      min-width: 28rem;
-      font-size: 0.82rem;
-      border-collapse: collapse;
-      margin: 0.75rem 0;
-    }
-    .spec-table th {
-      text-align: left;
-      color: #94a3b8;
-      font-weight: 600;
-      padding: 0.5rem 0.6rem;
-      border-bottom: 1px solid rgba(148, 163, 184, 0.28);
-    }
-    .spec-table td {
-      padding: 0.5rem 0.6rem;
-      color: #cbd5e1;
-      border-bottom: 1px solid rgba(148, 163, 184, 0.14);
-      vertical-align: top;
-    }
-    code {
-      background: rgba(15, 23, 42, 0.75);
-      border: 1px solid rgba(148, 163, 184, 0.2);
-      border-radius: 0.3rem;
-      padding: 0.1rem 0.35rem;
-      font-size: 0.82em;
-      color: #e2e8f0;
-    }
-  </style>
 </head>
-<body class="bg-slate-900 text-slate-100">
+<body class="doc-page">
 
-  <!-- ============================= TOP NAVIGATION ============================= -->
-  <div class="fixed top-0 inset-x-0 z-30 px-2.5 py-2 sm:px-4" style="padding-top: max(0.5rem, env(safe-area-inset-top, 0px));">
-    <div class="panel rounded-xl px-3 sm:px-4 py-2 flex flex-wrap items-center gap-2 sm:gap-3 shadow-lg">
-      <a href="index.html" class="flex items-center gap-2 mr-auto hover:text-amber-300 transition">
-        <i data-lucide="eclipse" class="w-5 h-5 text-amber-400 shrink-0"></i>
-        <span class="font-semibold text-sm sm:text-base leading-tight">Otago Eclipse 3D</span>
-        <span class="text-[11px] sm:text-xs font-medium text-amber-300 whitespace-nowrap">Technical spec</span>
-      </a>
-      <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
-        <a href="astronomy.html"
-          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 sm:px-3 py-1.5 transition">
-          <i data-lucide="compass" class="w-3.5 h-3.5 text-amber-400"></i> <span class="hidden sm:inline">General</span> overview
-        </a>
-        <a href="map.html"
-          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 sm:px-3 py-1.5 transition">
-          <i data-lucide="map" class="w-3.5 h-3.5 text-amber-400"></i> Spots map
-        </a>
-        <a href="index.html"
-          class="inline-flex items-center gap-1.5 text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg px-2.5 sm:px-3 py-1.5 transition">
-          <i data-lucide="box" class="w-3.5 h-3.5"></i> <span class="hidden sm:inline">Open 3D</span> simulator
-        </a>
-      </div>
-    </div>
-  </div>
+  <header class="doc-header">
+    <a class="doc-brand" href="index.html">Otago Eclipse</a>
+    <nav aria-label="Site">
+      <a href="index.html">3D simulator</a>
+      <a href="map.html">Map</a>
+      <a href="astronomy.html">How it works</a>
+      <a href="methods.html" aria-current="page">Technical spec</a>
+    </nav>
+  </header>
 
-  <!-- ============================= MAIN CONTENT ============================= -->
-  <main class="page-wrap">
-
-    <div class="mb-6">
-      <p class="text-xs uppercase tracking-wide text-amber-400 font-semibold mb-1">Technical Review Document &middot; Astronomy &amp; Geodesy</p>
-      <h1 class="text-2xl font-bold tracking-tight mb-2">Astronomical &amp; Geodetic Methods</h1>
-      <p class="text-sm text-slate-300 leading-relaxed mb-3">
+  <div class="doc-hero doc-hero--plain">
+    <div class="doc-hero-inner">
+      <p class="doc-kicker">Technical Review Document, Astronomy &amp; Geodesy</p>
+      <h1>Astronomical &amp; Geodetic Methods</h1>
+      <p class="doc-lede">
         This specification describes how <b>Otago Eclipse 3D</b> computes solar and lunar positions,
         topocentric eclipse circumstances, atmospheric refraction, and terrain horizon obstruction
         for the <b>total solar eclipse of 22 July 2028</b> over the South Island of New Zealand. It
         is written for domain reviewers in astronomy and geodesy and states all physical assumptions,
         numerical algorithms, and uncertainty budgets explicitly.
       </p>
-      <div class="rounded-lg bg-amber-900/25 border border-amber-600/30 p-3 mb-3">
-        <p class="text-xs text-amber-200/90">
+    </div>
+  </div>
+
+  <div class="doc-layout">
+    <nav class="doc-toc" aria-label="On this page">
+      <p>On this page</p>
+      <ul>
+        <li><a href="#s1">1. Physical Context of the Event</a></li>
+        <li><a href="#s2">2. Ephemeris and Coordinate Pipeline</a></li>
+        <li><a href="#s3">3. Time Scales and &Delta;T</a></li>
+        <li><a href="#s4">4. Observer Geodesy and Elevation Sensitivity</a></li>
+        <li><a href="#s5">5. Eclipse Circumstances, Magnitude, and Obscuration</a></li>
+        <li><a href="#s6">6. Atmospheric and Terrestrial Refraction</a></li>
+        <li><a href="#s7">7. Terrain Horizon Ray-Marching</a></li>
+        <li><a href="#s8">8. Validation &amp; Summary Error Budget</a></li>
+        <li><a href="#s9">9. Meteorological Climatology &amp; Cloud Cover</a></li>
+      </ul>
+    </nav>
+
+    <main class="doc-main">
+
+      <div class="doc-note">
+        <p>
           <b>Review status &mdash; independent, unvalidated tool:</b> This is an independent project
           developed with AI assistance and is not affiliated with or endorsed by any museum,
           university, or astronomical society. While internal cross-checks against published
           predictions are documented below, it has not yet undergone independent human validation
           by a domain specialist. Review feedback and corrections are actively sought.
         </p>
+        <p class="doc-end-links">
+          <a href="astronomy.html">Plain-language overview</a>
+          <a href="https://github.com/mdaviesnz/otago-eclipse-3d/blob/main/ASTRONOMY.md" target="_blank" rel="noopener">View ASTRONOMY.md on GitHub</a>
+        </p>
       </div>
-      <div class="flex flex-wrap items-center gap-2 text-xs">
-        <a href="astronomy.html" class="inline-flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-lg px-3 py-1.5 transition border border-slate-700/60">
-          <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> Plain-language overview
-        </a>
-        <a href="https://github.com/mdaviesnz/otago-eclipse-3d/blob/main/ASTRONOMY.md" target="_blank" rel="noopener"
-           class="inline-flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg px-3 py-1.5 transition border border-slate-700/60">
-          <i data-lucide="github" class="w-3.5 h-3.5 text-amber-400"></i> View ASTRONOMY.md on GitHub
-        </a>
-      </div>
-    </div>
 
     <!-- 1. Physical Context -->
-    <section class="spec-section">
+    <section class="doc-section spec-section" id="s1">
       <h2>1. Physical Context of the Event</h2>
       <p>
         On the afternoon of <b>22 July 2028</b> (Southern Hemisphere winter), the lunar umbra crosses
@@ -213,22 +107,22 @@
     </section>
 
     <!-- 2. Ephemeris and Coordinate Pipeline -->
-    <section class="spec-section">
+    <section class="doc-section spec-section" id="s2">
       <h2>2. Ephemeris and Coordinate Pipeline</h2>
       <h3>2.1 Ephemeris Engine</h3>
       <p>
         All solar and lunar positions and eclipse contact times come from
-        <a href="https://github.com/cosinekitty/astronomy" target="_blank" rel="noopener" class="text-amber-300 hover:underline">astronomy-engine</a>
+        <a href="https://github.com/cosinekitty/astronomy" target="_blank" rel="noopener">astronomy-engine</a>
         (Don Cross, MIT License), used identically across two independent code paths:
       </p>
-      <div class="overflow-x-auto -mx-2 px-2">
+      <div class="table-scroll">
         <table class="spec-table">
           <thead>
             <tr><th>Environment</th><th>Package</th><th>Purpose</th></tr>
           </thead>
           <tbody>
             <tr>
-              <td>Browser (<code>index.html</code>)</td>
+              <td>Browser (<code>simulator.js</code>)</td>
               <td><code>astronomy.browser.min.js</code> (v2)</td>
               <td>Live topocentric positions, continuous magnitude &amp; obscuration, per-location contact times</td>
             </tr>
@@ -271,7 +165,7 @@ hz = Horizon(t, observer, eq.ra, eq.dec, Refraction.Normal)</div>
     </section>
 
     <!-- 3. Time Scales and Delta T -->
-    <section class="spec-section">
+    <section class="doc-section spec-section" id="s3">
       <h2>3. Time Scales and &Delta;T</h2>
       <ul>
         <li><b>Internal time:</b> UTC throughout. Displayed wall-clock times are <b>NZST = UTC + 12h</b> (New Zealand winter; NZDT = UTC + 13h does not apply in July).</li>
@@ -281,7 +175,7 @@ hz = Horizon(t, observer, eq.ra, eq.dec, Refraction.Normal)</div>
     </section>
 
     <!-- 4. Observer Geodesy -->
-    <section class="spec-section">
+    <section class="doc-section spec-section" id="s4">
       <h2>4. Observer Geodesy and Elevation Sensitivity</h2>
       <p>
         The observer is constructed as <code>Observer(latitude, longitude, height)</code> with WGS84
@@ -291,7 +185,7 @@ hz = Horizon(t, observer, eq.ra, eq.dec, Refraction.Normal)</div>
         <li><b>Ellipsoidal vs. orthometric height datum:</b> Re:Earth Terrain (Copernicus GLO-30 / Mapterhorn) is referenced to the WGS84 ellipsoid, whereas <code>Observer.height</code> is documented as elevation above mean sea level. Over Otago, the NZGeoid2016 separation is <var>N</var> &approx; +5 m to +35 m. For terrain horizon checks (§7), both <var>h</var><sub>obs</sub> and <var>h</var><sub>terrain</sub>(<var>d</var>) come from the same DEM, so the datum offset cancels in <var>h</var><sub>terrain</sub> &minus; <var>h</var><sub>obs</sub>.</li>
         <li><b>Shadow-axis grazing sensitivity:</b> Because the lunar shadow arrives at <var>&alpha;</var><sub>&#9737;</sub> &approx; 8.4&deg;&ndash;10&deg;, raising an observer by &Delta;<var>h</var> shifts their intercept with the inclined shadow cone down-track by &Delta;<var>x</var> = &Delta;<var>h</var> cot <var>&alpha;</var><sub>&#9737;</sub> &approx; 6.8 &Delta;<var>h</var>.</li>
       </ul>
-      <div class="overflow-x-auto -mx-2 px-2">
+      <div class="table-scroll">
         <table class="spec-table">
           <thead>
             <tr><th>Observer height <var>h</var></th><th>Maximum eclipse (UTC)</th><th>Apparent solar altitude at maximum</th></tr>
@@ -312,7 +206,7 @@ hz = Horizon(t, observer, eq.ra, eq.dec, Refraction.Normal)</div>
     </section>
 
     <!-- 5. Eclipse Circumstances, Magnitude, and Obscuration -->
-    <section class="spec-section">
+    <section class="doc-section spec-section" id="s5">
       <h2>5. Eclipse Circumstances, Magnitude, and Obscuration</h2>
       <h3>5.1 Local Contact Times</h3>
       <p>
@@ -335,8 +229,8 @@ isTotal = (s_moon &gt;= s_sun) and (sep &lt;= s_moon - s_sun)</div>
       <p>
         <b>Strict totality gating:</b> An uncovered solar crescent of 0.1% area (<code>obsc = 0.999</code>)
         occurs when the lunar limb is still ~16.6&Prime; short of internal tangency (~33 s before C2 or
-        after C3) and remains blindingly bright. The UI therefore gates the <code>TOTALITY</code>
-        badge, corona diagram, and "safe to look without eclipse glasses" narration strictly on
+        after C3) and remains blindingly bright. The UI therefore gates the <code>Totality</code>
+        readout, time-left countdown, and "safe to look without eclipse glasses" narration strictly on
         geometric internal tangency (<code>isTotal</code>), and caps displayed partial obscuration at
         <code>99.9%</code> whenever <code>!isTotal</code>.
       </p>
@@ -350,7 +244,7 @@ isTotal = (s_moon &gt;= s_sun) and (sep &lt;= s_moon - s_sun)</div>
     </section>
 
     <!-- 6. Atmospheric and Terrestrial Refraction -->
-    <section class="spec-section">
+    <section class="doc-section spec-section" id="s6">
       <h2>6. Atmospheric and Terrestrial Refraction</h2>
       <p>
         Both the live simulator and the offline catalogue apply a unified refraction model across
@@ -394,7 +288,7 @@ drop(d) = (1 - k) · d² / (2 · R_earth) = d² / (2 · R_eff)</div>
     </section>
 
     <!-- 7. Terrain Horizon Geometry -->
-    <section class="spec-section">
+    <section class="doc-section spec-section" id="s7">
       <h2>7. Terrain Horizon Ray-Marching</h2>
       <div class="math-block">d_{n+1} = d_n + max(25 m, 0.03 · d_n),    d ∈ [100 m, 45 000 m]   (161 samples/ray)
 angle(d) = atan2(h_terrain(d) - h_observer - d² / (2 · R_eff), d)
@@ -408,10 +302,10 @@ horizon  = max_d angle(d),    clearance = alt_sun - horizon</div>
     </section>
 
     <!-- 8. Validation & Error Budget -->
-    <section class="spec-section">
+    <section class="doc-section spec-section" id="s8">
       <h2>8. Validation &amp; Summary Error Budget</h2>
       <h3>8.1 Dunedin Contact-Time Validation</h3>
-      <div class="overflow-x-auto -mx-2 px-2">
+      <div class="table-scroll">
         <table class="spec-table">
           <thead>
             <tr><th>Phase</th><th>Published (NZST)</th><th><code>astronomy-engine</code></th><th>&Delta;</th><th>Primary source of difference</th></tr>
@@ -427,7 +321,7 @@ horizon  = max_d angle(d),    clearance = alt_sun - horizon</div>
       </div>
 
       <h3>8.2 Model Approximation Summary</h3>
-      <div class="overflow-x-auto -mx-2 px-2">
+      <div class="table-scroll">
         <table class="spec-table">
           <thead>
             <tr><th>Approximation / Component</th><th>Magnitude</th><th>Effect on Verdicts</th></tr>
@@ -447,7 +341,7 @@ horizon  = max_d angle(d),    clearance = alt_sun - horizon</div>
     </section>
 
     <!-- 9. Meteorological Climatology & Cloud Cover -->
-    <section class="spec-section">
+    <section class="doc-section spec-section" id="s9">
       <h2>9. Meteorological Climatology &amp; Cloud Cover</h2>
       <p>
         While terrain horizon ray-marching establishes where the low solar disc is physically unobstructed
@@ -460,7 +354,7 @@ horizon  = max_d angle(d),    clearance = alt_sun - horizon</div>
       <p>
         Cloud statistics are derived from the <b>CLARA-A3</b> (CM SAF cLoud, Albedo and Surface Radiation dataset,
         Edition 3) and its operational Interim Climate Data Record (ICDR), produced by the
-        <a href="https://www.cmsaf.eu" target="_blank" rel="noopener" class="text-amber-300 hover:underline">EUMETSAT Satellite Application Facility on Climate Monitoring (CM SAF)</a>
+        <a href="https://www.cmsaf.eu" target="_blank" rel="noopener">EUMETSAT Satellite Application Facility on Climate Monitoring (CM SAF)</a>
         (DOI: <code>10.5676/EUM_SAF_CM/CLARA_AVHRR/V003</code>).
       </p>
       <ul>
@@ -486,7 +380,7 @@ P_clear(φ, λ) = 100% - C_day(φ, λ)</div>
       <p>
         For an arbitrary observer coordinate (<var>&phi;</var><sub>obs</sub>, <var>&lambda;</var><sub>obs</sub>),
         the values are interpolated bilinearly from the surrounding four 0.25&deg; grid nodes. In the
-        catalogue and spot popups:
+        catalogue and spot details:
       </p>
       <ul>
         <li><b>Historic July daytime cloud cover:</b> <var>C</var><sub>day</sub> (percentage of sky obscured on average during July afternoons).</li>
@@ -497,9 +391,9 @@ P_clear(φ, λ) = 100% - C_day(φ, λ)</div>
       <h3>9.3 Regional Synoptic Mechanics &amp; Findings</h3>
       <p>
         The satellite climatology reproduces the eclipse meteorology analysis published by
-        meteorologist Jay Anderson (<a href="https://eclipsophile.com/tse2028/" target="_blank" rel="noopener" class="text-amber-300 hover:underline">Eclipsophile.com</a>):
+        meteorologist Jay Anderson (<a href="https://eclipsophile.com/tse2028/" target="_blank" rel="noopener">Eclipsophile.com</a>):
       </p>
-      <div class="overflow-x-auto -mx-2 px-2">
+      <div class="table-scroll">
         <table class="spec-table">
           <thead>
             <tr><th>Region / Location</th><th>July Daytime Cloud</th><th>Clear-Sky Odds</th><th>Synoptic &amp; Topographic Driver</th></tr>
@@ -530,30 +424,14 @@ P_clear(φ, λ) = 100% - C_day(φ, λ)</div>
       </p>
     </section>
 
-    <div class="panel rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4">
-      <div>
-        <p class="text-sm font-bold text-slate-100">Feedback or review comments?</p>
-        <p class="text-xs text-slate-400 mt-0.5">
-          Corrections and technical review notes from astronomers and surveyors are very welcome.
-        </p>
+      <div class="doc-end">
+        <p><b>Feedback or review comments?</b></p>
+        <p>Corrections and technical review notes from astronomers and surveyors are very welcome.</p>
+        <p class="doc-end-links"><a id="contactLink" href="#"><span id="contactAddr">Email author</span></a> <a href="astronomy.html">General overview</a> <a href="index.html">3D simulator</a></p>
       </div>
-      <div class="flex flex-wrap items-center gap-2">
-        <a id="contactLink" href="#"
-          class="inline-flex items-center gap-1.5 text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg px-4 py-2 transition">
-          <i data-lucide="mail" class="w-4 h-4"></i> <span id="contactAddr">Email author</span>
-        </a>
-        <a href="astronomy.html"
-          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-2 transition">
-          <i data-lucide="compass" class="w-4 h-4 text-amber-400"></i> General overview
-        </a>
-        <a href="index.html"
-          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-2 transition">
-          <i data-lucide="box" class="w-4 h-4 text-amber-400"></i> 3D simulator
-        </a>
-      </div>
-    </div>
 
-  </main>
+    </main>
+  </div>
 
   <script>
     (() => {
@@ -562,7 +440,6 @@ P_clear(φ, λ) = 100% - C_day(φ, λ)</div>
       link.href = `mailto:${addr}?subject=${encodeURIComponent("Otago Eclipse 3D — Technical Review")}`;
       document.getElementById("contactAddr").textContent = addr;
     })();
-    lucide.createIcons();
     try {
       if ((location.hostname !== "localhost" && location.hostname !== "127.0.0.1") || window.__TEST_METRICS) {
         let sid = sessionStorage.getItem("eclipseMetricSid");
