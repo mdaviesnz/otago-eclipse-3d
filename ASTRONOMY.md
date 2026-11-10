@@ -22,8 +22,8 @@ On the afternoon of **22 July 2028** (mid-winter in the Southern Hemisphere), th
 crosses Fiordland, Southland, and Otago from west-north-west to east-south-east before leaving
 the New Zealand coast just after 16:19 NZST (04:19 UTC):
 
-- **Maximum eclipse in Dunedin (`-45.8788°, 170.5028°`):** `04:17:11.8 UTC` (`16:17:11.8 NZST`).
-- **Apparent solar altitude at maximum:** $8.39^\circ$ (Dunedin, east coast) to $10.0^\circ\text{–}10.8^\circ$ (Queenstown / Fiordland, inland west).
+- **Maximum eclipse in Dunedin (`-45.8788°, 170.5028°`):** `04:17:20.5 UTC` (`16:17:20.5 NZST`).
+- **Apparent solar altitude at maximum:** $8.37^\circ$ (Dunedin, east coast) to $10.0^\circ\text{–}10.8^\circ$ (Queenstown / Fiordland, inland west).
 - **Solar azimuth at maximum:** $\approx 310.6^\circ\text{–}312.9^\circ$ (north-west).
 - **Totality duration on the centreline:** up to $\approx 179\text{ s}$ ($2\text{m } 59\text{s}$).
 - **Sunset during the closing partial phase:** Fourth contact (C4) occurs with the Sun below
@@ -158,15 +158,15 @@ Measured sensitivity at Dunedin (`-45.8788°, 170.5028°`) varying observer heig
 
 | Observer height $h$ | Maximum eclipse (UTC) | Apparent solar altitude at maximum |
 |---|---|---|
-| $0\text{ m}$ | `04:17:11.848` | $8.3900^\circ$ |
-| $500\text{ m}$ | `04:17:12.269` | $8.3891^\circ$ |
-| $2000\text{ m}$ | `04:17:13.968` | $8.3854^\circ$ |
+| $0\text{ m}$ | `04:17:20.484` | $8.3712^\circ$ |
+| $500\text{ m}$ | `04:17:21.045` | $8.3699^\circ$ |
+| $2000\text{ m}$ | `04:17:23.125` | $8.3654^\circ$ |
 
-Contact times shift by **$\approx +1.06\text{ s}$ per km of elevation**, and apparent solar
-altitude at maximum decreases by **$\approx -0.0023^\circ$ per km** (not from direct solar
-parallax, which is $0.0015''/\text{km}$, but because the $+1.06\text{ s/km}$ delay in maximum
+Contact times shift by **$\approx +1.3\text{ s}$ per km of elevation**, and apparent solar
+altitude at maximum decreases by **$\approx -0.0029^\circ$ per km** (not from direct solar
+parallax, which is $0.0015''/\text{km}$, but because the $+1.3\text{ s/km}$ delay in maximum
 eclipse allows Earth's rotation to carry the setting Sun lower at $-0.0022^\circ/\text{s}$).
-A $35\text{ m}$ geoid–ellipsoid datum offset therefore affects contact times by $< 0.04\text{ s}$
+A $35\text{ m}$ geoid–ellipsoid datum offset therefore affects contact times by $< 0.05\text{ s}$
 and altitude by $< 10^{-4}\text{ deg}$.
 
 In the live simulator (`index.html`) and in the four precomputed town presets (`preset_rows` in
@@ -277,9 +277,9 @@ $T = 10^\circ\text{C}$):
 $$R_{\text{astro}} \text{ (arcminutes)} = \frac{1.02}{\tan\!\left(\alpha_{\text{geom}} + \frac{10.3}{\alpha_{\text{geom}} + 5.11}\right)}$$
 (with $\alpha_{\text{geom}}$ in degrees, plus a smooth clamping ramp below the horizon). At
 Dunedin maximum eclipse:
-- Geometric solar altitude (`Airless`): $8.2852^\circ$
-- Apparent refracted solar altitude (`Normal`): $8.3919^\circ$ (at `04:17:11.0Z`) / $8.3900^\circ$ (at `04:17:11.848Z`)
-- Astronomical refraction lift: **$R_{\text{astro}} = +0.1067^\circ \approx +6.40'$**
+- Geometric solar altitude (`Airless`): $8.2642^\circ$
+- Apparent refracted solar altitude (`Normal`): $8.3712^\circ$ (at `04:17:20.484Z`)
+- Astronomical refraction lift: **$R_{\text{astro}} = +0.1070^\circ \approx +6.42'$**
 
 ### 6.2 Terrestrial Refraction of the Horizon ($k = 0.13$)
 

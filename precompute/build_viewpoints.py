@@ -261,7 +261,7 @@ MISSING_TILES: list = []
 
 
 def build_mosaic(z: int, x0: int, x1: int, y0: int, y1: int, allow_missing: bool = False,
-                 progress: bool = False, workers: int = 6) -> Dem:
+                 progress: bool = False) -> Dem:
     """Stitch a rectangle of tiles into one Dem. Raises MissingTiles if any tile is absent."""
     nx, ny = x1 - x0 + 1, y1 - y0 + 1
     total = nx * ny
@@ -283,7 +283,7 @@ def build_mosaic(z: int, x0: int, x1: int, y0: int, y1: int, allow_missing: bool
         ix, iy = args
         return ix, iy, fetch_tile(z, x0 + ix, y0 + iy, SESSION)
 
-    with ThreadPoolExecutor(max_workers=workers) as pool:
+    with ThreadPoolExecutor(max_workers=6) as pool:
         for ix, iy, tile in pool.map(job, [(i, j) for j in range(ny) for i in range(nx)]):
             if tile is not None and tile.shape == (tile_px, tile_px):
                 grid[iy * tile_px:(iy + 1) * tile_px, ix * tile_px:(ix + 1) * tile_px] = tile

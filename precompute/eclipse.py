@@ -59,8 +59,11 @@ class PathCut(NamedTuple):
     south: float
 
 
-SCAN_FROM, SCAN_TO, SCAN_STEP = -25.0, -56.0, 0.5   # the path is over 1 degree wide over land
-LIMIT_TOLERANCE = 1e-4                               # degrees of latitude, about 11 m
+# Latitudes to search for the path on a meridian. It is over 1 degree wide over land.
+SEARCH_FROM_LAT, SEARCH_TO_LAT, SEARCH_STEP = -25.0, -56.0, 0.5
+LIMIT_TOLERANCE = 1e-4     # degrees of latitude, about 11 m
+CENTRE_TOLERANCE = 1e-3    # degrees of latitude, about 110 m
+AT_THE_EDGE = 0.01         # a centre this close to a limit is the limit, not a centre
 
 
 def totality_is_seen(lat: float, lon: float) -> bool:
@@ -88,7 +91,7 @@ def _edge(inside: float, outside: float, lon: float) -> float:
 def _longest(south: float, north: float, lon: float) -> float:
     """The latitude between the limits where totality lasts longest."""
     lo, hi = south, north
-    while hi - lo > 1e-3:
+    while hi - lo > CENTRE_TOLERANCE:
         a, b = lo + (hi - lo) / 3.0, hi - (hi - lo) / 3.0
         if totality_seconds(a, lon) < totality_seconds(b, lon):
             lo = a
@@ -100,17 +103,17 @@ def _longest(south: float, north: float, lon: float) -> float:
 def path_at(lon: float) -> PathCut | None:
     """The northern limit, centre line and southern limit on this meridian, or None where the
     meridian misses the part of the path that sees totality."""
-    lat = SCAN_FROM
-    while lat >= SCAN_TO and not totality_is_seen(lat, lon):
-        lat -= SCAN_STEP
-    if lat < SCAN_TO:
+    lat = SEARCH_FROM_LAT
+    while lat >= SEARCH_TO_LAT and not totality_is_seen(lat, lon):
+        lat -= SEARCH_STEP
+    if lat < SEARCH_TO_LAT:
         return None
-    north = _edge(lat, lat + SCAN_STEP, lon)
+    north = _edge(lat, lat + SEARCH_STEP, lon)
     while totality_is_seen(lat, lon):
-        lat -= SCAN_STEP
-    south = _edge(lat + SCAN_STEP, lat, lon)
+        lat -= SEARCH_STEP
+    south = _edge(lat + SEARCH_STEP, lat, lon)
     centre = _longest(south, north, lon)
     # Longest at the very edge means the true centre line lies beyond it, in the dark.
-    if min(centre - south, north - centre) < 0.01:
+    if min(centre - south, north - centre) < AT_THE_EDGE:
         centre = None
     return PathCut(north, centre, south)

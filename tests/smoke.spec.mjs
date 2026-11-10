@@ -180,9 +180,9 @@ for (const path of ["/map.html", "/index.html"]) {
 
     const secondsFrom = (ms, iso) => Math.abs(ms - Date.parse(iso)) / 1000;
     expect(r.kind.toLowerCase()).toContain("total");
-    expect(secondsFrom(r.totalBegin, "2028-07-22T04:15:53.5Z")).toBeLessThan(1);
-    expect(secondsFrom(r.peak, "2028-07-22T04:17:20.5Z")).toBeLessThan(1);
-    expect(secondsFrom(r.totalEnd, "2028-07-22T04:18:47.5Z")).toBeLessThan(1);
+    expect(secondsFrom(r.totalBegin, "2028-07-22T04:15:53.5Z")).toBeLessThan(0.5);
+    expect(secondsFrom(r.peak, "2028-07-22T04:17:20.5Z")).toBeLessThan(0.5);
+    expect(secondsFrom(r.totalEnd, "2028-07-22T04:18:47.5Z")).toBeLessThan(0.5);
     expect(r.peakAlt).toBeGreaterThan(8.0);
     expect(r.peakAlt).toBeLessThan(8.8);
   });

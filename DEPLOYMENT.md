@@ -170,8 +170,9 @@ Deliberately scoped to what is *reliable* in CI rather than what is most impress
 globe needs a GPU context that headless runners emulate inconsistently, so it is checked for
 load-time JS errors and control wiring rather than rendered pixels. What is tested properly:
 
-- **Astronomy** — asserts astronomy-engine still reproduces the published Dunedin contact times
-  (totality 16:15:45–16:18:36, maximum 16:17:11, sun 8–8.8°). This is the app's core claim to
+- **Astronomy** — asserts both app pages compute Dunedin's contacts with the agreed ΔT
+  (totality 16:15:53–16:18:48, maximum 16:17:20, sun 8–8.8°), and that the path limits drawn on
+  the map are where the page's own calculation says totality stops. This is the app's core claim to
   correctness and needs no WebGL.
 - **Overview map** — loads, plots markers, exclusive access filters genuinely change the set,
   and popups link back into the 3D view.
@@ -212,7 +213,7 @@ python build_path.py                            # only after a ΔT or library ch
 python -m unittest discover -p "test_*.py"      # stored figures against a fresh calculation
 python verify_output.py                          # summary of the output
 cd .. && python tests/check_static.py            # the CI gate, run locally
-git add viewpoints.json eclipse-path.js && git commit -m "Rebuild viewpoint catalogue"
+git add viewpoints.json eclipse-path.js && git commit -m "Rebuild the catalogue"
 git push
 ```
 

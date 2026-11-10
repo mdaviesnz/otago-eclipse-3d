@@ -91,8 +91,8 @@
         New Zealand coast just after 16:19 NZST (<code>04:19 UTC</code>):
       </p>
       <ul>
-        <li><b>Maximum eclipse in Dunedin (<code>-45.8788&deg;, 170.5028&deg;</code>):</b> <code>04:17:11.8 UTC</code> (<code>16:17:11.8 NZST</code>).</li>
-        <li><b>Apparent solar altitude at maximum:</b> 8.39&deg; (Dunedin, east coast) to 10.0&deg;&ndash;10.8&deg; (Queenstown / Fiordland, inland west).</li>
+        <li><b>Maximum eclipse in Dunedin (<code>-45.8788&deg;, 170.5028&deg;</code>):</b> <code>04:17:20.5 UTC</code> (<code>16:17:20.5 NZST</code>).</li>
+        <li><b>Apparent solar altitude at maximum:</b> 8.37&deg; (Dunedin, east coast) to 10.0&deg;&ndash;10.8&deg; (Queenstown / Fiordland, inland west).</li>
         <li><b>Solar azimuth at maximum:</b> 310.6&deg;&ndash;312.9&deg; (north-west).</li>
         <li><b>Totality duration on the centreline:</b> up to 179 s (2m 59s).</li>
         <li><b>Sunset during the closing partial phase:</b> Fourth contact (C4) occurs with the Sun below 1.7&deg; altitude across the entire South Island, and slightly below the horizon along the east coast (Dunedin refracted altitude &minus;0.09&deg;, geometric altitude &minus;0.63&deg; at <code>05:19:58 UTC</code>).</li>
@@ -192,17 +192,17 @@ hz = Horizon(t, observer, eq.ra, eq.dec, Refraction.Normal)</div>
             <tr><th>Observer height <var>h</var></th><th>Maximum eclipse (UTC)</th><th>Apparent solar altitude at maximum</th></tr>
           </thead>
           <tbody>
-            <tr><td>0 m</td><td><code>04:17:11.848</code></td><td>8.3900&deg;</td></tr>
-            <tr><td>500 m</td><td><code>04:17:12.269</code></td><td>8.3891&deg;</td></tr>
-            <tr><td>2000 m</td><td><code>04:17:13.968</code></td><td>8.3854&deg;</td></tr>
+            <tr><td>0 m</td><td><code>04:17:20.484</code></td><td>8.3712&deg;</td></tr>
+            <tr><td>500 m</td><td><code>04:17:21.045</code></td><td>8.3699&deg;</td></tr>
+            <tr><td>2000 m</td><td><code>04:17:23.125</code></td><td>8.3654&deg;</td></tr>
           </tbody>
         </table>
       </div>
       <p>
-        Contact times shift by <b>+1.06 s per km</b> of observer elevation, and peak solar altitude
-        shifts by <b>&minus;0.0023&deg; per km</b> (caused by the Sun sinking at &minus;0.0022&deg;/s during
-        the +1.06 s/km delay in maximum eclipse). A 35 m datum offset therefore alters contact times
-        by &lt;0.04 s.
+        Contact times shift by <b>+1.3 s per km</b> of observer elevation, and peak solar altitude
+        shifts by <b>&minus;0.0029&deg; per km</b> (caused by the Sun sinking at &minus;0.0022&deg;/s during
+        the +1.3 s/km delay in maximum eclipse). A 35 m datum offset therefore alters contact times
+        by &lt;0.05 s.
       </p>
     </section>
 
@@ -262,8 +262,8 @@ isTotal = (s_moon &gt;= s_sun) and (sep &lt;= s_moon - s_sun)</div>
       </p>
       <div class="math-block">R_astro (arcmin) = 1.02 / tan(alt_geom + 10.3 / (alt_geom + 5.11))</div>
       <p>
-        At Dunedin maximum eclipse, this lifts the geometric Sun from 8.2852&deg; to 8.3919&deg;
-        (a lift of <b>+0.1067&deg; &approx; +6.40&prime;</b>).
+        At Dunedin maximum eclipse, this lifts the geometric Sun from 8.2642&deg; to 8.3712&deg;
+        (a lift of <b>+0.1070&deg; &approx; +6.42&prime;</b>).
       </p>
 
       <h3>6.2 Terrestrial Refraction of the Horizon (<var>k</var> = 0.13)</h3>
