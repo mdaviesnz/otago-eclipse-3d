@@ -22,14 +22,14 @@ On the afternoon of **22 July 2028** (mid-winter in the Southern Hemisphere), th
 crosses Fiordland, Southland, and Otago from west-north-west to east-south-east before leaving
 the New Zealand coast just after 16:19 NZST (04:19 UTC):
 
-- **Maximum eclipse in Dunedin (`-45.8788°, 170.5028°`):** `04:17:11.8 UTC` (`16:17:11.8 NZST`).
-- **Apparent solar altitude at maximum:** $8.39^\circ$ (Dunedin, east coast) to $10.0^\circ\text{–}10.8^\circ$ (Queenstown / Fiordland, inland west).
+- **Maximum eclipse in Dunedin (`-45.8788°, 170.5028°`):** `04:17:20.5 UTC` (`16:17:20.5 NZST`).
+- **Apparent solar altitude at maximum:** $8.37^\circ$ (Dunedin, east coast) to $10.0^\circ\text{–}10.8^\circ$ (Queenstown / Fiordland, inland west).
 - **Solar azimuth at maximum:** $\approx 310.6^\circ\text{–}312.9^\circ$ (north-west).
 - **Totality duration on the centreline:** up to $\approx 179\text{ s}$ ($2\text{m } 59\text{s}$).
-- **Sunset during the closing partial phase:** Fourth contact (C4) occurs with the Sun below
-  $1.7^\circ$ altitude across the entire South Island, and slightly below the geometric horizon
-  along the east coast (Dunedin refracted altitude $-0.09^\circ$, geometric altitude $-0.63^\circ$
-  at `05:19:58 UTC`).
+- **Sunset during the closing partial phase:** Fourth contact (C4) occurs with the Sun no higher
+  than about $2^\circ$ anywhere in the region ($2.0^\circ$ at Puysegur Point, $1.8^\circ$ at
+  Milford Sound, $1.4^\circ$ at Haast), and slightly below the horizon along the east coast
+  (Dunedin refracted altitude $-0.11^\circ$, geometric altitude $-0.70^\circ$ at `05:20:06 UTC`).
 
 Because the Sun sits only $8^\circ\text{–}10^\circ$ above the north-western horizon during
 totality—across a region of steep glacial valleys and basin-and-range topography—local terrain
@@ -49,8 +49,8 @@ is executed identically in both code paths:
 
 | Environment | Library | Role |
 |---|---|---|
-| Browser (`index.html`) | `astronomy.browser.min.js` (v2) | Real-time topocentric coordinates, continuous magnitude/obscuration, and per-location contact times |
-| Offline pipeline (`precompute/build_viewpoints.py`) | `astronomy-engine` (Python) | Regional circumstance grid (`EclipseField`), POI/grid horizon clearances, and town-centre preset profiles |
+| Browser (`simulator.js`, `map.js`) | `astronomy.browser.min.js` (2.1.19) | Real-time topocentric coordinates, continuous magnitude/obscuration, and per-location contact times |
+| Offline pipeline (`precompute/build_viewpoints.py`) | `astronomy-engine` (Python, 2.1.19) | Regional circumstance grid (`EclipseField`), POI/grid horizon clearances, and town-centre preset profiles |
 
 `astronomy-engine` implements:
 - **Solar position:** VSOP87 theory (Bretagnon & Francou 1988) truncated to retain sub-arcsecond
@@ -111,16 +111,19 @@ ellipsoid at instant $t$:
 - **Displayed wall-clock time:** **NZST ($\text{UTC} + 12\text{ h}$)**. Because July is Southern
   Hemisphere winter, New Zealand Daylight Time ($\text{UTC} + 13\text{ h}$) is not in force.
 - **Terrestrial Time ($\text{TT}$) and $\Delta T$:** `astronomy-engine` converts Universal Time
-  ($\text{UT} \approx \text{UTC}$) to Terrestrial Time ($\text{TT} = \text{UT} + \Delta T$)
-  using the Espenak & Meeus (2006) polynomial fit (`DeltaT_EspenakMeeus`), which evaluates to
-  $\Delta T \approx 72.7\text{ s}$ for 2028.55.
-- **$\Delta T$ extrapolation uncertainty:** Recent IERS Earth rotation measurements indicate a
-  slower deceleration of UT1 than the 2006 quadratic extrapolation predicted, placing actual
-  2028 $\Delta T$ closer to $69.5\text{–}70.5\text{ s}$ (an offset of $\delta(\Delta T) \approx 2\text{–}3\text{ s}$).
-  Because Earth rotates eastward at $\approx 465\text{ m/s} \cdot \cos(45^\circ) \approx 329\text{ m/s}$,
-  each $1\text{ s}$ of $\Delta T$ uncertainty shifts the umbral ground track by $\approx 0.33\text{ km}$
-  in longitude and shifts contact times by $\approx 1\text{ s}$ when compared against predictions
-  adopting a different $\Delta T$ value.
+  ($\text{UT} \approx \text{UTC}$) to Terrestrial Time ($\text{TT} = \text{UT} + \Delta T$).
+  Left alone it extrapolates $\Delta T$ with the Espenak & Meeus (2006) polynomial, which gives
+  $76.65\text{ s}$ on 22 July 2028. Earth has been rotating faster than that fit expected, and
+  measured values put 2028 near $69\text{ s}$, so both code paths override the library with a
+  fixed $\Delta T = 69.2\text{ s}$ (`DELTA_T_SECONDS` in `eclipse-time.js` and
+  `precompute/eclipse.py`; `tests/check_static.py` fails if the two differ).
+- **Effect of the override:** Compared with the library default, every contact in the region is
+  $8.6\text{–}9.5\text{ s}$ later and both limits of the path of totality lie
+  $\approx 1.8\text{ km}$ further south. Near the limits that changes how long totality lasts:
+  Hampden goes from $105\text{ s}$ to $101\text{ s}$, Te Anau from $46\text{ s}$ to $56\text{ s}$.
+- **Sensitivity:** Each $1\text{ s}$ of $\Delta T$ moves contact times by $\approx 1.2\text{ s}$
+  and the path limits by $\approx 0.25\text{ km}$. The adopted value is a prediction, not a
+  measurement; an error of a second in it is well inside what this tool needs.
 
 ---
 
@@ -155,18 +158,18 @@ Measured sensitivity at Dunedin (`-45.8788°, 170.5028°`) varying observer heig
 
 | Observer height $h$ | Maximum eclipse (UTC) | Apparent solar altitude at maximum |
 |---|---|---|
-| $0\text{ m}$ | `04:17:11.848` | $8.3900^\circ$ |
-| $500\text{ m}$ | `04:17:12.269` | $8.3891^\circ$ |
-| $2000\text{ m}$ | `04:17:13.968` | $8.3854^\circ$ |
+| $0\text{ m}$ | `04:17:20.484` | $8.3712^\circ$ |
+| $500\text{ m}$ | `04:17:21.045` | $8.3699^\circ$ |
+| $2000\text{ m}$ | `04:17:23.125` | $8.3654^\circ$ |
 
-Contact times shift by **$\approx +1.06\text{ s}$ per km of elevation**, and apparent solar
-altitude at maximum decreases by **$\approx -0.0023^\circ$ per km** (not from direct solar
-parallax, which is $0.0015''/\text{km}$, but because the $+1.06\text{ s/km}$ delay in maximum
+Contact times shift by **$\approx +1.3\text{ s}$ per km of elevation**, and apparent solar
+altitude at maximum decreases by **$\approx -0.0029^\circ$ per km** (not from direct solar
+parallax, which is $0.0015''/\text{km}$, but because the $+1.3\text{ s/km}$ delay in maximum
 eclipse allows Earth's rotation to carry the setting Sun lower at $-0.0022^\circ/\text{s}$).
-A $35\text{ m}$ geoid–ellipsoid datum offset therefore affects contact times by $< 0.04\text{ s}$
+A $35\text{ m}$ geoid–ellipsoid datum offset therefore affects contact times by $< 0.05\text{ s}$
 and altitude by $< 10^{-4}\text{ deg}$.
 
-In the live simulator (`index.html`) and in the four precomputed town presets (`preset_rows` in
+In the live simulator (`simulator.js`) and in the five precomputed town presets (`preset_rows` in
 `build_viewpoints.py`), `SearchLocalSolarEclipse` is called with the actual observer elevation
 $h = h_{\text{terrain}} + 1.7\text{ m}$. In the regional circumstance grid (`EclipseField`, §5.1),
 grid nodes are evaluated at $h = 0\text{ m}$, which introduces up to $1\text{–}2\text{ s}$ of
@@ -196,7 +199,10 @@ In the offline catalogue builder (`build_viewpoints.py`), `EclipseField` evaluat
 `SearchLocalSolarEclipse` on a $0.1^\circ \times 0.1^\circ$ latitude/longitude grid ($\approx 2\,000$
 nodes across $[-46.6^\circ, -43.3^\circ] \times [166.0^\circ, 171.6^\circ]$) and interpolates
 solar altitude, azimuth, and totality duration bilinearly for the $\sim 650\,000$ land
-candidates. To prevent false-positive totality verdicts along the northern and southern umbral
+candidates. The interpolated duration only ranks candidates. Duration falls to zero along a
+curve at the edge of the path, where interpolation ran up to $20\text{ s}$ short, so each of the
+$\sim 800$ entries that is written gets its own `SearchLocalSolarEclipse` at its position and
+eye height (`with_direct_totality`), and that figure is the one stored. To prevent false-positive totality verdicts along the northern and southern umbral
 limits, totality membership is treated as a strict logical conjunction: **all four surrounding
 $0.1^\circ$ grid corners must be inside the path of totality** (`tot = c00 & c01 & c10 & c11`).
 
@@ -211,7 +217,7 @@ time-varying eclipse geometry on every clock tick in `eclipseAt(time, originCart
    $$s_\odot = \arcsin\!\left(\frac{R_\odot}{d_\odot}\right), \qquad s_\mathbb{C} = \arcsin\!\left(\frac{R_\mathbb{C}}{d_\mathbb{C}}\right)$$
    with nominal spherical radii:
    $$R_\odot = 695\,700\text{ km} \quad\text{(IAU 2015 Resolution B3 nominal photospheric radius)}$$
-   $$R_\mathbb{C} = 1\,737.4\text{ km} \quad\text{(IAU working group mean lunar radius, } k_0 = R_\mathbb{C}/R_\oplus = 0.2725076\text{)}$$
+   $$R_\mathbb{C} = 1\,737.4\text{ km} \quad\text{(IAU working group mean lunar radius, } k = R_\mathbb{C}/R_\oplus = 0.27240\text{)}$$
    At Dunedin maximum eclipse, this yields apparent diameters $2s_\odot = 31.47'$ and
    $2s_\mathbb{C} = 32.90'$, with radius ratio $k = s_\mathbb{C} / s_\odot = 1.0454$.
 
@@ -236,8 +242,9 @@ time-varying eclipse geometry on every clock tick in `eclipseAt(time, originCart
    tangency):
    $$\text{isTotal} \iff (s_\mathbb{C} \ge s_\odot) \;\land\; (\text{sep} \le s_\mathbb{C} - s_\odot)$$
    *Note on partial-phase rounding:* Because a thin exposed solar crescent of $0.1\%$ area
-   ($\text{obscuration} = 0.999$) still corresponds to a $\approx 16.6''$ separation from
-   internal tangency ($\approx 33\text{ s}$ before C2 or after C3) and remains blindingly bright,
+   ($\text{obscuration} = 0.999$) still corresponds to a $\approx 5''$ separation from
+   internal tangency ($\approx 10\text{ s}$ before C2 or after C3; $99.5\%$ is reached
+   $\approx 30\text{ s}$ out) and remains blindingly bright,
    the UI gates the `"TOTALITY"` state, corona diagram, and "safe to view without eclipse
    glasses" narration strictly on `isTotal` rather than an obscuration percentage threshold, and
    caps displayed partial obscuration at `99.9%` whenever `!isTotal`.
@@ -248,32 +255,38 @@ time-varying eclipse geometry on every clock tick in `eclipseAt(time, originCart
   Real lunar mountains and valleys shift C2 and C3 contact times by $\pm 1\text{–}3\text{ s}$
   near the centreline and govern Baily's beads and grazing-zone phenomena.
 - **Mean lunar radius vs. eclipse valley radius:** Standard Besselian element predictions
-  (Espenak & Meeus 2006; *Astronomical Almanac*) adopt $k = 0.272281 R_\oplus$ ($R_\mathbb{C} \approx 1\,735.95\text{ km}$,
-  the mean lunar valley radius, $\approx 1.45\text{ km}$ or $\approx 0.8''$ smaller than the IAU
-  mean radius of $1\,737.4\text{ km}$) when computing umbral contacts so that sunlight shining
-  through deep lunar valleys is excluded from nominal totality. Using the IAU mean radius in
-  `astronomy-engine` makes computed totality durations $\approx 2\text{–}3\text{ s}$ longer than
-  valley-radius predictions, matching the $+3\text{ s}$ difference observed at Dunedin C3 (§9).
+  (Espenak & Meeus 2006; *Astronomical Almanac*) adopt $k = 0.272281$ for umbral contacts
+  ($R_\mathbb{C} \approx 1\,736.65\text{ km}$, a mean lunar valley radius, $\approx 0.75\text{ km}$
+  or $\approx 0.4''$ smaller than the mean radius of $1\,737.4\text{ km}$ used here) so that
+  sunlight shining through deep lunar valleys is excluded from nominal totality. The larger
+  penumbral value those predictions use, $k = 0.2725076$, corresponds to $1\,738.09\text{ km}$.
+- **Effect of keeping the mean radius:** Compared with a valley-radius prediction, totality here
+  is $\approx 2\text{ s}$ longer in mid-path (Queenstown, Dunedin) and $\approx 8\text{ s}$
+  longer near the edge (Te Anau), and each limit of the path lies $\approx 1.1\text{ km}$ further
+  out. The app keeps the mean radius and is honest about the edge instead: a near-edge verdict
+  says totality there may be shorter or may not happen (`nearEdgeNote` in `catalogue.js`), and
+  the overview map draws each limit as a band about $2\text{ km}$ wide.
 
 ---
 
 ## 6. Atmospheric and Terrestrial Refraction
 
 At an altitude of $8^\circ\text{–}10^\circ$, atmospheric refraction is the largest optical
-correction after raw terrain geometry. Both code paths (`index.html` and `build_viewpoints.py`)
+correction after raw terrain geometry. Both code paths (`simulator.js` and `build_viewpoints.py`)
 apply a unified refraction model to the Sun and the terrain.
 
 ### 6.1 Astronomical Refraction of the Sun (`Refraction.Normal`)
 
-`astronomy-engine`'s `Refraction.Normal` implements Bennett's (1982) empirical formula (Meeus,
-*Astronomical Algorithms*, Ch. 16) for standard sea-level conditions ($P = 1010\text{ hPa}$,
+`astronomy-engine`'s `Refraction.Normal` implements Sæmundsson's (1986) empirical formula, which
+gives refraction from the true altitude and is the inverse of Bennett's (1982) (Meeus,
+*Astronomical Algorithms*, Ch. 16), for standard sea-level conditions ($P = 1010\text{ hPa}$,
 $T = 10^\circ\text{C}$):
 $$R_{\text{astro}} \text{ (arcminutes)} = \frac{1.02}{\tan\!\left(\alpha_{\text{geom}} + \frac{10.3}{\alpha_{\text{geom}} + 5.11}\right)}$$
 (with $\alpha_{\text{geom}}$ in degrees, plus a smooth clamping ramp below the horizon). At
 Dunedin maximum eclipse:
-- Geometric solar altitude (`Airless`): $8.2852^\circ$
-- Apparent refracted solar altitude (`Normal`): $8.3919^\circ$ (at `04:17:11.0Z`) / $8.3900^\circ$ (at `04:17:11.848Z`)
-- Astronomical refraction lift: **$R_{\text{astro}} = +0.1067^\circ \approx +6.40'$**
+- Geometric solar altitude (`Airless`): $8.2642^\circ$
+- Apparent refracted solar altitude (`Normal`): $8.3712^\circ$ (at `04:17:20.484Z`)
+- Astronomical refraction lift: **$R_{\text{astro}} = +0.1070^\circ \approx +6.42'$**
 
 ### 6.2 Terrestrial Refraction of the Horizon ($k = 0.13$)
 
@@ -311,7 +324,7 @@ Consequently:
   cancelling out of the clearance difference $\Delta\alpha = \alpha_{\odot,\text{app}} - \theta_{\text{terr,app}}$.
 - Only the atmosphere *above* the ridge elevation $h_{\text{ridge}}$ contributes to differential
   refraction between the Sun and the ridge, and the free atmosphere above ridge crests follows a
-  near-standard lapse rate where Bennett's formula is well-behaved.
+  near-standard lapse rate where Sæmundsson's formula is well-behaved.
 
 ---
 
@@ -324,7 +337,7 @@ the sightline check marches outward along a great-circle initial bearing $A$ fro
 $d_{\min} = 100\text{ m}$ to outer distance $d_{\max} = 45\,000\text{ m}$ with adaptive geometric
 spacing ($3\%$ growth per step):
 $$d_{n+1} = d_n + \max(25\text{ m},\; 0.03\, d_n)$$
-This produces $161$ radial samples per bearing: dense in the near-to-mid field ($25\text{ m}$ steps
+This produces $165$ radial samples per bearing, the last at $44.6\text{ km}$: dense in the near-to-mid field ($25\text{ m}$ steps
 at $100\text{ m}$, $150\text{ m}$ steps at $5\text{ km}$) where a sharp crest subtends a large
 angle, and $\le 1.3\text{ km}$ at the $45\text{ km}$ outer boundary.
 
@@ -335,7 +348,7 @@ angle, and $\le 1.3\text{ km}$ at the $45\text{ km}$ outer boundary.
   bilinear self-interpolation and DEM noise rather than real topography, and represents local
   ground clutter an observer can walk a few metres to avoid.
 - **Great-circle geodesic coordinates:** Both code paths trace a true great-circle ray:
-  - In `index.html`, radial offsets $(d\sin A, d\cos A, 0)$ in the local East–North–Up tangent
+  - In `simulator.js`, radial offsets $(d\sin A, d\cos A, 0)$ in the local East–North–Up tangent
     frame (`Cesium.Transforms.eastNorthUpToFixedFrame`) are projected onto the WGS84 ellipsoid.
   - In `precompute/build_viewpoints.py`, probe coordinates $(\phi_2, \lambda_2)$ are computed via
     the spherical forward geodesic equations with angular distance $\delta = d / R_\oplus$:
@@ -368,11 +381,14 @@ plus $\approx 0.25^\circ$ for the bright inner corona):
 During the $\approx 2.2\text{ hours}$ from C1 to C4, the Sun sweeps $\approx 26.5^\circ$ in
 azimuth across the north-western sky (and $\approx 0.6^\circ$ between C2 and C3 during totality).
 - **Live check (`runSightlineCheck`):** Evaluates full-resolution ($3\%$ step) rays along the
-  exact solar azimuths at **C1 (Start)**, **Maximum**, and **C4 (End)**, plus a $4^\circ$-spaced
-  azimuth fan extending $\pm 10^\circ$ beyond the C1–C4 span to render the horizon profile chart.
-  Phases where the Sun is already below the horizon ($\alpha_\odot \le 0^\circ$, such as C4 on
-  the east coast) are reported as `"sun below horizon"` rather than counting as terrain
-  obstructions.
+  exact solar azimuth at every contact the place has (C1, C2, maximum, C3, C4), plus a
+  $4^\circ$-spaced azimuth fan extending $\pm 10^\circ$ beyond the C1–C4 span to render the
+  horizon profile chart. Which contacts decide the verdict depends on its scope (`verdict.js`).
+  Inside the path of totality the verdict is **totality scope** and judges **C2, maximum and
+  C3**, the same three the catalogue stores; C1 and C4 are shown but do not change the level.
+  Outside the path it is **eclipse scope** and judges **C1, maximum and C4**. Contacts where the
+  Sun is already below the horizon ($\alpha_\odot \le 0^\circ$, such as C4 on the east coast)
+  are reported as `"sun below horizon"` rather than counting as terrain obstructions.
 - **Precomputed catalogue (`spots` and `pois`):** Evaluates full-resolution rays at **C2
   (`clearBegin`)**, **Maximum (`clearance`)**, and **C3 (`clearEnd`)**, and stores a
   totality-scope verdict `level`: `clear` when all three clearances are $> 0^\circ$, `blocked`
@@ -394,10 +410,10 @@ azimuth across the north-western sky (and $\approx 0.6^\circ$ between C2 and C3 
 CesiumJS shades terrain from solar direction but has no native concept of lunar occultation. The
 simulator modulates directional sunlight intensity, satellite imagery brightness/saturation, and
 sky/globe atmospheric scattering using a non-linear power law of geometric obscuration:
-$$\text{dim} = \text{clamp}(\text{obscuration}, 0, 1)^6$$
+$$\text{dim} = \text{clamp}(\text{obscuration}, 0, 1)^{5.5}$$
 This is an **explicitly perceptual visualization model, not a radiometric one**. Because human
 scotopic/mesopic adaptation compresses perceived brightness logarithmically, ambient daylight
-appears to change very little up to $\sim 80\%$ obscuration ($\text{dim} = 0.8^6 \approx 0.26$)
+appears to change very little up to $\sim 80\%$ obscuration ($\text{dim} = 0.8^{5.5} \approx 0.29$)
 and collapses rapidly past $95\%$ ($\text{dim} \to 1$). Any physical illuminance model would
 additionally require solar limb darkening (neckel & Labs 1994) and 3D Monte Carlo scattering of
 coronal and horizon-ring twilight outside the umbra.
@@ -411,13 +427,19 @@ coronal and horizon-ring twilight outside the umbra.
 Comparison at Dunedin (`-45.8788°, 170.5028°`) against published reference tables (Espenak /
 timeanddate):
 
-| Event | Reference (NZST) | `astronomy-engine` (NZST) | $\Delta$ | Notes |
+| Event | Reference (NZST) | Library default $\Delta T$ ($76.65\text{ s}$) | This app ($\Delta T = 69.2\text{ s}$) | Notes |
 |---|---|---|---|---|
-| First contact (C1) | `15:08:58` | `15:09:01` | $+3\text{ s}$ | Smooth-sphere + $\Delta T$ |
-| Second contact (C2) | `16:15:45` | `16:15:44` | $-1\text{ s}$ | Mean lunar radius vs. valley radius + limb profile |
-| **Maximum eclipse** | **`16:17:11`** | **`16:17:11`** | **$0\text{ s}$** | Exact agreement to the second |
-| Third contact (C3) | `16:18:36` | `16:18:39` | $+3\text{ s}$ | Mean lunar radius ($1737.4\text{ km}$) vs. valley radius |
-| Fourth contact (C4) | `17:17:00` (sunset) | `17:19:58` (alt $-0.09^\circ$) | $+3\text{ m}$ | Reference clamps partial end at local sunset |
+| First contact (C1) | `15:08:58` | `15:09:01` | `15:09:10` | Smooth-sphere + $\Delta T$ |
+| Second contact (C2) | `16:15:45` | `16:15:44` | `16:15:53` | Mean lunar radius vs. valley radius + limb profile |
+| **Maximum eclipse** | **`16:17:11`** | **`16:17:11`** | **`16:17:20`** | |
+| Third contact (C3) | `16:18:36` | `16:18:39` | `16:18:48` | Mean lunar radius ($1737.4\text{ km}$) vs. valley radius |
+| Fourth contact (C4) | `17:17:00` (sunset) | `17:19:58` | `17:20:06` (alt $-0.1^\circ$) | Reference clamps partial end at local sunset |
+
+The reference agrees with the library's default $\Delta T$ to within $3\text{ s}$, which most
+likely means the reference was computed with a $\Delta T$ close to that default. It therefore
+checks the ephemeris and the contact search, not the choice of $\Delta T$. The app's own times
+are $\approx 9\text{ s}$ later by design (§3) and have not been re-validated against a reference
+that uses a current $\Delta T$.
 
 ### 9.2 Cross-Validation Between DEM Pipelines
 
@@ -441,9 +463,9 @@ Worst-case discrepancy across all 12 town/contact checks is $0.13^\circ$ with ze
 | Component | Model / Approximation | Quantitative Magnitude | Impact on Verdicts |
 |---|---|---|---|
 | **Ephemeris** | `astronomy-engine` (VSOP87 + ELP/MPP02) | $\sim 1\text{–}3''$ in 2028 ($\pm 1'$ multi-century bound) | $\pm 1\text{–}3\text{ s}$ on contact times; $< 0.001^\circ$ on altitude |
-| **$\Delta T$ extrapolation** | Espenak & Meeus (2006) polynomial ($\approx 72.7\text{ s}$) | $\delta(\Delta T) \approx 2\text{–}3\text{ s}$ | $\approx 0.7\text{–}1.0\text{ km}$ longitudinal shift of umbral track |
-| **Lunar limb profile** | Smooth sphere ($R_\mathbb{C} = 1737.4\text{ km}$), no Kaguya/LRO limb | $\approx 0.8''$ mean-to-valley radius + $\pm 1.5''$ topography | $\pm 1\text{–}3\text{ s}$ on C2/C3 near centreline; larger near grazing edge |
-| **Solar refraction** | Bennett (1982) (`Refraction.Normal`, $1010\text{ hPa}, 10^\circ\text{C}$) | $+6.4'$ ($+0.107^\circ$) at $8.3^\circ$ altitude | Unified across both code paths; meteorological scatter $\sim \pm 0.5'$ |
+| **$\Delta T$** | Fixed at $69.2\text{ s}$ (library default $76.65\text{ s}$ overridden) | $\approx \pm 1\text{ s}$ in the adopted value | $\approx 1.2\text{ s}$ on contact times and $\approx 0.25\text{ km}$ on the path limits, per second |
+| **Lunar limb profile** | Smooth sphere ($R_\mathbb{C} = 1737.4\text{ km}$), no Kaguya/LRO limb | $\approx 0.4''$ mean-to-valley radius + $\pm 1.5''$ topography | $\pm 1\text{–}3\text{ s}$ on C2/C3 near centreline; $\approx 8\text{ s}$ and $\approx 1.1\text{ km}$ at each limit |
+| **Solar refraction** | Sæmundsson (1986) (`Refraction.Normal`, $1010\text{ hPa}, 10^\circ\text{C}$) | $+6.4'$ ($+0.107^\circ$) at $8.3^\circ$ altitude | Unified across both code paths; meteorological scatter $\sim \pm 0.5'$ |
 | **Terrestrial refraction** | Effective Earth radius $R_{\text{eff}} = R_\oplus / (1 - k)$, $k = 0.13$ | $+0.35'$ at $10\text{ km}$, $+1.6'$ at $45\text{ km}$ | Unified across both code paths; basin anomalies cancel with solar ray below ridge |
 | **Solar disc semi-diameter** | Sightline clearance measured to solar centre ($s_\odot \approx 0.26^\circ$) | $0.26^\circ$ photospheric limb ($0.5^\circ$ with inner corona) | Clearances in $(0^\circ, 0.26^\circ)$ flagged as lower-limb grazing |
 | **Near-field DEM error** | Copernicus GLO-30 / Mapterhorn ($\sim 30\text{ m}$ horizontal, $\sigma_z \approx 5\text{ m}$) | $\pm 2.9^\circ$ at $100\text{ m}$; $\pm 0.3^\circ$ at $1\text{ km}$ | Dominant uncertainty for ridges closer than $\sim 1\text{ km}$ |
@@ -457,11 +479,11 @@ Worst-case discrepancy across all 12 town/contact checks is $0.13^\circ$ with ze
 
 | Symbol | File | Purpose |
 |---|---|---|
-| `bodyAltAz`, `sunAltAz` | [`index.html`](index.html) | Topocentric $(\alpha, \delta) \to$ refracted $(\text{alt}, \text{az})$, apparent semi-diameter, sky unit vector |
-| `eclipseAt` | [`index.html`](index.html) | Continuous magnitude, exact circle-overlap obscuration, and internal-tangency `isTotal` |
-| `localCircumstances` | [`index.html`](index.html) | Per-observer C1, C2, max, C3, C4 via `SearchLocalSolarEclipse`, cached by coordinate |
-| `timeAtObscuration` | [`index.html`](index.html) | 22-step bisection between C1 and peak for the $50\%$ arrival framing |
-| `runSightlineCheck` | [`index.html`](index.html) | Adaptive $3\%$ ENU ray-march ($100\text{ m}\text{–}45\text{ km}$), $R_{\text{eff}}$ curvature reduction, grazing-limb check |
+| `bodyAltAz`, `sunAltAz` | [`simulator.js`](simulator.js) | Topocentric $(\alpha, \delta) \to$ refracted $(\text{alt}, \text{az})$, apparent semi-diameter, sky unit vector |
+| `eclipseAt` | [`simulator.js`](simulator.js) | Continuous magnitude, exact circle-overlap obscuration, and internal-tangency `isTotal` |
+| `localCircumstances` | [`simulator.js`](simulator.js) | Per-observer C1, C2, max, C3, C4 via `SearchLocalSolarEclipse`, cached by coordinate |
+| `timeAtObscuration` | [`simulator.js`](simulator.js) | 22-step bisection between C1 and peak for the $50\%$ arrival framing |
+| `runSightlineCheck` | [`simulator.js`](simulator.js) | Adaptive $3\%$ ENU ray-march ($100\text{ m}\text{–}45\text{ km}$), $R_{\text{eff}}$ curvature reduction, grazing-limb check |
 | `EclipseField` | [`precompute/build_viewpoints.py`](precompute/build_viewpoints.py) | $0.1^\circ$ circumstance grid, 4-corner totality mask, bilinear interpolation |
 | `great_circle_step`, `horizon_angles` | [`precompute/build_viewpoints.py`](precompute/build_viewpoints.py) | Vectorised spherical geodesic ray-march and horizon reduction |
 | `ray_horizon`, `preset_rows` | [`precompute/build_viewpoints.py`](precompute/build_viewpoints.py) | Dual-resolution ($z=13$ near / $z=11$ far) $1^\circ$ azimuth horizon profiles for town presets |

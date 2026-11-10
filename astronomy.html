@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>How It Works — The Astronomy Behind Otago Eclipse 3D</title>
   <meta name="description" content="How Otago Eclipse 3D predicts the 22 July 2028 total solar eclipse and checks whether mountains will block your view." />
-  <meta name="theme-color" content="#0f172a" />
+  <meta name="theme-color" content="#0A1016" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Eclipse 2028" />
@@ -22,190 +22,62 @@
   <link rel="apple-touch-icon" href="icon.svg" />
 
   <link rel="stylesheet" href="app.css" />
-  <script src="https://unpkg.com/lucide@latest"></script>
 
-  <style>
-    body {
-      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-      background: #0f172a;
-      color: #f1f5f9;
-    }
-    .panel {
-      backdrop-filter: blur(10px);
-      background: rgba(15, 23, 42, 0.88);
-      border: 1px solid rgba(148, 163, 184, 0.22);
-    }
-    .page-wrap {
-      max-width: 52rem;
-      margin: 0 auto;
-      padding: calc(7rem + env(safe-area-inset-top, 0px)) 1rem calc(4rem + env(safe-area-inset-bottom, 0px));
-    }
-    @media (min-width: 640px) {
-      .page-wrap {
-        padding: calc(5.5rem + env(safe-area-inset-top, 0px)) 1.25rem 4rem;
-      }
-    }
-    .prose-card {
-      background: rgba(30, 41, 59, 0.55);
-      border: 1px solid rgba(148, 163, 184, 0.2);
-      border-radius: 1rem;
-      padding: 1.25rem;
-      margin-bottom: 1.5rem;
-    }
-    @media (min-width: 640px) {
-      .prose-card { padding: 1.5rem; }
-    }
-    .prose-card h2 {
-      font-size: 1.2rem;
-      font-weight: 700;
-      color: #f8fafc;
-      margin-bottom: 0.75rem;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-    .prose-card p {
-      color: #cbd5e1;
-      font-size: 0.925rem;
-      line-height: 1.7;
-      margin-bottom: 0.85rem;
-    }
-    .prose-card p:last-child { margin-bottom: 0; }
-    .stat-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-      gap: 0.75rem;
-      margin: 1rem 0;
-    }
-    .stat-box {
-      background: rgba(15, 23, 42, 0.7);
-      border: 1px solid rgba(148, 163, 184, 0.2);
-      border-radius: 0.75rem;
-      padding: 0.85rem 1rem;
-    }
-    .diagram-box {
-      background: #0b1220;
-      border: 1px solid rgba(148, 163, 184, 0.2);
-      border-radius: 0.75rem;
-      padding: 0.75rem 0.5rem;
-      margin: 1rem 0;
-    }
-    @media (min-width: 640px) {
-      .diagram-box { padding: 1rem; }
-    }
-    .data-table {
-      width: 100%;
-      min-width: 30rem;
-      font-size: 0.825rem;
-      border-collapse: collapse;
-      margin-top: 0.5rem;
-    }
-    .data-table th {
-      text-align: left;
-      color: #94a3b8;
-      font-weight: 600;
-      padding: 0.5rem 0.6rem;
-      border-bottom: 1px solid rgba(148, 163, 184, 0.25);
-    }
-    .data-table td {
-      padding: 0.5rem 0.6rem;
-      color: #cbd5e1;
-      border-bottom: 1px solid rgba(148, 163, 184, 0.12);
-    }
-    .step-list {
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-      margin-top: 0.75rem;
-    }
-    .step-item {
-      display: flex;
-      align-items: flex-start;
-      gap: 0.75rem;
-      background: rgba(15, 23, 42, 0.55);
-      border: 1px solid rgba(148, 163, 184, 0.16);
-      border-radius: 0.75rem;
-      padding: 0.85rem 1rem;
-    }
-    .step-num {
-      width: 1.6rem;
-      height: 1.6rem;
-      border-radius: 9999px;
-      background: #f59e0b;
-      color: #0f172a;
-      font-weight: 700;
-      font-size: 0.8rem;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      margin-top: 0.1rem;
-    }
-  </style>
 </head>
-<body class="bg-slate-900 text-slate-100">
+<body class="doc-page">
 
-  <!-- ============================= TOP NAVIGATION ============================= -->
-  <div class="fixed top-0 inset-x-0 z-30 px-2.5 py-2 sm:px-4" style="padding-top: max(0.5rem, env(safe-area-inset-top, 0px));">
-    <div class="panel rounded-xl px-3 sm:px-4 py-2 flex flex-wrap items-center gap-2 sm:gap-3 shadow-lg">
-      <a href="index.html" class="flex items-center gap-2 mr-auto hover:text-amber-300 transition">
-        <i data-lucide="eclipse" class="w-5 h-5 text-amber-400 shrink-0"></i>
-        <span class="font-semibold text-sm sm:text-base leading-tight">Otago Eclipse 3D</span>
-        <span class="text-[11px] sm:text-xs font-medium text-amber-300 whitespace-nowrap">How it works</span>
-      </a>
-      <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
-        <a href="methods.html"
-          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 sm:px-3 py-1.5 transition">
-          <i data-lucide="book-open" class="w-3.5 h-3.5 text-amber-400"></i> <span class="hidden sm:inline">Technical</span> spec
-        </a>
-        <a href="map.html"
-          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-2.5 sm:px-3 py-1.5 transition">
-          <i data-lucide="map" class="w-3.5 h-3.5 text-amber-400"></i> Spots map
-        </a>
-        <a href="index.html"
-          class="inline-flex items-center gap-1.5 text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg px-2.5 sm:px-3 py-1.5 transition">
-          <i data-lucide="box" class="w-3.5 h-3.5"></i> <span class="hidden sm:inline">Open 3D</span> simulator
-        </a>
-      </div>
-    </div>
-  </div>
+  <header class="doc-header">
+    <a class="doc-brand" href="index.html">Otago Eclipse</a>
+    <nav aria-label="Site">
+      <a href="index.html">3D simulator</a>
+      <a href="map.html">Map</a>
+      <a href="astronomy.html" aria-current="page">How it works</a>
+      <a href="methods.html">Technical spec</a>
+    </nav>
+  </header>
 
-  <!-- ============================= MAIN CONTENT ============================= -->
-  <main class="page-wrap">
-
-    <!-- Header + Technical Reviewer Banner -->
-    <div class="mb-6">
-      <p class="text-xs uppercase tracking-wide text-amber-400 font-semibold mb-1">22 July 2028 &middot; Otago &amp; Southland, New Zealand</p>
-      <h1 class="text-2xl font-bold tracking-tight mb-2">How the Astronomy &amp; Sightline Checks Work</h1>
-      <p class="text-sm text-slate-300 leading-relaxed mb-4">
+  <div class="doc-hero">
+    <div class="doc-hero-inner">
+      <p class="doc-kicker">22 July 2028, Otago &amp; Southland, New Zealand</p>
+      <h1>How the Astronomy &amp; Sightline Checks Work</h1>
+      <p class="doc-lede">
         Most solar eclipses happen high in the sky, where any open backyard or park gives a great view.
         The 2028 Otago total eclipse is different: it happens late on a mid-winter afternoon, when the
         sun is sitting low in the north-west. Here is how this app works out what you will see—and
         whether a hill will be in your way.
       </p>
-
-      <div class="rounded-xl bg-slate-800/80 border border-slate-600 p-4 flex flex-wrap items-center justify-between gap-3">
-        <div class="flex items-start gap-3">
-          <i data-lucide="graduation-cap" class="w-5 h-5 text-amber-400 shrink-0 mt-0.5"></i>
-          <div>
-            <p class="text-xs font-semibold text-slate-100">Independent, unvalidated tool &mdash; technical reviewers welcome</p>
-            <p class="text-xs text-slate-400 mt-0.5">
-              This is an independent project developed with AI assistance and has not yet been independently validated
-              by an astronomer or surveyor. This page explains the concepts in plain language; for the full mathematical
-              specification—ephemeris series, coordinate frames, &Delta;<var>T</var>, refraction equations, and error budgets—read the technical document.
-            </p>
-          </div>
-        </div>
-        <a href="methods.html"
-          class="inline-flex items-center gap-1.5 text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg px-3 py-2 transition shrink-0">
-          <i data-lucide="file-text" class="w-3.5 h-3.5"></i> Read technical specification &rarr;
-        </a>
-      </div>
     </div>
+    <svg class="doc-ridge" viewBox="0 0 1000 300" preserveAspectRatio="none" aria-hidden="true"><path d="M0 300 L0 101 L20 97 L39 91 L59 87 L78 81 L98 73 L118 68 L137 64 L157 62 L176 61 L196 61 L216 60 L235 61 L255 63 L275 71 L294 78 L314 75 L333 75 L353 74 L373 69 L392 68 L412 70 L431 74 L451 71 L471 69 L490 67 L510 72 L529 73 L549 78 L569 84 L588 88 L608 95 L627 102 L647 108 L667 112 L686 112 L706 113 L725 117 L745 123 L765 128 L784 132 L804 128 L824 124 L843 121 L863 117 L882 115 L902 110 L922 109 L941 108 L961 106 L980 115 L1000 117 L1000 300Z" fill="#0A1016"/></svg>
+  </div>
+
+  <div class="doc-layout">
+    <nav class="doc-toc" aria-label="On this page">
+      <p>On this page</p>
+      <ul>
+        <li><a href="#skyline">Why this eclipse is all about the skyline</a></li>
+        <li><a href="#sun-and-moon">Predicting the Sun and Moon for your exact spot</a></li>
+        <li><a href="#sightline">Tracing your sightline across 45 km of terrain</a></li>
+        <li><a href="#darkness">Why darkness arrives all at once (and eye safety)</a></li>
+        <li><a href="#weather">Cloud cover &amp; weather: playing the odds</a></li>
+        <li><a href="#limits">What the elevation model cannot see</a></li>
+      </ul>
+    </nav>
+
+    <main class="doc-main">
+
+      <div class="doc-note">
+        <p><b>Independent, unvalidated tool &mdash; technical reviewers welcome</b></p>
+        <p>
+          This is an independent project developed with AI assistance and has not yet been independently validated
+          by an astronomer or surveyor. This page explains the concepts in plain language; for the full mathematical
+          specification—ephemeris series, coordinate frames, &Delta;<var>T</var>, refraction equations, and error budgets—read the technical document.
+        </p>
+        <p><a href="methods.html">Read technical specification</a></p>
+      </div>
 
     <!-- 1. The Low-Sun Challenge -->
-    <section class="prose-card">
-      <h2><i data-lucide="sun" class="w-5 h-5 text-amber-400"></i> 1. Why this eclipse is all about the skyline</h2>
+    <section class="doc-section" id="skyline">
+      <h2>Why this eclipse is all about the skyline</h2>
       <p>
         On <b>22 July 2028</b>, the Moon's dark central shadow (the <i>umbra</i>) sweeps across Fiordland,
         Queenstown, Central Otago, and Dunedin between <b>4:14 PM and 4:19 PM NZST</b>. Because it is the middle of
@@ -214,51 +86,51 @@
 
       <div class="stat-grid">
         <div class="stat-box">
-          <p class="text-[11px] uppercase tracking-wide text-slate-400">Sun height at totality</p>
-          <p class="text-lg font-bold text-amber-300 mt-0.5">8&deg; &ndash; 10&deg; high</p>
-          <p class="text-xs text-slate-400 mt-0.5">About one fist held at arm's length above the horizon</p>
+          <p class="stat-label">Sun height at totality</p>
+          <p class="stat-value">8&deg; &ndash; 10&deg; high</p>
+          <p class="stat-note">About one fist held at arm's length above the horizon</p>
         </div>
         <div class="stat-box">
-          <p class="text-[11px] uppercase tracking-wide text-slate-400">Direction to look</p>
-          <p class="text-lg font-bold text-amber-300 mt-0.5">North-West (~311&deg;)</p>
-          <p class="text-xs text-slate-400 mt-0.5">Toward the Southern Alps and inland ranges</p>
+          <p class="stat-label">Direction to look</p>
+          <p class="stat-value">North-West (~311&deg;)</p>
+          <p class="stat-note">Toward the Southern Alps and inland ranges</p>
         </div>
         <div class="stat-box">
-          <p class="text-[11px] uppercase tracking-wide text-slate-400">Totality duration</p>
-          <p class="text-lg font-bold text-amber-300 mt-0.5">Up to 2m 59s</p>
-          <p class="text-xs text-slate-400 mt-0.5">Longest near the centreline; shorter near the edges</p>
+          <p class="stat-label">Totality duration</p>
+          <p class="stat-value">Up to 2m 59s</p>
+          <p class="stat-note">Longest near the centreline; shorter near the edges</p>
         </div>
       </div>
 
       <div class="diagram-box">
         <svg viewBox="0 0 600 190" class="w-full" aria-label="Diagram showing a low 8 degree sun blocked by a nearby ridge vs clear from higher ground">
           <!-- Sky background -->
-          <rect x="0" y="0" width="600" height="190" fill="#0b1220" rx="6" />
+          <rect x="0" y="0" width="600" height="190" fill="#131C25" />
           <!-- Ground / Horizon baseline -->
-          <line x1="20" y1="155" x2="580" y2="155" stroke="#334155" stroke-width="1" stroke-dasharray="4 4" />
-          <text x="575" y="147" fill="#94a3b8" font-size="12" text-anchor="end">True horizontal (0°)</text>
+          <line x1="20" y1="155" x2="580" y2="155" stroke="#AAB7BC" stroke-opacity=".5" stroke-width="1" stroke-dasharray="4 4" />
+          <text x="24" y="147" fill="#AAB7BC" font-size="14" text-anchor="start">True horizontal (0°)</text>
 
           <!-- Eclipsed Sun in NW -->
-          <circle cx="85" cy="48" r="16" fill="none" stroke="#fde68a" stroke-width="3" opacity="0.85" />
-          <circle cx="85" cy="48" r="13" fill="#0f172a" stroke="#fbbf24" stroke-width="1.5" />
-          <text x="85" y="22" fill="#fbbf24" font-size="13" font-weight="600" text-anchor="middle">Eclipsed Sun (~8.5°)</text>
+          <circle cx="85" cy="48" r="16" fill="none" stroke="#F5B83D" stroke-width="3" />
+          <circle cx="85" cy="48" r="13" fill="#0A1016" stroke="#EFF3F1" stroke-width="1.5" />
+          <text x="28" y="22" fill="#F5B83D" font-size="15" font-weight="600" text-anchor="start">Eclipsed Sun (~8.5°)</text>
 
           <!-- Clear sightline from hilltop / open valley -->
-          <line x1="85" y1="48" x2="505" y2="132" stroke="#34d399" stroke-width="2" />
+          <line x1="85" y1="48" x2="505" y2="132" stroke="#EFF3F1" stroke-width="2" />
           <!-- Blocked sightline into valley floor -->
-          <line x1="85" y1="48" x2="230" y2="95" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="4 3" />
-          <line x1="230" y1="95" x2="345" y2="148" stroke="#f87171" stroke-width="2" stroke-dasharray="4 3" />
+          <line x1="85" y1="48" x2="230" y2="95" stroke="#EFF3F1" stroke-opacity=".6" stroke-width="1.5" stroke-dasharray="4 3" />
+          <line x1="230" y1="95" x2="345" y2="148" stroke="#E5475B" stroke-width="2" stroke-dasharray="4 3" />
 
           <!-- Mountain ridge silhouette -->
-          <path d="M 20 155 L 150 155 L 230 95 L 295 148 L 430 152 L 505 132 L 565 155 Z" fill="#1e293b" stroke="#64748b" stroke-width="1.5" />
+          <path d="M 20 155 L 150 155 L 230 95 L 295 148 L 430 152 L 505 132 L 565 155 Z" fill="#0A1016" stroke="#AAB7BC" stroke-width="1.5" />
 
           <!-- Valley observer (blocked) -->
-          <circle cx="345" cy="148" r="5" fill="#f87171" />
-          <text x="335" y="176" fill="#fca5a5" font-size="12.5" font-weight="600" text-anchor="middle">Town in valley (Blocked)</text>
+          <circle cx="345" cy="148" r="5" fill="#E5475B" />
+          <text x="418" y="176" fill="#FF9AA6" font-size="15" font-weight="600" text-anchor="end">Town in valley (Blocked)</text>
 
           <!-- Open observer (clear) -->
-          <circle cx="505" cy="132" r="5" fill="#34d399" />
-          <text x="505" y="176" fill="#6ee7b7" font-size="12.5" font-weight="600" text-anchor="middle">Open sightline (Clear)</text>
+          <circle cx="505" cy="132" r="5" fill="#EFF3F1" />
+          <text x="434" y="176" fill="#EFF3F1" font-size="15" font-weight="600" text-anchor="start">Open sightline (Clear)</text>
         </svg>
       </div>
 
@@ -272,61 +144,52 @@
     </section>
 
     <!-- 2. How the App Tracks the Sun and Moon -->
-    <section class="prose-card">
-      <h2><i data-lucide="compass" class="w-5 h-5 text-amber-400"></i> 2. Predicting the Sun and Moon for your exact spot</h2>
+    <section class="doc-section" id="sun-and-moon">
+      <h2>Predicting the Sun and Moon for your exact spot</h2>
       <p>
         Standard 3D map engines have a built-in sun and moon for drawing shadows, but their lunar orbits are
         simplified to save computer work—during testing, the 3D globe's built-in moon missed totality by several
         minutes and only covered 88% of the sun.
       </p>
       <p>
-        Instead, this app uses a dedicated astronomical library (<b class="text-slate-200">astronomy-engine</b>)
+        Instead, this app uses a dedicated astronomical library (<b>astronomy-engine</b>)
         based on high-precision solar and lunar orbital models developed at the Paris Observatory (VSOP87 and ELP/MPP02).
         Whenever you pick a location on the map, the app calculates the eclipse specifically for <b>that exact coordinate
         and elevation</b>:
       </p>
       <div class="step-list">
         <div class="step-item">
-          <span class="step-num">1</span>
-          <div>
-            <p class="text-xs font-semibold text-slate-200 mb-0.5">Your position on a curved, spinning Earth</p>
-            <p class="text-xs text-slate-400">
+          <h3>Your position on a curved, spinning Earth</h3>
+          <p>
               Because the Moon is relatively close to Earth (~373,000 km on eclipse day), viewing it from different towns
               in Otago changes the angle slightly (<i>parallax</i>). Queenstown reaches totality about <b>42 seconds earlier</b>
               than Dunedin, and a spot near the centreline gets nearly 3 minutes of totality compared to under a minute near the edge.
             </p>
-          </div>
         </div>
         <div class="step-item">
-          <span class="step-num">2</span>
-          <div>
-            <p class="text-xs font-semibold text-slate-200 mb-0.5">The size of the Sun and Moon in the sky</p>
-            <p class="text-xs text-slate-400">
+          <h3>The size of the Sun and Moon in the sky</h3>
+          <p>
               On 22 July 2028, the Moon appears about <b>4.5% wider</b> than the Sun (32.9 arcminutes vs 31.5 arcminutes—just
               over half a degree across). The app calculates their exact overlap on every tick of the clock to show how much
               of the sun's surface is covered (<i>obscuration</i>).
             </p>
-          </div>
         </div>
         <div class="step-item">
-          <span class="step-num">3</span>
-          <div>
-            <p class="text-xs font-semibold text-slate-200 mb-0.5">Why the eclipse ends below the horizon</p>
-            <p class="text-xs text-slate-400">
+          <h3>Why the eclipse ends below the horizon</h3>
+          <p>
               After totality finishes around 4:18 PM, the Moon takes another hour to slide completely off the Sun. By the
               time the eclipse finishes around 5:19 PM, the sun has already set on the east coast (Dunedin and Oamaru) and
-              is less than 1.7&deg; high everywhere else. The app only judges a spot on moments when the sun is actually above the horizon.
+              is less than 1.7&deg; high everywhere else. The app judges each place on totality, so a sun that has set by the end of the eclipse does not count against it.
             </p>
-          </div>
         </div>
       </div>
     </section>
 
     <!-- 3. How the Sightline Check Works -->
-    <section class="prose-card">
-      <h2><i data-lucide="scan-eye" class="w-5 h-5 text-amber-400"></i> 3. Tracing your sightline across 45 km of terrain</h2>
+    <section class="doc-section" id="sightline">
+      <h2>Tracing your sightline across 45 km of terrain</h2>
       <p>
-        When you click <b>Can I see it?</b> (or select a spot from the catalogue), the app stands <b>1.7 metres</b>
+        When you choose a place, the app stands <b>1.7 metres</b>
         (average eye height) above the ground at your chosen spot and marches a fan of virtual sightlines outward
         toward the sun's direction, sampling elevation data from <b>100 metres out to 45 kilometres</b> away.
       </p>
@@ -335,7 +198,7 @@
         The sightline check accounts for four real-world effects:
       </p>
 
-      <div class="overflow-x-auto -mx-2 px-2">
+      <div class="table-scroll">
         <table class="data-table">
           <thead>
             <tr>
@@ -346,24 +209,24 @@
           </thead>
           <tbody>
             <tr>
-              <td class="font-semibold text-slate-200">Earth's curvature</td>
+              <td class="row-head">Earth's curvature</td>
               <td>The Earth curves away beneath distant mountains, making a peak 30 km away sit about 70 metres lower than on a flat plane.</td>
               <td>Applies Earth curvature drop along great-circle bearings out to 45 km.</td>
             </tr>
             <tr>
-              <td class="font-semibold text-slate-200">Atmospheric refraction</td>
+              <td class="row-head">Atmospheric refraction</td>
               <td>Air is denser near the ground and bends light downward. This lifts the apparent position of an 8&deg; sun by ~0.11&deg; (about a fifth of the sun's width) and also slightly lifts distant mountain ridges.</td>
               <td>Applies standard astronomical refraction to the sun and terrestrial refraction (<var>k</var> = 0.13) to distant terrain.</td>
             </tr>
             <tr>
-              <td class="font-semibold text-slate-200">Width of the Sun's disc</td>
+              <td class="row-head">Width of the Sun's disc</td>
               <td>The sun isn't a single point of light—its disc spans ~0.52&deg; (radius ~0.26&deg;). If the sun's centre barely clears a ridge by 0.1&deg;, its bottom edge is still behind the hill.</td>
               <td>Flags clearances under 0.26&deg; as <i>grazing</i> so you know to move slightly higher for the full disc.</td>
             </tr>
             <tr>
-              <td class="font-semibold text-slate-200">Sun movement during the eclipse</td>
+              <td class="row-head">Sun movement during the eclipse</td>
               <td>Between the start of the eclipse (3:09 PM) and sunset, the sun moves ~26&deg; sideways across the sky while sinking lower.</td>
-              <td>Tests the start, peak, and end of the eclipse—and checks whether a spot stays clear for the <i>entire</i> duration of totality.</td>
+              <td>Judges each place on whether it stays clear for the <i>entire</i> duration of totality, and reports the start and end of the eclipse alongside.</td>
             </tr>
           </tbody>
         </table>
@@ -371,10 +234,10 @@
     </section>
 
     <!-- 4. Why Darkness Arrives Suddenly & Eye Safety -->
-    <section class="prose-card">
-      <h2><i data-lucide="eye" class="w-5 h-5 text-amber-400"></i> 4. Why darkness arrives all at once (and eye safety)</h2>
+    <section class="doc-section" id="darkness">
+      <h2>Why darkness arrives all at once (and eye safety)</h2>
       <p>
-        If you use the <b>Watch it happen</b> button or drag the timeline slider, you will notice that the 3D
+        If you use the <b>Watch from here</b> button or drag the sun along the skyline, you will notice that the 3D
         landscape stays relatively bright until more than 85% of the sun is covered, and then plunges into
         twilight in the final minute before totality.
       </p>
@@ -384,8 +247,8 @@
         but still like daytime. Only when the last few percent of the sun's surface disappears does the light
         collapse.
       </p>
-      <div class="rounded-lg bg-amber-900/25 border border-amber-600/30 p-3 mt-3">
-        <p class="text-xs text-amber-200/90">
+      <div class="doc-safety">
+        <p>
           <b>Eye safety rule:</b> Even when 99.9% of the sun is covered, the remaining tiny sliver of the sun's surface
           is still tens of thousands of times brighter than the corona and can permanently damage your eyes.
           <b>Certified eclipse glasses (ISO 12312-2) must be worn for the entire partial eclipse</b>, and may only come
@@ -395,8 +258,8 @@
     </section>
 
     <!-- 5. Cloud Cover & Weather: Playing the Odds -->
-    <section class="prose-card">
-      <h2><i data-lucide="cloud-sun" class="w-5 h-5 text-amber-400"></i> 5. Cloud cover &amp; weather: playing the odds</h2>
+    <section class="doc-section" id="weather">
+      <h2>Cloud cover &amp; weather: playing the odds</h2>
       <p>
         A mountain in the way is fixed and predictable: if your spot has a clear view today, it will still have a clear view in 2028.
         Weather, however, is the wild card. Because the sun sits just <b>8&deg;&ndash;10&deg; above the horizon</b>, your line of sight
@@ -406,42 +269,41 @@
 
       <div class="stat-grid">
         <div class="stat-box">
-          <p class="text-[11px] uppercase tracking-wide text-slate-400">Clearest corridor</p>
-          <p class="text-lg font-bold text-sky-300 mt-0.5">Central Otago</p>
-          <p class="text-xs text-slate-400 mt-0.5">~48&ndash;51% daytime cloud (Cromwell, Wānaka, Alexandra, Palmerston)</p>
+          <p class="stat-label">Clearest corridor</p>
+          <p class="stat-value">Central Otago</p>
+          <p class="stat-note">~48&ndash;51% daytime cloud (Cromwell, Wānaka, Alexandra, Palmerston)</p>
         </div>
         <div class="stat-box">
-          <p class="text-[11px] uppercase tracking-wide text-slate-400">Higher cloud risk</p>
-          <p class="text-lg font-bold text-amber-300 mt-0.5">Coastal Otago &amp; Southland</p>
-          <p class="text-xs text-slate-400 mt-0.5">~65&ndash;70% daytime cloud (Dunedin, Catlins, Invercargill)</p>
+          <p class="stat-label">Higher cloud risk</p>
+          <p class="stat-value">Coastal Otago &amp; Southland</p>
+          <p class="stat-note">~65&ndash;70% daytime cloud (Dunedin, Catlins, Invercargill)</p>
         </div>
         <div class="stat-box">
-          <p class="text-[11px] uppercase tracking-wide text-slate-400">Data source</p>
-          <p class="text-lg font-bold text-slate-200 mt-0.5">48 years of satellite data</p>
-          <p class="text-xs text-slate-400 mt-0.5">EUMETSAT CM SAF CLARA-A3 (1979&ndash;2026 July daytime observations)</p>
+          <p class="stat-label">Data source</p>
+          <p class="stat-value">48 years of satellite data</p>
+          <p class="stat-note">EUMETSAT CM SAF CLARA-A3 (1979&ndash;2026 July daytime observations)</p>
         </div>
       </div>
 
       <p>
         To help you plan, this tool includes historical cloud cover estimates derived from <b>48 years of afternoon satellite observations</b> (1979&ndash;2026),
-        following the eclipse meteorology methods pioneered by retired Canadian meteorologist <b>Jay Anderson</b> (<a href="https://eclipsophile.com/tse2028/" target="_blank" rel="noopener" class="text-amber-300 hover:underline">Eclipsophile</a>).
+        following the eclipse meteorology methods pioneered by retired Canadian meteorologist <b>Jay Anderson</b> (<a href="https://eclipsophile.com/tse2028/" target="_blank" rel="noopener">Eclipsophile</a>).
         These show clear regional patterns:
       </p>
-      <ul class="space-y-1.5 text-xs text-slate-300 mt-2 mb-3">
-        <li>&bull; <b class="text-slate-100">The Southern Alps rain shadow:</b> As prevailing westerly winds hit the Southern Alps, mountains squeeze out their moisture. By the time air spills east into the Central Otago basins (Cromwell, Alexandra, Wānaka) and down to Palmerston, it dries and warms. These spots enjoy the lowest average July cloud cover (~48&ndash;51%) anywhere in the path of totality.</li>
-        <li>&bull; <b class="text-slate-100">Coastal marine cloud:</b> Dunedin and the Southland coast are exposed to moist ocean air, onshore southerly changes, and marine stratocumulus, resulting in higher average cloud cover (~65&ndash;70%).</li>
-        <li>&bull; <b class="text-slate-100">Winter valley inversions &amp; fog:</b> On calm, cold July afternoons, cold air settles in low river basins like the Clutha and Manuherikia, occasionally forming localized ground fog or low stratus. Choosing viewing spots slightly elevated above the valley floor can reduce this risk.</li>
+      <ul>
+        <li><b>The Southern Alps rain shadow:</b> As prevailing westerly winds hit the Southern Alps, mountains squeeze out their moisture. By the time air spills east into the Central Otago basins (Cromwell, Alexandra, Wānaka) and down to Palmerston, it dries and warms. These spots enjoy the lowest average July cloud cover (~48&ndash;51%) anywhere in the path of totality.</li>
+        <li><b>Coastal marine cloud:</b> Dunedin and the Southland coast are exposed to moist ocean air, onshore southerly changes, and marine stratocumulus, resulting in higher average cloud cover (~65&ndash;70%).</li>
+        <li><b>Winter valley inversions &amp; fog:</b> On calm, cold July afternoons, cold air settles in low river basins like the Clutha and Manuherikia, occasionally forming localized ground fog or low stratus. Choosing viewing spots slightly elevated above the valley floor can reduce this risk.</li>
       </ul>
 
-      <div class="rounded-xl bg-amber-950/30 border border-amber-500/30 border-l-4 border-l-amber-400 p-3.5 sm:p-4 mt-3 flex items-start gap-3" style="background: rgba(120, 53, 15, 0.28); border: 1px solid rgba(245, 158, 11, 0.35); border-left: 4px solid #fbbf24;">
-        <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-400 shrink-0 mt-0.5"></i>
-        <div class="text-xs text-amber-200/90 leading-relaxed space-y-1.5">
-          <p class="font-bold text-amber-100 text-[13px] tracking-tight">Important: These numbers are historical estimates, not a weather forecast</p>
+      <div class="doc-note">
+        <div>
+          <p><b>Important: These numbers are historical estimates, not a weather forecast</b></p>
           <p>
             A &ldquo;52% clear-sky probability&rdquo; means that on July afternoons over the past five decades, about half were clear and half were cloudy.
             On <b>22 July 2028</b>, it will either be completely clear or completely overcast at your spot. A passing winter front can easily cloud out Central Otago while leaving Dunedin clear, or vice versa.
           </p>
-          <p class="text-amber-300 font-medium">
+          <p>
             Use these historical statistics as a guide for booking accommodations and planning flexible travel corridors, but <b>rely on live weather forecasts (such as MetService) in the final 48&ndash;72 hours</b> before eclipse day.
           </p>
         </div>
@@ -449,44 +311,30 @@
     </section>
 
     <!-- 6. Limitations: What to Check in Person -->
-    <section class="prose-card">
-      <h2><i data-lucide="alert-triangle" class="w-5 h-5 text-amber-400"></i> 6. What the elevation model cannot see</h2>
+    <section class="doc-section" id="limits">
+      <h2>What the elevation model cannot see</h2>
       <p>
         The satellite elevation model used by the app measures terrain height on a ~30-metre grid (sharpened to ~7 metres
-        around the four preset towns). That is ideal for mountains, hills, and valley walls several kilometres away,
+        around the five preset towns). That is ideal for mountains, hills, and valley walls several kilometres away,
         but it has important blind spots right next to where you stand:
       </p>
-      <ul class="space-y-1 text-xs text-slate-300 mt-2">
-        <li>&bull; <b>Trees, shelterbelts, and buildings:</b> Because the sun is only 8&deg;&ndash;10&deg; high, a 15-metre row of pine trees 90 metres away is tall enough to block it. The app ignores the first 100 metres around you so elevation noise doesn't create false alarms.</li>
-        <li>&bull; <b>Road cuttings and embankments:</b> A roadside pull-off cut into a bank on its north-west side can block a view that looks clear from the middle of the valley.</li>
-        <li>&bull; <b>Private land and winter access:</b> The catalogue finds spots within 100 metres of mapped roads and tracks, but proximity on OpenStreetMap is not legal permission, and high-country 4WD tracks in July may be snowed in or closed.</li>
+      <ul>
+        <li><b>Trees, shelterbelts, and buildings:</b> Because the sun is only 8&deg;&ndash;10&deg; high, a 15-metre row of pine trees 90 metres away is tall enough to block it. The app ignores the first 100 metres around you so elevation noise doesn't create false alarms.</li>
+        <li><b>Road cuttings and embankments:</b> A roadside pull-off cut into a bank on its north-west side can block a view that looks clear from the middle of the valley.</li>
+        <li><b>Private land and winter access:</b> The catalogue finds spots within 100 metres of mapped roads and tracks, but proximity on OpenStreetMap is not legal permission, and high-country 4WD tracks in July may be snowed in or closed.</li>
       </ul>
     </section>
 
-    <!-- Footer CTA to Technical Spec -->
-    <div class="panel rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4">
-      <div>
-        <p class="text-sm font-bold text-slate-100">Want the equations, coordinate frames, and validation numbers?</p>
-        <p class="text-xs text-slate-400 mt-0.5">
-          Read the full technical specification prepared for astronomical and geodetic review.
-        </p>
+      <div class="doc-end">
+        <p><b>Want the equations, coordinate frames, and validation numbers?</b></p>
+        <p>Read the full technical specification prepared for astronomical and geodetic review.</p>
+        <p class="doc-end-links"><a href="methods.html">Technical specification</a> <a href="index.html">Back to 3D simulator</a></p>
       </div>
-      <div class="flex flex-wrap items-center gap-2">
-        <a href="methods.html"
-          class="inline-flex items-center gap-1.5 text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-900 rounded-lg px-4 py-2 transition">
-          <i data-lucide="book-open" class="w-4 h-4"></i> Technical specification &rarr;
-        </a>
-        <a href="index.html"
-          class="inline-flex items-center gap-1.5 text-xs font-medium bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-2 transition">
-          <i data-lucide="box" class="w-4 h-4 text-amber-400"></i> Back to 3D simulator
-        </a>
-      </div>
-    </div>
 
-  </main>
+    </main>
+  </div>
 
   <script>
-    lucide.createIcons();
     try {
       if ((location.hostname !== "localhost" && location.hostname !== "127.0.0.1") || window.__TEST_METRICS) {
         let sid = sessionStorage.getItem("eclipseMetricSid");

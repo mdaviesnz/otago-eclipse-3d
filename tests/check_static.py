@@ -31,8 +31,16 @@ sys.path.insert(0, str(ROOT / "precompute"))
 import verdict  # noqa: E402  (precompute/verdict.py: standard library only)
 
 SITE_FILES = ["index.html", "map.html", "astronomy.html", "methods.html", "app.css",
-              "viewpoints.json", "verdict.js", "social-card.svg", "icon.svg",
-              "manifest.webmanifest", "sw.js", "_headers"]
+              "viewpoints.json", "verdict.js", "catalogue.js", "places.js", "contours.js", "skyline.js",
+              "eclipse-time.js", "eclipse-path.js",
+              "simulator.js", "map.js",
+              "social-card.svg", "icon.svg", "manifest.webmanifest", "sw.js", "_headers",
+              "font-piazzolla-latin.woff2", "font-piazzolla-latin-ext.woff2",
+              "font-overpass-latin.woff2", "font-overpass-latin-ext.woff2",
+              "font-licenses.txt"]
+
+# The two app pages keep their code in a companion script.
+PAGE_SCRIPTS = {"index.html": "simulator.js", "map.html": "map.js"}
 
 failures: list[str] = []
 notes: list[str] = []
@@ -62,7 +70,7 @@ def check_no_secrets() -> None:
     hits = 0
     for name in [*SITE_FILES, "src/worker.js"]:
         p = ROOT / name
-        if not p.exists():
+        if not p.exists() or name.endswith(".woff2"):
             continue
         text = p.read_text(encoding="utf-8", errors="replace")
         for m in jwt.findall(text):
@@ -97,7 +105,9 @@ def check_analytics_beacon() -> None:
         else:
             fail(f"{name}: analytics beacon present but carries no valid 32-hex site token")
             bad = True
-        if "/api/metric" not in text:
+        companion = ROOT / PAGE_SCRIPTS[name] if name in PAGE_SCRIPTS else None
+        code = companion.read_text(encoding="utf-8", errors="replace") if companion else text
+        if "/api/metric" not in code:
             fail(f"{name}: Worker usage metric endpoint (/api/metric) is missing")
             bad = True
     if len(tokens) > 1:
@@ -183,6 +193,14 @@ def check_local_references() -> None:
                 continue
             if rel not in site_set:
                 fail(f"{name}: references '{rel}', which exists on disk but is missing from SITE_FILES")
+    # Fonts are referenced from the built stylesheet, which the HTML scan above cannot see.
+    for ref in re.findall(r"url\(([^)\"']+)\)", (ROOT / "app.css").read_text(encoding="utf-8")):
+        if ref.startswith(("http", "data:", "#")):
+            continue
+        if not (ROOT / ref).exists():
+            fail(f"app.css: references missing local file '{ref}'")
+        elif ref not in site_set:
+            fail(f"app.css: references '{ref}', which is missing from SITE_FILES")
     ok("local asset references resolve and are included in SITE_FILES")
 
 
@@ -201,6 +219,22 @@ def check_catalogue() -> None:
         fail(f"viewpoints.json has {len(gaps)} unfetched OSM bbox(es) — coverage is incomplete: {gaps}")
     else:
         ok("catalogue has no OSM coverage gaps")
+
+    missing_tiles = d.get("missingTiles")
+    if missing_tiles:
+        fail(f"viewpoints.json was built with {len(missing_tiles)} terrain tile(s) missing, which "
+             f"read as sea level and lower the horizons that cross them: {missing_tiles[:10]}")
+    else:
+        ok("catalogue was built with no terrain tiles missing")
+
+    grid = d.get("cloudGrid") or {}
+    if grid:
+        first, last = grid["years"]
+        if grid.get("count") == last - first + 1:
+            ok(f"cloud climatology has one July per year, {first}-{last}")
+        else:
+            fail(f"viewpoints.json: cloudGrid has {grid.get('count')} months for {first}-{last} — "
+                 "a non-July file was probably averaged in")
 
     required = {"lat", "lon", "elev", "sunAlt", "clearance", "clearBegin", "clearEnd",
                 "totality", "access", "level"}
@@ -312,10 +346,10 @@ def check_presets(d: dict, region: dict) -> None:
                  f"({min(pr['angles'])}..{max(pr['angles'])} deg)")
 
     # The app's own list, parsed straight out of the markup it ships with.
-    html = (ROOT / "index.html").read_text(encoding="utf-8")
-    block = re.search(r"const LOCATIONS = \[(.*?)\];", html, re.S)
+    source = (ROOT / "simulator.js").read_text(encoding="utf-8")
+    block = re.search(r"const LOCATIONS = \[(.*?)\];", source, re.S)
     if not block:
-        fail("index.html: could not find the LOCATIONS array to cross-check presets against")
+        fail("simulator.js: could not find the LOCATIONS array to cross-check presets against")
         return
     app = {
         m.group("name"): (float(m.group("lat")), float(m.group("lon")))
@@ -324,22 +358,22 @@ def check_presets(d: dict, region: dict) -> None:
             r'\s*lat:\s*(?P<lat>-?[\d.]+)', block.group(1))
     }
     if not app:
-        fail("index.html: LOCATIONS found but no entries parsed — the format has changed")
+        fail("simulator.js: LOCATIONS found but no entries parsed — the format has changed")
         return
 
     built = {p["name"]: (p["lat"], p["lon"]) for p in presets}
     if set(app) != set(built):
-        fail(f"preset names differ — index.html has {sorted(app)}, "
+        fail(f"preset names differ — simulator.js has {sorted(app)}, "
              f"viewpoints.json has {sorted(built)}")
         return
     # 1e-5 is the rounding the catalogue writes at; anything larger is real drift.
     drifted = [n for n in app
                if abs(app[n][0] - built[n][0]) > 1e-5 or abs(app[n][1] - built[n][1]) > 1e-5]
     if drifted:
-        fail(f"preset coordinates differ between index.html and viewpoints.json: {drifted} — "
+        fail(f"preset coordinates differ between simulator.js and viewpoints.json: {drifted} — "
              f"the app will fall back to a live terrain probe for these")
     else:
-        ok(f"presets: {len(presets)} entries, fields OK, coordinates match index.html")
+        ok(f"presets: {len(presets)} entries, fields OK, coordinates match simulator.js")
 
 
 def check_verdict_cases() -> None:
@@ -359,6 +393,72 @@ def check_verdict_cases() -> None:
         fail(f"precompute/verdict.py disagrees with the shared verdict cases — {w}")
     if not wrong:
         ok(f"precompute/verdict.py passes all {len(run)} shared totality-scope verdict cases")
+
+
+def check_astronomy_version() -> None:
+    """The stored catalogue and the live calculation come from two builds of astronomy-engine,
+    one for Python and one for the browser. They must be the same release, named exactly, or
+    a new release could move one side's figures without the other."""
+    req = ROOT / "precompute" / "requirements.txt"
+    m = re.search(r"^astronomy-engine==([0-9.]+)\s*$", req.read_text(encoding="utf-8"), re.M) if req.exists() else None
+    if not m:
+        fail("precompute/requirements.txt: astronomy-engine must be pinned with ==")
+        return
+    want = m.group(1)
+    wrong = []
+    text_files = [n for n in SITE_FILES if n.endswith((".html", ".js"))] + ["tests/smoke.spec.mjs"]
+    for name in text_files:
+        found = re.findall(r"astronomy-engine@([^/\"']+)/", (ROOT / name).read_text(encoding="utf-8"))
+        if not found and name in ("index.html", "map.html", "sw.js"):
+            wrong.append(f"{name} does not load astronomy-engine")
+        wrong += [f"{name} loads {v}" for v in found if v != want]
+    if wrong:
+        fail(f"astronomy-engine: the precompute uses {want}, but {'; '.join(wrong)}")
+    else:
+        ok(f"browser and precompute use the same astronomy-engine ({want})")
+
+
+def check_dead_constants() -> None:
+    """Contacts are computed per place. Hardcoded Dunedin contact times were left behind once,
+    unused and holding values from an older ΔT."""
+    text = (ROOT / "simulator.js").read_text(encoding="utf-8")
+    left = [n for n in ("TOTALITY_BEG_UTC", "TOTALITY_END_UTC", "PARTIAL_BEG_UTC", "PARTIAL_END_UTC",
+                        "totalBegJ", "totalEndJ", "partBegJ", "partEndJ") if re.search(rf"\b{n}\b", text)]
+    if left:
+        fail(f"simulator.js still has hardcoded Dunedin contact times: {left}")
+    else:
+        ok("simulator.js has no hardcoded contact times")
+
+
+def check_delta_t() -> None:
+    """The browser and the precompute each fix ΔT (TT - UT) for the eclipse. A second of
+    disagreement moves every contact by a second, so the stored catalogue and the live
+    calculation would quietly drift apart."""
+    found = {}
+    for name, pattern in (("eclipse-time.js", r"^export const DELTA_T_SECONDS\s*=\s*([0-9.]+)\s*;"),
+                          ("precompute/eclipse.py", r"^DELTA_T_SECONDS\s*=\s*([0-9.]+)")):
+        p = ROOT / name
+        m = re.search(pattern, p.read_text(encoding="utf-8"), re.M) if p.exists() else None
+        if not m:
+            fail(f"{name}: could not find DELTA_T_SECONDS")
+            return
+        found[name] = float(m.group(1))
+    js, py = found["eclipse-time.js"], found["precompute/eclipse.py"]
+    if js != py:
+        fail(f"ΔT differs: eclipse-time.js uses {js} s, precompute/eclipse.py uses {py} s")
+    else:
+        ok(f"browser and precompute use the same ΔT ({js} s)")
+
+    # The path limits on the map are generated, and are only right for the ΔT they were made with.
+    p = ROOT / "eclipse-path.js"
+    m = re.search(r'"deltaT":([0-9.]+)', p.read_text(encoding="utf-8")) if p.exists() else None
+    if not m:
+        fail("eclipse-path.js: could not find the ΔT it was generated with")
+    elif float(m.group(1)) != py:
+        fail(f"eclipse-path.js was generated with ΔT {m.group(1)} s, but the precompute now uses "
+             f"{py} s. Run precompute/build_path.py.")
+    else:
+        ok("the map's path limits were generated with the current ΔT")
 
 
 def check_pwa_and_headers() -> None:
@@ -440,6 +540,9 @@ def main() -> int:
     check_cache_not_tracked()
     check_local_references()
     check_verdict_cases()
+    check_delta_t()
+    check_astronomy_version()
+    check_dead_constants()
     check_catalogue()
     check_pwa_and_headers()
 

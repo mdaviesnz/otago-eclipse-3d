@@ -43,6 +43,7 @@ from PIL import Image
 
 import astronomy as A
 
+import eclipse  # fixes ΔT for every astronomy call below
 from verdict import verdict_fields
 
 # ----------------------------------------------------------------------------------------
@@ -221,7 +222,7 @@ def fetch_tile(z: int, x: int, y: int, session: requests.Session, retries: int =
             try:
                 r = session.get(url, timeout=30)
                 if r.status_code == 404:
-                    return None            # outside coverage; treat as sea level
+                    return None            # the service covers open sea too, so this is a gap
                 r.raise_for_status()
                 data = r.content
                 path.write_bytes(data)
@@ -233,6 +234,7 @@ def fetch_tile(z: int, x: int, y: int, session: requests.Session, retries: int =
     try:
         im = Image.open(io.BytesIO(data)).convert("RGB")
     except Exception:
+        path.unlink(missing_ok=True)       # a corrupt download; fetch it again next run
         return None
     a = np.asarray(im, dtype=np.float32)
     # Terrarium: elevation = (R * 256 + G + B / 256) - 32768
@@ -240,7 +242,68 @@ def fetch_tile(z: int, x: int, y: int, session: requests.Session, retries: int =
     return np.rint(elev).astype(np.int16)
 
 
-def build_dem(z: int, workers: int = 6) -> Dem:
+class MissingTiles(Exception):
+    """Terrain tiles could not be fetched, so the mosaic would have holes in it."""
+
+    def __init__(self, tiles: list):
+        self.tiles = sorted(tiles)
+        names = ", ".join(f"{z}/{x}/{y}" for z, x, y in self.tiles[:20])
+        more = f" and {len(self.tiles) - 20} more" if len(self.tiles) > 20 else ""
+        super().__init__(
+            f"{len(self.tiles)} terrain tile(s) could not be fetched: {names}{more}. A missing "
+            "tile reads as sea level and lowers every horizon that crosses it, so no catalogue "
+            "was written. Run again to retry, or pass --allow-missing-tiles to build anyway.")
+
+
+# Tiles left out of a mosaic because --allow-missing-tiles was given, as "z/x/y". Written to the
+# catalogue as missingTiles, which tests/check_static.py refuses to deploy.
+MISSING_TILES: list = []
+
+
+def build_mosaic(z: int, x0: int, x1: int, y0: int, y1: int, allow_missing: bool = False,
+                 progress: bool = False) -> Dem:
+    """Stitch a rectangle of tiles into one Dem. Raises MissingTiles if any tile is absent."""
+    nx, ny = x1 - x0 + 1, y1 - y0 + 1
+    total = nx * ny
+
+    # Tile pixel size is a property of the service (Re:Earth serves 512 px), so probe rather
+    # than assume the usual 256.
+    probe = fetch_tile(z, x0, y0, SESSION)
+    tile_px = probe.shape[0] if probe is not None else 512
+    if progress:
+        mpp = (156543.03392 * 256.0 / tile_px) * math.cos(math.radians(-45)) / (1 << z)
+        print(f"  DEM: zoom {z}, {nx}x{ny} = {total} tiles of {tile_px}px "
+              f"({nx * tile_px} x {ny * tile_px} px, ~{mpp:.0f} m/px)")
+
+    grid = np.zeros((ny * tile_px, nx * tile_px), dtype=np.int16)
+    missing = []
+    done = 0
+
+    def job(args):
+        ix, iy = args
+        return ix, iy, fetch_tile(z, x0 + ix, y0 + iy, SESSION)
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        for ix, iy, tile in pool.map(job, [(i, j) for j in range(ny) for i in range(nx)]):
+            if tile is not None and tile.shape == (tile_px, tile_px):
+                grid[iy * tile_px:(iy + 1) * tile_px, ix * tile_px:(ix + 1) * tile_px] = tile
+            else:
+                missing.append((z, x0 + ix, y0 + iy))
+            done += 1
+            if progress and (done % 25 == 0 or done == total):
+                print(f"\r  tiles {done}/{total}", end="", flush=True)
+    if progress:
+        print()
+    if missing:
+        if not allow_missing:
+            raise MissingTiles(missing)
+        print(f"  WARNING: {len(missing)} of {total} z{z} tiles are missing and read as sea level")
+        MISSING_TILES.extend(f"{tz}/{tx}/{ty}" for tz, tx, ty in sorted(missing))
+    return Dem(grid, z, x0 * float(tile_px), y0 * float(tile_px), tile_px)
+
+
+def build_dem(z: int, allow_missing: bool = False) -> Dem:
+    """The region-wide mosaic the catalogue is scanned on."""
     # Pad the mosaic so probe rays never run off its edge. The sun sits to the north-west, so
     # rays from candidates on the NW boundary reach up to MAX_PROBE beyond the region; without
     # padding those samples come back NaN and are treated as "no terrain", which would report a
@@ -251,33 +314,7 @@ def build_dem(z: int, workers: int = 6) -> Dem:
     x1 = int(math.floor(lon_to_tile_x(REGION["lon_max"] + pad_lon, z)))
     y0 = int(math.floor(lat_to_tile_y(REGION["lat_max"] + pad_lat, z)))   # north -> smaller y
     y1 = int(math.floor(lat_to_tile_y(REGION["lat_min"] - pad_lat, z)))
-    nx, ny = x1 - x0 + 1, y1 - y0 + 1
-    total = nx * ny
-
-    # Tile pixel size is a property of the service (Re:Earth serves 512 px), so probe rather
-    # than assume the usual 256.
-    probe = fetch_tile(z, x0, y0, SESSION)
-    tile_px = probe.shape[0] if probe is not None else 512
-    mpp = (156543.03392 * 256.0 / tile_px) * math.cos(math.radians(-45)) / (1 << z)
-    print(f"  DEM: zoom {z}, {nx}x{ny} = {total} tiles of {tile_px}px "
-          f"({nx * tile_px} x {ny * tile_px} px, ~{mpp:.0f} m/px)")
-
-    grid = np.zeros((ny * tile_px, nx * tile_px), dtype=np.int16)
-    done = 0
-
-    def job(args):
-        ix, iy = args
-        return ix, iy, fetch_tile(z, x0 + ix, y0 + iy, SESSION)
-
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        for ix, iy, tile in pool.map(job, [(i, j) for j in range(ny) for i in range(nx)]):
-            if tile is not None and tile.shape == (tile_px, tile_px):
-                grid[iy * tile_px:(iy + 1) * tile_px, ix * tile_px:(ix + 1) * tile_px] = tile
-            done += 1
-            if done % 25 == 0 or done == total:
-                print(f"\r  tiles {done}/{total}", end="", flush=True)
-    print()
-    return Dem(grid, z, x0 * float(tile_px), y0 * float(tile_px), tile_px)
+    return build_mosaic(z, x0, x1, y0, y1, allow_missing, progress=True)
 
 
 # ----------------------------------------------------------------------------------------
@@ -289,7 +326,9 @@ class EclipseField:
 
     Circumstances vary smoothly over tens of kilometres, so a ~0.1 deg grid interpolated
     bilinearly is far cheaper than one ephemeris search per candidate -- and indistinguishable
-    at the precision that matters here.
+    at the precision that matters here. The exception is totality duration near the edge of
+    the path, so the duration here only ranks candidates; with_direct_totality works out the
+    figure that is stored.
     """
 
     def __init__(self, step: float = 0.1):
@@ -375,6 +414,28 @@ class EclipseField:
         return dict(alt=alt, az=az, altB=altB, azB=azB, altE=altE, azE=azE, dur=dur, tot=tot)
 
 
+def with_direct_totality(rows: list) -> list:
+    """The rows that will be written, each with totality worked out for its own position.
+
+    EclipseField is fine for the sun's altitude and bearing, which change slowly, and for
+    deciding which candidates are inside the path. Totality length is different: it falls to
+    zero at the edge of the path along a curve, so interpolating it across a 0.1 degree cell
+    ran up to 20 s short there. One ephemeris search per written row costs a few seconds in
+    all, at the observer's eye, as the browser does for the same place.
+
+    A row with no totality of its own is dropped: it would say "inside the path" about a place
+    that is not.
+    """
+    kept = []
+    for r in rows:
+        seconds = int(round(eclipse.totality_seconds(r["lat"], r["lon"], r["elev"] + EYE_HEIGHT)))
+        if seconds > 0:
+            kept.append({**r, "totality": seconds})
+    if len(kept) < len(rows):
+        print(f"  dropped {len(rows) - len(kept)} row(s) with no totality at their own position")
+    return kept
+
+
 # ----------------------------------------------------------------------------------------
 # Horizon scan (vectorised over all candidates at once)
 # ----------------------------------------------------------------------------------------
@@ -445,29 +506,14 @@ PRESET_NEAR_ZOOM = 13
 PRESET_NEAR_M = 9000.0
 
 
-def build_dem_bbox(z: int, lat_min: float, lat_max: float, lon_min: float, lon_max: float):
-    """A small DEM mosaic over one bounding box. Returns (Dem, tiles fetched, tiles missing)."""
+def build_dem_bbox(z: int, lat_min: float, lat_max: float, lon_min: float, lon_max: float,
+                   allow_missing: bool = False) -> Dem:
+    """A small DEM mosaic over one bounding box."""
     x0 = int(math.floor(lon_to_tile_x(lon_min, z)))
     x1 = int(math.floor(lon_to_tile_x(lon_max, z)))
     y0 = int(math.floor(lat_to_tile_y(lat_max, z)))
     y1 = int(math.floor(lat_to_tile_y(lat_min, z)))
-    nx, ny = x1 - x0 + 1, y1 - y0 + 1
-    probe = fetch_tile(z, x0, y0, SESSION)
-    tile_px = probe.shape[0] if probe is not None else 512
-    grid = np.zeros((ny * tile_px, nx * tile_px), dtype=np.int16)
-    missing = 0
-
-    def job(args):
-        ix, iy = args
-        return ix, iy, fetch_tile(z, x0 + ix, y0 + iy, SESSION)
-
-    with ThreadPoolExecutor(max_workers=6) as pool:
-        for ix, iy, tile in pool.map(job, [(i, j) for j in range(ny) for i in range(nx)]):
-            if tile is not None and tile.shape == (tile_px, tile_px):
-                grid[iy * tile_px:(iy + 1) * tile_px, ix * tile_px:(ix + 1) * tile_px] = tile
-            else:
-                missing += 1
-    return Dem(grid, z, x0 * float(tile_px), y0 * float(tile_px), tile_px), nx * ny, missing
+    return build_mosaic(z, x0, x1, y0, y1, allow_missing)
 
 
 def ray_horizon(near: "Dem", far: "Dem", lat: float, lon: float, eye: float, az_deg: float):
@@ -498,7 +544,7 @@ def ray_horizon(near: "Dem", far: "Dem", lat: float, lon: float, eye: float, az_
     return float(ang[k]), float(ds[k]), float(np.nan_to_num(h[k], nan=0.0))
 
 
-def preset_rows(dem: "Dem") -> list:
+def preset_rows(dem: "Dem", allow_missing: bool = False) -> list:
     """Full precomputed sightline data for the app's fixed presets.
 
     The catalogue stores a verdict for totality only, because storing a whole horizon profile
@@ -521,11 +567,8 @@ def preset_rows(dem: "Dem") -> list:
         # Sharp DEM over the near field only, padded past PRESET_NEAR_M so a ray on any
         # diagonal bearing stays inside it rather than falling through to the coarse mosaic.
         pad_lon = PRESET_NEAR_M / (111320.0 * math.cos(math.radians(la))) * 1.15
-        near, n_tiles, n_missing = build_dem_bbox(
-            PRESET_NEAR_ZOOM, la - pad_lat, la + pad_lat, lo - pad_lon, lo + pad_lon)
-        if n_missing:
-            print(f"    WARNING: {name} near-field DEM is missing {n_missing}/{n_tiles} "
-                  f"z{PRESET_NEAR_ZOOM} tiles — its horizon may read low")
+        near = build_dem_bbox(PRESET_NEAR_ZOOM, la - pad_lat, la + pad_lat,
+                              lo - pad_lon, lo + pad_lon, allow_missing)
         ground = float(np.nan_to_num(near.sample(np.array([la]), np.array([lo])), nan=0.0)[0])
         eye = ground + EYE_HEIGHT
         obs = A.Observer(la, lo, eye)
@@ -1326,6 +1369,9 @@ def main():
     ap.add_argument("--top", type=int, default=400, help="how many spots to emit")
     ap.add_argument("--no-osm", action="store_true", help="skip all OSM queries")
     ap.add_argument("--no-poi", action="store_true", help="skip named viewing POIs")
+    ap.add_argument("--allow-missing-tiles", action="store_true",
+                    help="build even if terrain tiles cannot be fetched; they read as sea level "
+                         "and are listed in the output as missingTiles")
     ap.add_argument("--min-clearance", type=float, default=0.0,
                     help="require the sun to clear terrain by at least this many degrees")
     args = ap.parse_args()
@@ -1334,7 +1380,7 @@ def main():
     t_start = time.time()
 
     print("1/5  Building DEM from Re:Earth Terrarium tiles")
-    dem = build_dem(args.zoom)
+    dem = build_dem(args.zoom, args.allow_missing_tiles)
 
     print("2/5  Computing eclipse circumstances")
     field = EclipseField(step=0.1)
@@ -1619,8 +1665,12 @@ def main():
         "access": rank_name[int(access[i])] if access.size else "unknown",
     } for i in chosen]
 
+    print("  computing totality at each spot's own position")
+    spots = with_direct_totality(spots)
+    poi_out = with_direct_totality(poi_out)
+
     print("  computing the app's fixed presets (full horizon profiles)")
-    presets = preset_rows(dem)
+    presets = preset_rows(dem, args.allow_missing_tiles)
     for p in presets:
         state = {"clear": "clear through totality", "partial": "part of totality blocked",
                  "blocked": "BLOCKED"}[p["level"]]
@@ -1660,7 +1710,11 @@ def main():
         # clicking one costs no terrain probe. Deliberately unfiltered and unranked.
         "presets": presets,
         "osmGaps": osm_gaps,
+        "missingTiles": MISSING_TILES,
     }
+    if MISSING_TILES:
+        print(f"  NOTE: {len(MISSING_TILES)} terrain tile(s) missing — recorded as missingTiles "
+              "in the JSON")
     if osm_gaps:
         print(f"  NOTE: {len(osm_gaps)} OSM bbox(es) missing — recorded as osmGaps in the JSON")
 
@@ -1695,4 +1749,7 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt:
         print("\ninterrupted")
+        sys.exit(1)
+    except MissingTiles as ex:
+        print(f"\nERROR: {ex}")
         sys.exit(1)

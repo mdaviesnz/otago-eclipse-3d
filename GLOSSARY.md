@@ -44,6 +44,10 @@ The terrain point that sets the horizon on a bearing.
 **Horizon profile**:
 The horizon across the band of bearings the eclipsed sun passes through, stored for presets.
 
+**Skyline strip**:
+The simulator's main control: the horizon drawn as a silhouette with the sun's path across it. Moving the sun along the path sets the time.
+_Avoid_: timeline, scrubber, chart
+
 **Clearance**:
 The sun's apparent altitude minus the horizon on the sun's bearing, at one contact. Positive means the sun's centre is above the skyline.
 _Avoid_: margin, headroom
@@ -63,8 +67,8 @@ _Avoid_: result, rating, score
 
 **Scope**:
 Which contacts a verdict judges. Two verdicts with different scopes answer different questions and may legitimately disagree.
-- **Totality scope**: second contact, maximum and third contact. Used by the catalogue and by presets on the overview map.
-- **Eclipse scope**: first contact, maximum and last contact, skipping any with the sun below the astronomical horizon. Second and third contact also count here: if either is blocked, or the sun is below the horizon then, a clear verdict becomes partial. Used by the sightline check and the preset card.
+- **Totality scope**: second contact, maximum and third contact. Used for every place inside the path of totality, whether the verdict is stored or checked live.
+- **Eclipse scope**: first contact, maximum and last contact, skipping any with the sun below the astronomical horizon. Second and third contact also count here: if either is blocked, or the sun is below the horizon then, a clear verdict becomes partial. Used only outside the path of totality, where there is no totality to judge.
 
 **Level**:
 The headline of a verdict, one of four values:
