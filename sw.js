@@ -28,6 +28,7 @@ const PRECACHE_SHELL = [
   "./places.js",
   "./contours.js",
   "./skyline.js",
+  "./eclipse-time.js",
   "./simulator.js",
   "./map.js",
   "./font-piazzolla-latin.woff2",

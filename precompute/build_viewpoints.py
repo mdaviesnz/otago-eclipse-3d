@@ -43,6 +43,7 @@ from PIL import Image
 
 import astronomy as A
 
+import eclipse  # fixes ΔT for every astronomy call below
 from verdict import verdict_fields
 
 # ----------------------------------------------------------------------------------------

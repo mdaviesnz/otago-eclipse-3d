@@ -32,6 +32,7 @@ import verdict  # noqa: E402  (precompute/verdict.py: standard library only)
 
 SITE_FILES = ["index.html", "map.html", "astronomy.html", "methods.html", "app.css",
               "viewpoints.json", "verdict.js", "catalogue.js", "places.js", "contours.js", "skyline.js",
+              "eclipse-time.js",
               "simulator.js", "map.js",
               "social-card.svg", "icon.svg", "manifest.webmanifest", "sw.js", "_headers",
               "font-piazzolla-latin.woff2", "font-piazzolla-latin-ext.woff2",
@@ -387,6 +388,26 @@ def check_verdict_cases() -> None:
         ok(f"precompute/verdict.py passes all {len(run)} shared totality-scope verdict cases")
 
 
+def check_delta_t() -> None:
+    """The browser and the precompute each fix ΔT (TT - UT) for the eclipse. A second of
+    disagreement moves every contact by a second, so the stored catalogue and the live
+    calculation would quietly drift apart."""
+    found = {}
+    for name, pattern in (("eclipse-time.js", r"^export const DELTA_T_SECONDS\s*=\s*([0-9.]+)\s*;"),
+                          ("precompute/eclipse.py", r"^DELTA_T_SECONDS\s*=\s*([0-9.]+)")):
+        p = ROOT / name
+        m = re.search(pattern, p.read_text(encoding="utf-8"), re.M) if p.exists() else None
+        if not m:
+            fail(f"{name}: could not find DELTA_T_SECONDS")
+            return
+        found[name] = float(m.group(1))
+    js, py = found["eclipse-time.js"], found["precompute/eclipse.py"]
+    if js != py:
+        fail(f"ΔT differs: eclipse-time.js uses {js} s, precompute/eclipse.py uses {py} s")
+    else:
+        ok(f"browser and precompute use the same ΔT ({js} s)")
+
+
 def check_pwa_and_headers() -> None:
     """Ensure manifest.webmanifest, sw.js, and _headers stay in sync with SITE_FILES."""
     site_set = set(SITE_FILES)
@@ -466,6 +487,7 @@ def main() -> int:
     check_cache_not_tracked()
     check_local_references()
     check_verdict_cases()
+    check_delta_t()
     check_catalogue()
     check_pwa_and_headers()
 

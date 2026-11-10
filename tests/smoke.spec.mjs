@@ -156,32 +156,37 @@ test("a place on the map sorts spots by distance and can be shared", async ({ pa
   expect(errs, "no JS errors with a place set").toEqual([]);
 });
 
-test("astronomy reproduces the published Dunedin circumstances", async ({ page }) => {
-  await page.goto("/map.html");           // any page will do; we load the library directly
-  await page.addScriptTag({ url: "https://cdn.jsdelivr.net/npm/astronomy-engine@2/astronomy.browser.min.js" });
+// Both pages compute contacts live, and both must do it with the agreed ΔT of 69.2 s, not the
+// library's own extrapolation (76.65 s), which runs every contact about 9 s early. The instants
+// are the ones precompute/test_eclipse.py pins for the build, so stored and live times agree.
+for (const path of ["/map.html", "/index.html"]) {
+  test(`Dunedin's contacts on ${path} use the agreed ΔT`, async ({ page }) => {
+    await page.goto(path);
+    await page.waitForFunction(() => !!window.Astronomy && !!window.Catalogue, null, { timeout: 20000 });
 
-  const r = await page.evaluate(() => {
-    const A = window.Astronomy;
-    const obs = new A.Observer(-45.8788, 170.5028, 0);
-    const e = A.SearchLocalSolarEclipse(new A.AstroTime(new Date(Date.UTC(2028, 6, 21))), obs);
-    const iso = (ev) => ev.time.date.toISOString();
-    return {
-      kind: String(e.kind),
-      peakAlt: e.peak.altitude,
-      totalBegin: iso(e.total_begin),
-      peak: iso(e.peak),
-      totalEnd: iso(e.total_end),
-    };
+    const r = await page.evaluate(() => {
+      const A = window.Astronomy;
+      const obs = new A.Observer(-45.8788, 170.5028, 0);
+      const e = A.SearchLocalSolarEclipse(new A.AstroTime(new Date(Date.UTC(2028, 6, 21))), obs);
+      const ms = (ev) => ev.time.date.getTime();
+      return {
+        kind: String(e.kind),
+        peakAlt: e.peak.altitude,
+        totalBegin: ms(e.total_begin),
+        peak: ms(e.peak),
+        totalEnd: ms(e.total_end),
+      };
+    });
+
+    const secondsFrom = (ms, iso) => Math.abs(ms - Date.parse(iso)) / 1000;
+    expect(r.kind.toLowerCase()).toContain("total");
+    expect(secondsFrom(r.totalBegin, "2028-07-22T04:15:53.5Z")).toBeLessThan(1);
+    expect(secondsFrom(r.peak, "2028-07-22T04:17:20.5Z")).toBeLessThan(1);
+    expect(secondsFrom(r.totalEnd, "2028-07-22T04:18:47.5Z")).toBeLessThan(1);
+    expect(r.peakAlt).toBeGreaterThan(8.0);
+    expect(r.peakAlt).toBeLessThan(8.8);
   });
-
-  // Published: totality 16:15:45–16:18:36 NZST, maximum 16:17:11, sun ~8 deg.
-  expect(r.kind.toLowerCase()).toContain("total");
-  expect(r.totalBegin).toContain("2028-07-22T04:15:4");
-  expect(r.peak).toContain("2028-07-22T04:17:1");
-  expect(r.totalEnd).toContain("2028-07-22T04:18:3");
-  expect(r.peakAlt).toBeGreaterThan(8.0);
-  expect(r.peakAlt).toBeLessThan(8.8);
-});
+}
 
 // A catalogue spot must be answered from viewpoints.json, not by re-probing terrain: the live
 // check costs ~230 quantized-mesh tiles (~8 MB) from a best-effort third party, and clicking

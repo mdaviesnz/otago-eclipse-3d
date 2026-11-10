@@ -111,16 +111,19 @@ ellipsoid at instant $t$:
 - **Displayed wall-clock time:** **NZST ($\text{UTC} + 12\text{ h}$)**. Because July is Southern
   Hemisphere winter, New Zealand Daylight Time ($\text{UTC} + 13\text{ h}$) is not in force.
 - **Terrestrial Time ($\text{TT}$) and $\Delta T$:** `astronomy-engine` converts Universal Time
-  ($\text{UT} \approx \text{UTC}$) to Terrestrial Time ($\text{TT} = \text{UT} + \Delta T$)
-  using the Espenak & Meeus (2006) polynomial fit (`DeltaT_EspenakMeeus`), which evaluates to
-  $\Delta T \approx 72.7\text{ s}$ for 2028.55.
-- **$\Delta T$ extrapolation uncertainty:** Recent IERS Earth rotation measurements indicate a
-  slower deceleration of UT1 than the 2006 quadratic extrapolation predicted, placing actual
-  2028 $\Delta T$ closer to $69.5\text{–}70.5\text{ s}$ (an offset of $\delta(\Delta T) \approx 2\text{–}3\text{ s}$).
-  Because Earth rotates eastward at $\approx 465\text{ m/s} \cdot \cos(45^\circ) \approx 329\text{ m/s}$,
-  each $1\text{ s}$ of $\Delta T$ uncertainty shifts the umbral ground track by $\approx 0.33\text{ km}$
-  in longitude and shifts contact times by $\approx 1\text{ s}$ when compared against predictions
-  adopting a different $\Delta T$ value.
+  ($\text{UT} \approx \text{UTC}$) to Terrestrial Time ($\text{TT} = \text{UT} + \Delta T$).
+  Left alone it extrapolates $\Delta T$ with the Espenak & Meeus (2006) polynomial, which gives
+  $76.65\text{ s}$ on 22 July 2028. Earth has been rotating faster than that fit expected, and
+  measured values put 2028 near $69\text{ s}$, so both code paths override the library with a
+  fixed $\Delta T = 69.2\text{ s}$ (`DELTA_T_SECONDS` in `eclipse-time.js` and
+  `precompute/eclipse.py`; `tests/check_static.py` fails if the two differ).
+- **Effect of the override:** Compared with the library default, every contact in the region is
+  $8.6\text{–}9.5\text{ s}$ later and both limits of the path of totality lie
+  $\approx 1.8\text{ km}$ further south. Near the limits that changes how long totality lasts:
+  Hampden goes from $105\text{ s}$ to $101\text{ s}$, Te Anau from $46\text{ s}$ to $56\text{ s}$.
+- **Sensitivity:** Each $1\text{ s}$ of $\Delta T$ moves contact times by $\approx 1.2\text{ s}$
+  and the path limits by $\approx 0.25\text{ km}$. The adopted value is a prediction, not a
+  measurement; an error of a second in it is well inside what this tool needs.
 
 ---
 
@@ -411,13 +414,19 @@ coronal and horizon-ring twilight outside the umbra.
 Comparison at Dunedin (`-45.8788°, 170.5028°`) against published reference tables (Espenak /
 timeanddate):
 
-| Event | Reference (NZST) | `astronomy-engine` (NZST) | $\Delta$ | Notes |
+| Event | Reference (NZST) | Library default $\Delta T$ ($76.65\text{ s}$) | This app ($\Delta T = 69.2\text{ s}$) | Notes |
 |---|---|---|---|---|
-| First contact (C1) | `15:08:58` | `15:09:01` | $+3\text{ s}$ | Smooth-sphere + $\Delta T$ |
-| Second contact (C2) | `16:15:45` | `16:15:44` | $-1\text{ s}$ | Mean lunar radius vs. valley radius + limb profile |
-| **Maximum eclipse** | **`16:17:11`** | **`16:17:11`** | **$0\text{ s}$** | Exact agreement to the second |
-| Third contact (C3) | `16:18:36` | `16:18:39` | $+3\text{ s}$ | Mean lunar radius ($1737.4\text{ km}$) vs. valley radius |
-| Fourth contact (C4) | `17:17:00` (sunset) | `17:19:58` (alt $-0.09^\circ$) | $+3\text{ m}$ | Reference clamps partial end at local sunset |
+| First contact (C1) | `15:08:58` | `15:09:01` | `15:09:10` | Smooth-sphere + $\Delta T$ |
+| Second contact (C2) | `16:15:45` | `16:15:44` | `16:15:53` | Mean lunar radius vs. valley radius + limb profile |
+| **Maximum eclipse** | **`16:17:11`** | **`16:17:11`** | **`16:17:20`** | |
+| Third contact (C3) | `16:18:36` | `16:18:39` | `16:18:48` | Mean lunar radius ($1737.4\text{ km}$) vs. valley radius |
+| Fourth contact (C4) | `17:17:00` (sunset) | `17:19:58` | `17:20:06` (alt $-0.1^\circ$) | Reference clamps partial end at local sunset |
+
+The reference agrees with the library's default $\Delta T$ to within $3\text{ s}$, which most
+likely means the reference was computed with a $\Delta T$ close to that default. It therefore
+checks the ephemeris and the contact search, not the choice of $\Delta T$. The app's own times
+are $\approx 9\text{ s}$ later by design (§3) and have not been re-validated against a reference
+that uses a current $\Delta T$.
 
 ### 9.2 Cross-Validation Between DEM Pipelines
 
@@ -441,7 +450,7 @@ Worst-case discrepancy across all 12 town/contact checks is $0.13^\circ$ with ze
 | Component | Model / Approximation | Quantitative Magnitude | Impact on Verdicts |
 |---|---|---|---|
 | **Ephemeris** | `astronomy-engine` (VSOP87 + ELP/MPP02) | $\sim 1\text{–}3''$ in 2028 ($\pm 1'$ multi-century bound) | $\pm 1\text{–}3\text{ s}$ on contact times; $< 0.001^\circ$ on altitude |
-| **$\Delta T$ extrapolation** | Espenak & Meeus (2006) polynomial ($\approx 72.7\text{ s}$) | $\delta(\Delta T) \approx 2\text{–}3\text{ s}$ | $\approx 0.7\text{–}1.0\text{ km}$ longitudinal shift of umbral track |
+| **$\Delta T$** | Fixed at $69.2\text{ s}$ (library default $76.65\text{ s}$ overridden) | $\approx \pm 1\text{ s}$ in the adopted value | $\approx 1.2\text{ s}$ on contact times and $\approx 0.25\text{ km}$ on the path limits, per second |
 | **Lunar limb profile** | Smooth sphere ($R_\mathbb{C} = 1737.4\text{ km}$), no Kaguya/LRO limb | $\approx 0.8''$ mean-to-valley radius + $\pm 1.5''$ topography | $\pm 1\text{–}3\text{ s}$ on C2/C3 near centreline; larger near grazing edge |
 | **Solar refraction** | Bennett (1982) (`Refraction.Normal`, $1010\text{ hPa}, 10^\circ\text{C}$) | $+6.4'$ ($+0.107^\circ$) at $8.3^\circ$ altitude | Unified across both code paths; meteorological scatter $\sim \pm 0.5'$ |
 | **Terrestrial refraction** | Effective Earth radius $R_{\text{eff}} = R_\oplus / (1 - k)$, $k = 0.13$ | $+0.35'$ at $10\text{ km}$, $+1.6'$ at $45\text{ km}$ | Unified across both code paths; basin anomalies cancel with solar ray below ridge |
