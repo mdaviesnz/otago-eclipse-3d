@@ -514,12 +514,13 @@
   <!-- The sightline verdict and the catalogue rules. Modules, so tests/unit can import them
        without a browser; handed to the classic script below on window. -->
   <script type="module">
-    import { useEclipseDeltaT } from "./eclipse-time.js";
+    import * as EclipseTime from "./eclipse-time.js";
     import * as Verdict from "./verdict.js";
     import * as Catalogue from "./catalogue.js";
     import * as Places from "./places.js";
     import * as Skyline from "./skyline.js";
-    useEclipseDeltaT(window.Astronomy);
+    EclipseTime.useEclipseDeltaT(window.Astronomy);
+    window.EclipseTime = EclipseTime;
     window.Skyline = Skyline;
     window.Verdict = Verdict;
     window.Catalogue = Catalogue;

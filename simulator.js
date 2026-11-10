@@ -700,12 +700,11 @@ function updateEclipseSky(t, e) {
     bbGlare.color = new Cesium.Color(1, 1, 1, glareAlpha);
   }
 
-  // 6. Diamond Ring starburst at C2 / C3 (97.8% - 100% partial inside totality path)
-  const showDiamond = hasTotality && !e.isTotal && e.obscuration >= 0.978;
-  bbDiamond.show = showDiamond;
-  if (showDiamond) {
-    const u = Cesium.Math.clamp((e.obscuration - 0.978) / 0.022, 0, 1);
-    const dAlpha = Math.max(0.35, Math.sin(u * Math.PI * 0.9));
+  // 6. Diamond ring starburst in the seconds before C2 and after C3
+  const diamond = e.isTotal ? 0 : diamondRingAt(t, c);
+  bbDiamond.show = diamond > 0;
+  if (diamond > 0) {
+    const dAlpha = 0.35 + 0.65 * diamond;
     const limbPx = 22.0;
     bbDiamond.position = posAt(sunDir, SKY_ECLIPSE_DIST - 2000);
     bbDiamond.pixelOffset = new Cesium.Cartesian2(-limbPx * Math.cos(pa), limbPx * Math.sin(pa));
@@ -1477,14 +1476,21 @@ function percentCovered(c) {
   return o >= 0.995 ? "99.9%" : `${Math.round(o * 100)}%`;
 }
 
+// How strongly the diamond ring shows at `t` for a place with circumstances `c`: 0 to 1. The
+// rule, and why it goes by time and not by how much of the sun is covered, is in eclipse-time.js.
+function diamondRingAt(t, c) {
+  if (!c || !c.totalBegin || !c.totalEnd) return 0;
+  const seconds = (j) => Cesium.JulianDate.secondsDifference(j, startJulian);
+  return EclipseTime.diamondRing(seconds(t), seconds(c.totalBegin), seconds(c.totalEnd));
+}
+
 // The clock, the phase and the time left, once per tick.
 function updateReadouts(t, e) {
   const c = activeGroundCartesian ? localCircumstances(activeGroundCartesian) : null;
-  const hasTotality = Boolean(c && c.totalBegin);
   $("clockReadout").textContent = clockText(t, true);
   const pct = e.obscuration >= 0.995 ? "99.9%" : `${Math.round(e.obscuration * 100)}%`;
   $("phaseReadout").textContent = e.isTotal ? "Totality"
-    : hasTotality && e.obscuration >= 0.985 ? "Diamond ring"
+    : diamondRingAt(t, c) > 0 ? "Diamond ring"
     : e.mag > 0 ? `${pct} covered` : "No eclipse";
 
   document.body.dataset.quiet = e.isTotal ? "1" : "0";

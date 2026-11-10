@@ -321,6 +321,43 @@ test("catalogue spots are answered from precomputed data", async ({ page }) => {
 
 // Pure logic again, so it runs without a GPU. These pin the promise that a place reads the same
 // wherever you see it: the map shows the stored level, the simulator judges the same contacts.
+// "Diamond ring" could be read as the cue to take eclipse glasses off, so it must not show while
+// the sun is still a bright crescent, and never where there is no totality.
+test("the phase readout says diamond ring only in the seconds around totality", async ({ page }) => {
+  await page.goto("/index.html");
+  await page.waitForFunction(() => typeof updateReadouts === "function" && !!window.EclipseTime
+    && !!window.Astronomy, null, { timeout: 20000 });
+
+  const r = await page.evaluate(() => {
+    const phaseAt = (j) => {
+      updateReadouts(j, eclipseAt(j, activeGroundCartesian));
+      return document.getElementById("phaseReadout").textContent;
+    };
+    const plus = (j, s) => Cesium.JulianDate.addSeconds(j, s, new Cesium.JulianDate());
+
+    activeGroundCartesian = Cesium.Cartesian3.fromDegrees(170.5028, -45.8788, 2 + EYE_HEIGHT);   // Dunedin
+    const c = localCircumstances(activeGroundCartesian);
+    const dunedin = {
+      minuteBefore: phaseAt(plus(c.totalBegin, -60)),
+      justBefore: phaseAt(plus(c.totalBegin, -5)),
+      during: phaseAt(c.peak),
+      justAfter: phaseAt(plus(c.totalEnd, 5)),
+      minuteAfter: phaseAt(plus(c.totalEnd, 60)),
+    };
+
+    activeGroundCartesian = Cesium.Cartesian3.fromDegrees(172.63643, -43.53095, 10 + EYE_HEIGHT); // Christchurch
+    const chch = phaseAt(localCircumstances(activeGroundCartesian).peak);
+    return { dunedin, chch };
+  });
+
+  expect(r.dunedin.minuteBefore).toMatch(/% covered$/);
+  expect(r.dunedin.justBefore).toBe("Diamond ring");
+  expect(r.dunedin.during).toBe("Totality");
+  expect(r.dunedin.justAfter).toBe("Diamond ring");
+  expect(r.dunedin.minuteAfter).toMatch(/% covered$/);
+  expect(r.chch).toMatch(/% covered$/);
+});
+
 test("the verdict answers totality inside the path and agrees with the catalogue", async ({ page }) => {
   const errs = errors(page);
   await page.goto("/index.html");
