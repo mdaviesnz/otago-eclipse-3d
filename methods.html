@@ -95,7 +95,7 @@
         <li><b>Apparent solar altitude at maximum:</b> 8.37&deg; (Dunedin, east coast) to 10.0&deg;&ndash;10.8&deg; (Queenstown / Fiordland, inland west).</li>
         <li><b>Solar azimuth at maximum:</b> 310.6&deg;&ndash;312.9&deg; (north-west).</li>
         <li><b>Totality duration on the centreline:</b> up to 179 s (2m 59s).</li>
-        <li><b>Sunset during the closing partial phase:</b> Fourth contact (C4) occurs with the Sun below 1.7&deg; altitude across the entire South Island, and slightly below the horizon along the east coast (Dunedin refracted altitude &minus;0.09&deg;, geometric altitude &minus;0.63&deg; at <code>05:19:58 UTC</code>).</li>
+        <li><b>Sunset during the closing partial phase:</b> Fourth contact (C4) occurs with the Sun no higher than about 2&deg; anywhere in the region (2.0&deg; at Puysegur Point, 1.8&deg; at Milford Sound, 1.4&deg; at Haast), and slightly below the horizon along the east coast (Dunedin refracted altitude &minus;0.11&deg;, geometric altitude &minus;0.70&deg; at <code>05:20:06 UTC</code>).</li>
       </ul>
       <p>
         Because the Sun sits only 8&deg;&ndash;10&deg; above the north-western horizon at totality across a
@@ -233,8 +233,8 @@ obsc   = A_overlap(s_sun, s_moon, sep) / (π · s_sun²)
 isTotal = (s_moon &gt;= s_sun) and (sep &lt;= s_moon - s_sun)</div>
       <p>
         <b>Strict totality gating:</b> An uncovered solar crescent of 0.1% area (<code>obsc = 0.999</code>)
-        occurs when the lunar limb is still ~16.6&Prime; short of internal tangency (~33 s before C2 or
-        after C3) and remains blindingly bright. The UI therefore gates the <code>Totality</code>
+        occurs when the lunar limb is still ~5&Prime; short of internal tangency (~10 s before C2 or
+        after C3; 99.5% is reached ~30 s out) and remains blindingly bright. The UI therefore gates the <code>Totality</code>
         readout, time-left countdown, and "safe to look without eclipse glasses" narration strictly on
         geometric internal tangency (<code>isTotal</code>), and caps displayed partial obscuration at
         <code>99.9%</code> whenever <code>!isTotal</code>.
@@ -257,7 +257,8 @@ isTotal = (s_moon &gt;= s_sun) and (sep &lt;= s_moon - s_sun)</div>
       </p>
       <h3>6.1 Astronomical Refraction of the Sun (<code>Refraction.Normal</code>)</h3>
       <p>
-        <code>astronomy-engine</code> applies Bennett's (1982) formula for standard conditions
+        <code>astronomy-engine</code> applies S&aelig;mundsson's (1986) formula, which gives refraction
+        from the true altitude and is the inverse of Bennett's (1982), for standard conditions
         (<var>P</var> = 1010 hPa, <var>T</var> = 10&deg;C):
       </p>
       <div class="math-block">R_astro (arcmin) = 1.02 / tan(alt_geom + 10.3 / (alt_geom + 5.11))</div>
@@ -295,7 +296,7 @@ drop(d) = (1 - k) · d² / (2 · R_earth) = d² / (2 · R_eff)</div>
     <!-- 7. Terrain Horizon Geometry -->
     <section class="doc-section spec-section" id="s7">
       <h2>7. Terrain Horizon Ray-Marching</h2>
-      <div class="math-block">d_{n+1} = d_n + max(25 m, 0.03 · d_n),    d ∈ [100 m, 45 000 m]   (161 samples/ray)
+      <div class="math-block">d_{n+1} = d_n + max(25 m, 0.03 · d_n),    d ∈ [100 m, 45 000 m]   (165 samples/ray, the last at 44.6 km)
 angle(d) = atan2(h_terrain(d) - h_observer - d² / (2 · R_eff), d)
 horizon  = max_d angle(d),    clearance = alt_sun - horizon</div>
       <ul>
@@ -342,7 +343,7 @@ horizon  = max_d angle(d),    clearance = alt_sun - horizon</div>
             <tr><td>Ephemeris (VSOP87 + ELP/MPP02 in 2028)</td><td>~1&ndash;3&Prime;</td><td>&plusmn;1&ndash;3 s on contact times; &lt;0.001&deg; on altitude</td></tr>
             <tr><td>&Delta;<var>T</var>, fixed at 69.2 s (library default 76.65 s overridden)</td><td>~&plusmn;1 s in the adopted value</td><td>~1.2 s on contact times and ~0.25 km on the path limits, per second</td></tr>
             <tr><td>Smooth spherical Moon (no Kaguya/LRO limb)</td><td>~0.8&Prime; radius + &plusmn;1.5&Prime; limb</td><td>&plusmn;1&ndash;3 s on C2/C3; larger in grazing edge zone</td></tr>
-            <tr><td>Solar refraction (Bennett 1982, 1010 hPa, 10&deg;C)</td><td>+6.4&prime; (+0.107&deg;) at 8.3&deg;</td><td>Unified across both paths; weather scatter ~&plusmn;0.5&prime;</td></tr>
+            <tr><td>Solar refraction (S&aelig;mundsson 1986, 1010 hPa, 10&deg;C)</td><td>+6.4&prime; (+0.107&deg;) at 8.3&deg;</td><td>Unified across both paths; weather scatter ~&plusmn;0.5&prime;</td></tr>
             <tr><td>Terrestrial refraction (<var>k</var> = 0.13, <var>R</var><sub>eff</sub> = 7323 km)</td><td>+0.35&prime; at 10 km, +1.6&prime; at 45 km</td><td>Unified across both paths; basin inversion cancels with solar ray</td></tr>
             <tr><td>Solar semi-diameter (<var>s</var><sub>&#9737;</sub> &approx; 0.26&deg;)</td><td>0.26&deg; limb (0.5&deg; inner corona)</td><td>Clearances in (0&deg;, 0.26&deg;) flagged as lower-limb grazing</td></tr>
             <tr><td>DEM vertical uncertainty (<var>&sigma;</var><sub>z</sub> &approx; 5 m at ~30 m)</td><td>&plusmn;2.9&deg; at 100 m; &plusmn;0.3&deg; at 1 km</td><td>Dominant error source for ridges closer than ~1 km</td></tr>
