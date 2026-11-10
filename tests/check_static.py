@@ -220,6 +220,13 @@ def check_catalogue() -> None:
     else:
         ok("catalogue has no OSM coverage gaps")
 
+    holes = d.get("missingTiles")
+    if holes:
+        fail(f"viewpoints.json was built with {len(holes)} terrain tile(s) missing, which read as "
+             f"sea level and lower the horizons that cross them: {holes[:10]}")
+    else:
+        ok("catalogue was built with no terrain tiles missing")
+
     grid = d.get("cloudGrid") or {}
     if grid:
         first, last = grid["years"]
