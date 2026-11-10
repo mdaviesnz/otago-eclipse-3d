@@ -432,6 +432,31 @@ test("a place whose ground height did not load is not judged, and can be tried a
   expect(r.preset.rest).not.toBe("");
 });
 
+// The verdict is worked out for an eye 1.7 m above the ground. From 10 m up, a ridge 775 m away
+// sits 0.6 degrees lower in the frame, more than the sun's whole disc, so the picture could show
+// the sun clear of a ridge the verdict says hides it.
+test("the eye-level view is framed from the height the verdict assumes", async ({ page }) => {
+  test.setTimeout(90000);
+  await page.goto("/index.html");
+  const ready = await page.waitForFunction(() => typeof viewerReady !== "undefined" && viewerReady,
+    null, { timeout: 45000 }).then(() => true, () => false);
+  test.skip(!ready, "framing the view needs WebGL");
+
+  const r = await page.evaluate(() => {
+    const arrowtown = { name: "Arrowtown", lat: -44.9385, lon: 168.8306 };
+    const ground = 409;
+    activeGroundCartesian = Cesium.Cartesian3.fromDegrees(arrowtown.lon, arrowtown.lat, ground + EYE_HEIGHT);
+    const view = frameEyeLevel(arrowtown, ground);
+    return {
+      eyeHeight: EYE_HEIGHT,
+      cameraAboveGround: Cesium.Cartographic.fromCartesian(view.destination).height - ground,
+    };
+  });
+
+  expect(r.eyeHeight).toBe(1.7);
+  expect(r.cameraAboveGround).toBeCloseTo(r.eyeHeight, 2);
+});
+
 test("the verdict answers totality inside the path and agrees with the catalogue", async ({ page }) => {
   const errs = errors(page);
   await page.goto("/index.html");
@@ -624,7 +649,7 @@ test("a chosen place loads behind a backdrop, and the camera stays where the app
     const cam = Cesium.Cartographic.fromCartesian(viewer.camera.positionWC).height;
     return cam - Cesium.Cartographic.fromCartesian(activeGroundCartesian).height;
   });
-  expect(lift, "the eye-level camera sits ~8 m above the observer, not on a coarse tile").toBeLessThan(20);
+  expect(lift, "the eye-level camera sits at the observer's eye, not on a coarse tile").toBeLessThan(5);
 
   expect(errs, "no JS errors while arriving").toEqual([]);
 });

@@ -1209,8 +1209,12 @@ function frameEyeLevel(loc, groundHeight) {
   const s = sunAltAz(c && c.peak ? c.peak : viewer.clock.currentTime, activeGroundCartesian);
   const { offsetDeg } = framingBand();
   const pitchDeg = Math.max(2.5, Math.min(8, s.altitude * 0.48)) - offsetDeg;
+  // The camera stands where the verdict's observer does. Any higher and near ridges sit lower
+  // in the frame than the verdict says: from 10 m up, one 775 m away drops by 0.6 degrees, more
+  // than the sun's disc. The rendered ground stays below the eye (1.7 to 1.9 m at Arrowtown,
+  // Queenstown and Dunedin), so the camera does not clip into it.
   return {
-    destination: Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat, groundHeight + 10),
+    destination: Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat, groundHeight + EYE_HEIGHT),
     orientation: {
       heading: Cesium.Math.toRadians(s.azimuth),
       pitch: Cesium.Math.toRadians(pitchDeg),
@@ -2727,7 +2731,8 @@ async function startCinematic() {
     const { offsetDeg } = framingBand();
     const pitchDeg = Math.max(2.5, Math.min(7.5, s.altitude * 0.45)) - offsetDeg;
     placeCamera({
-      destination: Cesium.Cartesian3.fromRadians(ground.longitude, ground.latitude, ground.height + 25),
+      // `ground` is the observer's eye, so the film is watched from where the verdict stands.
+      destination: Cesium.Cartesian3.fromRadians(ground.longitude, ground.latitude, ground.height),
       orientation: {
         heading: Cesium.Math.toRadians(s.azimuth),
         pitch: Cesium.Math.toRadians(pitchDeg),
