@@ -85,3 +85,14 @@ export function heightPhrase(alt) {
   if (fists < 1.4) return "about one fist above the horizon";
   return `about ${Math.round(fists)} fists above the horizon`;
 }
+
+// The observer's ground height in metres, or null when it is not known.
+//
+// `sampled` is what the terrain gave for the point, and may be missing when a tile did not
+// load. `stored` is a catalogue record's own elevation, if the place has one. A missing sample
+// must never read as 0: that stands the observer at sea level under the real ground, and the
+// sightline check then reports terrain all round. Zero is a real height at the coast.
+export function groundHeightFrom(sampled, stored) {
+  if (Number.isFinite(sampled)) return sampled;
+  return Number.isFinite(stored) ? stored : null;
+}

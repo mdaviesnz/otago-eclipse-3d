@@ -88,6 +88,7 @@ let sightlineToken = 0;               // guards against overlapping re-runs
 let locationMarker = null;            // visible marker at the checked location
 let activeCatEntry = null;            // catalogue record the observer is standing on, or null
 let pinMode = false;                  // when true, clicking the map sets the location
+let groundHeightMissing = false;      // the terrain under the observer did not load: no verdict
 const startJulian = Cesium.JulianDate.fromIso8601(CLOCK_START_UTC);
 const stopJulian  = Cesium.JulianDate.fromIso8601(CLOCK_STOP_UTC);
 const maxJ        = Cesium.JulianDate.fromIso8601(TOTALITY_MAX_UTC);
@@ -1033,6 +1034,32 @@ function highlightActiveButtons() {
 }
 
 
+// Terrain height under a place in metres, or undefined if it will not load. The terrain service
+// is best-effort and does throttle, so a failure gets two more goes before giving up.
+let sampleTerrain = (cartographics) =>
+  Cesium.sampleTerrainMostDetailed(viewer.terrainProvider, cartographics);   // a seam for tests
+
+async function sampleGroundHeight(loc) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const samples = await sampleTerrain([Cesium.Cartographic.fromDegrees(loc.lon, loc.lat)]);
+      if (Number.isFinite(samples[0].height)) return samples[0].height;
+    } catch (e) { /* try again */ }
+  }
+  return undefined;
+}
+
+// The button under the strip either draws the full skyline for a catalogue spot or, when the
+// ground height did not load, tries the place again.
+const SKYLINE_BUTTON = {
+  draw: "Draw the full skyline<small>Downloads about 14 MB of terrain</small>",
+  retry: "Try again<small>The terrain here did not load</small>",
+};
+function showSkylineButton(kind) {
+  $("drawSkyline").innerHTML = SKYLINE_BUTTON[kind];
+  $("drawSkyline").hidden = false;
+}
+
 // Move the observer/checked location WITHOUT moving the camera. Returns ground height.
 async function setObserver(loc) {
   activeLoc = loc;
@@ -1045,17 +1072,13 @@ async function setObserver(loc) {
   // through; anything else (a shared link, a dropped pin) is matched on coordinates.
   activeCatEntry = loc.cat || findCatalogueEntry(loc.lat, loc.lon);
 
-  // Sample ground height so the observer sits on the terrain.
-  let groundHeight = 0;
-  try {
-    const samples = await Cesium.sampleTerrainMostDetailed(viewer.terrainProvider, [
-      Cesium.Cartographic.fromDegrees(loc.lon, loc.lat),
-    ]);
-    groundHeight = samples[0].height || 0;
-  } catch (e) { groundHeight = 0; }
-  if (!groundHeight && activeCatEntry && Number.isFinite(activeCatEntry.elev)) {
-    groundHeight = activeCatEntry.elev;
-  }
+  // Sample ground height so the observer sits on the terrain. If it does not load there is no
+  // height to stand them at, and the place cannot be judged: see Places.groundHeightFrom. The
+  // sun and the clock still need an observer, and are not sensitive to its height, so they get
+  // one at sea level while groundHeightMissing keeps the sightline check from using it.
+  const known = Places.groundHeightFrom(await sampleGroundHeight(loc), activeCatEntry && activeCatEntry.elev);
+  groundHeightMissing = known === null;
+  const groundHeight = groundHeightMissing ? 0 : known;
   activeGroundCartesian = Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat, groundHeight + EYE_HEIGHT);
   // The catalogue may have arrived while the ground height was loading. Its own retry could not
   // answer for this place then, because the observer did not exist yet.
@@ -1846,7 +1869,8 @@ function presentVerdict(view) {
     renderStrip();
   }
   $("stripBusy").hidden = true;
-  $("drawSkyline").hidden = !(view.stored && !view.profile && !view.stored.profile);
+  if (view.stored && !view.profile && !view.stored.profile) showSkylineButton("draw");
+  else $("drawSkyline").hidden = true;
   renderVerdictBlock();
   renderDetails();
 }
@@ -1990,6 +2014,13 @@ async function runSightlineCheck() {
   // Remember whether we are refining a precomputed verdict, so the result can say how the
   // two compare instead of quietly overwriting one number with a slightly different one.
   const catAtStart = activeCatEntry;
+
+  if (groundHeightMissing) {
+    $("stripBusy").hidden = true;
+    $("verdictReason").textContent = "The ground height here did not load, so this place can’t be checked right now.";
+    showSkylineButton("retry");
+    return;
+  }
 
   if (terrainSource === "offline" && activeCatEntry) {
     if (activeCatEntry.profile) runPresetCheck(activeCatEntry);
@@ -2800,7 +2831,8 @@ function wireControls() {
   $("openDetails").addEventListener("click", () => setPanel("details"));
   $("closePlaces").addEventListener("click", closePanels);
   $("closeDetails").addEventListener("click", closePanels);
-  $("drawSkyline").addEventListener("click", runSightlineCheck);
+  $("drawSkyline").addEventListener("click",
+    () => (groundHeightMissing ? selectLocation(activeLoc, false) : runSightlineCheck()));
 
   // Build the contact address at runtime rather than shipping it in the markup. This stops
   // naive address harvesters that regex the served HTML; it does not stop a scraper that

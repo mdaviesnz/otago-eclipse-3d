@@ -3,8 +3,34 @@
 import { test, expect } from "@playwright/test";
 import {
   inNzBounds, photonUrl, photonLabel, photonFeatures, parseCoords,
-  compassName, compassShort, heightPhrase, handMeasure,
+  compassName, compassShort, heightPhrase, handMeasure, groundHeightFrom,
 } from "../../places.js";
+
+// A terrain sample that fails used to become 0 m, which stands the observer at sea level under
+// whatever ground is really there and can report a clear place as blocked.
+test.describe("the ground height at a place", () => {
+  test("a sample that did not load is unknown, not sea level", () => {
+    expect(groundHeightFrom(undefined)).toBeNull();
+    expect(groundHeightFrom(null)).toBeNull();
+    expect(groundHeightFrom(NaN)).toBeNull();
+  });
+
+  test("a real height of zero at the coast is a height", () => {
+    expect(groundHeightFrom(0)).toBe(0);
+    expect(groundHeightFrom(-0.4)).toBe(-0.4);
+  });
+
+  test("the sample wins over a stored elevation", () => {
+    expect(groundHeightFrom(312.6, 318)).toBe(312.6);
+    expect(groundHeightFrom(0, 318)).toBe(0);
+  });
+
+  test("a stored elevation stands in when the sample did not load", () => {
+    expect(groundHeightFrom(undefined, 318)).toBe(318);
+    expect(groundHeightFrom(undefined, 0)).toBe(0);
+    expect(groundHeightFrom(undefined, undefined)).toBeNull();
+  });
+});
 
 test("New Zealand bounds accept the country and refuse its neighbours", () => {
   expect(inNzBounds(-45.03, 168.66)).toBe(true);

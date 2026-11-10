@@ -358,6 +358,58 @@ test("the phase readout says diamond ring only in the seconds around totality", 
   expect(r.chch).toMatch(/% covered$/);
 });
 
+// If the terrain sample under the observer fails, there is no height to stand them at. Calling
+// it 0 m would put them at sea level under the real ground and report the place as blocked.
+test("a place whose ground height did not load is not judged, and can be tried again", async ({ page }) => {
+  await page.goto("/index.html");
+  await page.waitForFunction(() => typeof setObserver === "function" && !!window.Places
+    && !!window.Astronomy, null, { timeout: 20000 });
+  await page.evaluate(() => catalogueSettled);
+
+  const r = await page.evaluate(async () => {
+    const somewhere = { name: "A paddock", lat: -45.4012, lon: 169.3127 };   // not in the catalogue
+    const real = sampleTerrain;
+    const read = () => ({
+      missing: groundHeightMissing,
+      rest: document.getElementById("verdictRest").textContent,
+      reason: document.getElementById("verdictReason").textContent,
+      retryShown: !document.getElementById("drawSkyline").hidden,
+      retryLabel: document.getElementById("drawSkyline").textContent,
+      eye: Cesium.Cartographic.fromCartesian(activeGroundCartesian).height,
+    });
+    try {
+      sampleTerrain = async () => [{}];              // the tile did not load
+      await setObserver(somewhere);
+      await runSightlineCheck();
+      const failed = read();
+
+      sampleTerrain = async () => [{ height: 0 }];   // a real beach
+      await setObserver(somewhere);
+      const atSeaLevel = read();
+
+      sampleTerrain = async () => [{}];
+      await setObserver(catalogue.presets[0]);                          // has its own elevation
+      const preset = { ...read(), elev: catalogue.presets[0].elev };
+      return { failed, atSeaLevel, preset };
+    } finally {
+      sampleTerrain = real;
+    }
+  });
+
+  expect(r.failed.missing).toBe(true);
+  expect(r.failed.rest).toBe("");
+  expect(r.failed.reason).toMatch(/ground height .* did not load/i);
+  expect(r.failed.retryShown).toBe(true);
+  expect(r.failed.retryLabel).toMatch(/try again/i);
+
+  expect(r.atSeaLevel.missing).toBe(false);
+  expect(r.atSeaLevel.eye).toBeCloseTo(1.7, 1);
+
+  expect(r.preset.missing).toBe(false);
+  expect(r.preset.eye).toBeCloseTo(r.preset.elev + 1.7, 1);
+  expect(r.preset.rest).not.toBe("");
+});
+
 test("the verdict answers totality inside the path and agrees with the catalogue", async ({ page }) => {
   const errs = errors(page);
   await page.goto("/index.html");
