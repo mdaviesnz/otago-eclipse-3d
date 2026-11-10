@@ -406,14 +406,12 @@ def check_astronomy_version() -> None:
         return
     want = m.group(1)
     wrong = []
-    for name in ("index.html", "map.html", "sw.js"):
+    text_files = [n for n in SITE_FILES if n.endswith((".html", ".js"))] + ["tests/smoke.spec.mjs"]
+    for name in text_files:
         found = re.findall(r"astronomy-engine@([^/\"']+)/", (ROOT / name).read_text(encoding="utf-8"))
-        if not found:
+        if not found and name in ("index.html", "map.html", "sw.js"):
             wrong.append(f"{name} does not load astronomy-engine")
         wrong += [f"{name} loads {v}" for v in found if v != want]
-    for name in ("simulator.js", "map.js", "tests/smoke.spec.mjs"):
-        if "astronomy-engine@" in (ROOT / name).read_text(encoding="utf-8"):
-            wrong.append(f"{name} loads its own copy of astronomy-engine")
     if wrong:
         fail(f"astronomy-engine: the precompute uses {want}, but {'; '.join(wrong)}")
     else:

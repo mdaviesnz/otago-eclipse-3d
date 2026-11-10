@@ -341,8 +341,6 @@ test("catalogue spots are answered from precomputed data", async ({ page }) => {
   expect(errs, "no JS errors while reading the catalogue").toEqual([]);
 });
 
-// Pure logic again, so it runs without a GPU. These pin the promise that a place reads the same
-// wherever you see it: the map shows the stored level, the simulator judges the same contacts.
 // "Diamond ring" could be read as the cue to take eclipse glasses off, so it must not show while
 // the sun is still a bright crescent, and never where there is no totality.
 test("the phase readout says diamond ring only in the seconds around totality", async ({ page }) => {
@@ -351,7 +349,7 @@ test("the phase readout says diamond ring only in the seconds around totality", 
     && !!window.Astronomy, null, { timeout: 20000 });
 
   const r = await page.evaluate(() => {
-    const phaseAt = (j) => {
+    const readoutAt = (j) => {
       updateReadouts(j, eclipseAt(j, activeGroundCartesian));
       return document.getElementById("phaseReadout").textContent;
     };
@@ -360,15 +358,15 @@ test("the phase readout says diamond ring only in the seconds around totality", 
     activeGroundCartesian = Cesium.Cartesian3.fromDegrees(170.5028, -45.8788, 2 + EYE_HEIGHT);   // Dunedin
     const c = localCircumstances(activeGroundCartesian);
     const dunedin = {
-      minuteBefore: phaseAt(plus(c.totalBegin, -60)),
-      justBefore: phaseAt(plus(c.totalBegin, -5)),
-      during: phaseAt(c.peak),
-      justAfter: phaseAt(plus(c.totalEnd, 5)),
-      minuteAfter: phaseAt(plus(c.totalEnd, 60)),
+      minuteBefore: readoutAt(plus(c.totalBegin, -60)),
+      justBefore: readoutAt(plus(c.totalBegin, -5)),
+      during: readoutAt(c.peak),
+      justAfter: readoutAt(plus(c.totalEnd, 5)),
+      minuteAfter: readoutAt(plus(c.totalEnd, 60)),
     };
 
     activeGroundCartesian = Cesium.Cartesian3.fromDegrees(172.63643, -43.53095, 10 + EYE_HEIGHT); // Christchurch
-    const chch = phaseAt(localCircumstances(activeGroundCartesian).peak);
+    const chch = readoutAt(localCircumstances(activeGroundCartesian).peak);
     return { dunedin, chch };
   });
 
@@ -405,6 +403,10 @@ test("a place whose ground height did not load is not judged, and can be tried a
       await runSightlineCheck();
       const failed = read();
 
+      sampleTerrain = async () => { throw new Error("terrain request failed"); };
+      await setObserver(somewhere);
+      const threw = read();
+
       sampleTerrain = async () => [{ height: 0 }];   // a real beach
       await setObserver(somewhere);
       const atSeaLevel = read();
@@ -412,7 +414,7 @@ test("a place whose ground height did not load is not judged, and can be tried a
       sampleTerrain = async () => [{}];
       await setObserver(catalogue.presets[0]);                          // has its own elevation
       const preset = { ...read(), elev: catalogue.presets[0].elev };
-      return { failed, atSeaLevel, preset };
+      return { failed, threw, atSeaLevel, preset };
     } finally {
       sampleTerrain = real;
     }
@@ -423,6 +425,8 @@ test("a place whose ground height did not load is not judged, and can be tried a
   expect(r.failed.reason).toMatch(/ground height .* did not load/i);
   expect(r.failed.retryShown).toBe(true);
   expect(r.failed.retryLabel).toMatch(/try again/i);
+
+  expect(r.threw.missing).toBe(true);
 
   expect(r.atSeaLevel.missing).toBe(false);
   expect(r.atSeaLevel.eye).toBeCloseTo(1.7, 1);
@@ -457,6 +461,8 @@ test("the eye-level view is framed from the height the verdict assumes", async (
   expect(r.cameraAboveGround).toBeCloseTo(r.eyeHeight, 2);
 });
 
+// Pure logic again, so it runs without a GPU. These pin the promise that a place reads the same
+// wherever you see it: the map shows the stored level, the simulator judges the same contacts.
 test("the verdict answers totality inside the path and agrees with the catalogue", async ({ page }) => {
   const errs = errors(page);
   await page.goto("/index.html");

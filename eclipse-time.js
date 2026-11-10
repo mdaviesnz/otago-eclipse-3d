@@ -1,5 +1,8 @@
-// ΔT (Terrestrial Time minus Universal Time) for the 22 July 2028 eclipse.
+// The eclipse's clock: the ΔT both app pages compute with, and when the diamond ring shows.
 //
+// Pure, apart from useEclipseDeltaT, which sets ΔT on the astronomy library it is handed.
+//
+// ΔT is Terrestrial Time minus Universal Time, here for the 22 July 2028 eclipse.
 // astronomy-engine extrapolates ΔT with the Espenak & Meeus polynomial, which gives 76.65 s for
 // this date. The Earth has been spinning faster than that fit expected, and measured values put
 // 2028 near 69 s. The difference runs every contact about 9 s early and draws the path of

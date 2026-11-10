@@ -1040,11 +1040,13 @@ let sampleTerrain = (cartographics) =>
   Cesium.sampleTerrainMostDetailed(viewer.terrainProvider, cartographics);   // a seam for tests
 
 async function sampleGroundHeight(loc) {
+  if (!viewer) return undefined;       // no 3D view, so no terrain to ask: waiting would not help
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const samples = await sampleTerrain([Cesium.Cartographic.fromDegrees(loc.lon, loc.lat)]);
       if (Number.isFinite(samples[0].height)) return samples[0].height;
     } catch (e) { /* try again */ }
+    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
   }
   return undefined;
 }
@@ -1366,6 +1368,12 @@ async function selectLocation(loc, fly = true) {
     const c = localCircumstances(activeGroundCartesian);
     const t = (c && c.peak) ? c.peak : Cesium.JulianDate.fromIso8601(TOTALITY_MAX_UTC);
     updateReadouts(t, eclipseAt(t, activeGroundCartesian));
+    return;
+  }
+  if (groundHeightMissing) {
+    // With no height to stand at, an eye-level camera would be put at sea level, inside the
+    // hill. Leave the camera where it is and say why there is no answer.
+    runSightlineCheck();
     return;
   }
 
@@ -2197,9 +2205,6 @@ function renderSightlineResults(v, profile, missingFraction = 0, cat = null, pre
   if (hasTotality && !focus.blocked && v.level === "partial") {
     notes.push(note("The sun clears the skyline at maximum, but terrain cuts in at the start or end of totality.", true));
   }
-  if (v.nearEdge) {
-    notes.push(note(Catalogue.nearEdgeNote(totDur), true));
-  }
   // The verdict only judges totality, so a place can be clear and still lose the far ends of
   // the partial eclipse, when the sun is much lower.
   const lostEnds = hasTotality && v.level === "clear" ? moments.filter((m) => m.blocked) : [];
@@ -2526,7 +2531,6 @@ function renderCatalogueVerdict(s) {
   const notes = [];
   if (v.grazing) notes.push(note("During totality the sun clears the skyline by less than its own radius (0.26&deg;), so the lower edge of the disc grazes the ridge. Standing a little higher would clear it.", true));
   if (v.level === "partial") notes.push(note("The skyline cuts in during totality, so you would lose part of it.", true));
-  if (v.nearEdge) notes.push(note(Catalogue.nearEdgeNote(s.totality), true));
   if (s.publicAccess === false) notes.push(note("No verified public land or road here. You may need the landowner’s permission.", true));
 
   const rows = v.phases.map((p) => {
@@ -2968,9 +2972,10 @@ function liftVeilWhenGroundLoads() {
   const stop = scene.postRender.addEventListener(() => {
     const now = performance.now();
     if (groundAt === null) {
-      // Within the eye-level camera's 10 m: the detailed tile under the observer is in.
+      // The detailed tile under the observer is in once the rendered ground is below their
+      // eye, where the eye-level camera stands, and not far below it.
       const h = scene.globe.getHeight(ground);
-      if (h !== undefined && Math.abs(h - groundHeight) < 10) groundAt = now;
+      if (h !== undefined && h - groundHeight < EYE_HEIGHT && groundHeight - h < 10) groundAt = now;
     }
     if ((now - since > 400 && scene.globe.tilesLoaded) || (groundAt !== null && now - groundAt > 1500) ||
         now - since > 8000) {
