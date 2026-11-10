@@ -217,7 +217,7 @@ time-varying eclipse geometry on every clock tick in `eclipseAt(time, originCart
    $$s_\odot = \arcsin\!\left(\frac{R_\odot}{d_\odot}\right), \qquad s_\mathbb{C} = \arcsin\!\left(\frac{R_\mathbb{C}}{d_\mathbb{C}}\right)$$
    with nominal spherical radii:
    $$R_\odot = 695\,700\text{ km} \quad\text{(IAU 2015 Resolution B3 nominal photospheric radius)}$$
-   $$R_\mathbb{C} = 1\,737.4\text{ km} \quad\text{(IAU working group mean lunar radius, } k_0 = R_\mathbb{C}/R_\oplus = 0.2725076\text{)}$$
+   $$R_\mathbb{C} = 1\,737.4\text{ km} \quad\text{(IAU working group mean lunar radius, } k = R_\mathbb{C}/R_\oplus = 0.27240\text{)}$$
    At Dunedin maximum eclipse, this yields apparent diameters $2s_\odot = 31.47'$ and
    $2s_\mathbb{C} = 32.90'$, with radius ratio $k = s_\mathbb{C} / s_\odot = 1.0454$.
 
@@ -255,12 +255,17 @@ time-varying eclipse geometry on every clock tick in `eclipseAt(time, originCart
   Real lunar mountains and valleys shift C2 and C3 contact times by $\pm 1\text{–}3\text{ s}$
   near the centreline and govern Baily's beads and grazing-zone phenomena.
 - **Mean lunar radius vs. eclipse valley radius:** Standard Besselian element predictions
-  (Espenak & Meeus 2006; *Astronomical Almanac*) adopt $k = 0.272281 R_\oplus$ ($R_\mathbb{C} \approx 1\,735.95\text{ km}$,
-  the mean lunar valley radius, $\approx 1.45\text{ km}$ or $\approx 0.8''$ smaller than the IAU
-  mean radius of $1\,737.4\text{ km}$) when computing umbral contacts so that sunlight shining
-  through deep lunar valleys is excluded from nominal totality. Using the IAU mean radius in
-  `astronomy-engine` makes computed totality durations $\approx 2\text{–}3\text{ s}$ longer than
-  valley-radius predictions, matching the $+3\text{ s}$ difference observed at Dunedin C3 (§9).
+  (Espenak & Meeus 2006; *Astronomical Almanac*) adopt $k = 0.272281$ for umbral contacts
+  ($R_\mathbb{C} \approx 1\,736.65\text{ km}$, a mean lunar valley radius, $\approx 0.75\text{ km}$
+  or $\approx 0.4''$ smaller than the mean radius of $1\,737.4\text{ km}$ used here) so that
+  sunlight shining through deep lunar valleys is excluded from nominal totality. The larger
+  penumbral value those predictions use, $k = 0.2725076$, corresponds to $1\,738.09\text{ km}$.
+- **Effect of keeping the mean radius:** Compared with a valley-radius prediction, totality here
+  is $\approx 2\text{ s}$ longer in mid-path (Queenstown, Dunedin) and $\approx 8\text{ s}$
+  longer near the edge (Te Anau), and each limit of the path lies $\approx 1.1\text{ km}$ further
+  out. The app keeps the mean radius and is honest about the edge instead: a near-edge verdict
+  says totality there may be shorter or may not happen (`nearEdgeNote` in `catalogue.js`), and
+  the overview map draws each limit as a band about $2\text{ km}$ wide.
 
 ---
 
@@ -459,7 +464,7 @@ Worst-case discrepancy across all 12 town/contact checks is $0.13^\circ$ with ze
 |---|---|---|---|
 | **Ephemeris** | `astronomy-engine` (VSOP87 + ELP/MPP02) | $\sim 1\text{–}3''$ in 2028 ($\pm 1'$ multi-century bound) | $\pm 1\text{–}3\text{ s}$ on contact times; $< 0.001^\circ$ on altitude |
 | **$\Delta T$** | Fixed at $69.2\text{ s}$ (library default $76.65\text{ s}$ overridden) | $\approx \pm 1\text{ s}$ in the adopted value | $\approx 1.2\text{ s}$ on contact times and $\approx 0.25\text{ km}$ on the path limits, per second |
-| **Lunar limb profile** | Smooth sphere ($R_\mathbb{C} = 1737.4\text{ km}$), no Kaguya/LRO limb | $\approx 0.8''$ mean-to-valley radius + $\pm 1.5''$ topography | $\pm 1\text{–}3\text{ s}$ on C2/C3 near centreline; larger near grazing edge |
+| **Lunar limb profile** | Smooth sphere ($R_\mathbb{C} = 1737.4\text{ km}$), no Kaguya/LRO limb | $\approx 0.4''$ mean-to-valley radius + $\pm 1.5''$ topography | $\pm 1\text{–}3\text{ s}$ on C2/C3 near centreline; $\approx 8\text{ s}$ and $\approx 1.1\text{ km}$ at each limit |
 | **Solar refraction** | Sæmundsson (1986) (`Refraction.Normal`, $1010\text{ hPa}, 10^\circ\text{C}$) | $+6.4'$ ($+0.107^\circ$) at $8.3^\circ$ altitude | Unified across both code paths; meteorological scatter $\sim \pm 0.5'$ |
 | **Terrestrial refraction** | Effective Earth radius $R_{\text{eff}} = R_\oplus / (1 - k)$, $k = 0.13$ | $+0.35'$ at $10\text{ km}$, $+1.6'$ at $45\text{ km}$ | Unified across both code paths; basin anomalies cancel with solar ray below ridge |
 | **Solar disc semi-diameter** | Sightline clearance measured to solar centre ($s_\odot \approx 0.26^\circ$) | $0.26^\circ$ photospheric limb ($0.5^\circ$ with inner corona) | Clearances in $(0^\circ, 0.26^\circ)$ flagged as lower-limb grazing |

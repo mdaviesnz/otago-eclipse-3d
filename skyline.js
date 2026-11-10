@@ -5,6 +5,7 @@
 // the sun's track as [{ t, az, alt }] in time order, and contacts as [{ t, x, ... }].
 
 import { compassName, heightPhrase, handMeasure } from "./places.js";
+import { nearEdgeNote } from "./catalogue.js";
 
 // Horizon angle on a bearing, between stored samples. Off either end, the end value holds.
 export function horizonAt(profile, az) {
@@ -110,7 +111,7 @@ export function verdictReason({ level, scope, focus, peakPct, peakTime, totality
   const dir = compassName(focus.az);
   const look = `Look ${dir}, ${heightPhrase(focus.alt)}.`;
   const margin = handMeasure(Math.abs(focus.alt - focus.horizon));
-  const edge = nearEdge ? ` Totality lasts only ${Math.round(totalitySeconds)} seconds here.` : "";
+  const edge = nearEdge ? ` ${nearEdgeNote(totalitySeconds)}` : "";
 
   if (focus.below) return `The sun is below the horizon at ${peakTime}.`;
   if (focus.blocked) {

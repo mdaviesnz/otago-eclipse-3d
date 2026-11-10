@@ -187,6 +187,14 @@ function renderCloudOverlay() {
 const PARTIAL_BANDS = {"p90":[[-24.82,146],[-26.43,148],[-28,150],[-29.53,152],[-31.02,154],[-32.46,156],[-33.85,158],[-35.19,160],[-36.48,162],[-37.72,164],[-38.92,166],[-40.06,168],[-41.15,170],[-42.2,172],[-43.21,174],[-44.17,176],[-45.1,178],[-45.98,180],[-46.83,182],[-47.25,183.04],[-47.68,183.4],[-48.1,183.12],[-48.52,182.85],[-48.94,182.57],[-49.37,182.29],[-49.79,182],[-52.49,180],[-54.1,178],[-53.24,176],[-52.35,174],[-51.42,172],[-50.45,170],[-49.43,168],[-48.38,166],[-47.28,164],[-46.13,162],[-44.94,160],[-43.7,158],[-42.41,156],[-41.08,154],[-39.69,152],[-38.27,150],[-36.79,148],[-35.28,146]],"p75":[[-19.78,146],[-21.4,148],[-23.01,150],[-24.58,152],[-26.11,154],[-27.59,156],[-29.02,158],[-30.4,160],[-31.73,162],[-33,164],[-34.24,166],[-35.41,168],[-36.53,170],[-37.61,172],[-38.65,174],[-39.64,176],[-40.58,178],[-41.5,180],[-42.36,182],[-43.19,184],[-43.69,185.25],[-44.2,185.45],[-44.7,185.17],[-45.2,184.88],[-45.7,184.59],[-46.21,184.3],[-46.71,184],[-49.79,182],[-52.49,180],[-54.82,178],[-56.85,176],[-57.98,174],[-57.06,172],[-56.11,170],[-55.12,168],[-54.09,166],[-53.02,164],[-51.89,162],[-50.72,160],[-49.5,158],[-48.23,156],[-46.93,154],[-45.57,152],[-44.17,150],[-42.72,148],[-41.23,146]],"p50":[[-11.46,146],[-13.1,148],[-14.75,150],[-16.37,152],[-17.96,154],[-19.52,156],[-21.02,158],[-22.47,160],[-23.86,162],[-25.21,164],[-26.5,166],[-27.74,168],[-28.92,170],[-30.06,172],[-31.15,174],[-32.19,176],[-33.19,178],[-34.14,180],[-35.05,182],[-35.91,184],[-37.45,187.78],[-39,188],[-40.54,187.39],[-42.08,186.6],[-43.62,185.77],[-45.17,184.9],[-46.71,184],[-49.79,182],[-52.49,180],[-54.82,178],[-56.85,176],[-58.6,174],[-60.13,172],[-61.46,170],[-62.63,168],[-63.67,166],[-64.57,164],[-64.52,162],[-63.35,160],[-62.11,158],[-60.84,156],[-59.5,154],[-58.14,152],[-56.71,150],[-55.23,148],[-53.73,146]]};
 
 const WARM = "#F5B83D";
+
+// A limit drawn about 2 km wide. The limits run north-west to south-east at roughly 37 degrees
+// to the parallels here, so a kilometre across the band is about 1.25 km of latitude.
+const LIMIT_BAND_HALF_DEG = 1.25 / 111.2;
+const limitBand = (line) => [
+  ...line.map(([lat, lon]) => [lat + LIMIT_BAND_HALF_DEG, lon]),
+  ...[...line].reverse().map(([lat, lon]) => [lat - LIMIT_BAND_HALF_DEG, lon]),
+];
 let bandLayers = [];
 
 // The path is the one warm thing on the map. The partial bands are too far away to see at any
@@ -197,8 +205,13 @@ function renderEclipsePath() {
   L.polygon([...north, ...[...south].reverse()], {
     stroke: false, fillColor: WARM, fillOpacity: 0.08, interactive: false,
   }).addTo(pathLayer);
+  // Each limit is a band, not a line: where totality stops is only known to a kilometre or two
+  // (Catalogue.nearEdgeNote). The thin outline keeps it visible zoomed out, where 2 km is under
+  // a pixel.
   for (const lim of [north, south]) {
-    L.polyline(lim, { color: WARM, weight: 2, opacity: 0.9, interactive: false }).addTo(pathLayer);
+    L.polygon(limitBand(lim), {
+      color: WARM, weight: 1, opacity: 0.45, fillColor: WARM, fillOpacity: 0.3, interactive: false,
+    }).addTo(pathLayer);
   }
   L.polyline(centre, {
     color: WARM, weight: 1.5, opacity: 0.75, dashArray: "6 6", interactive: false,
@@ -519,7 +532,7 @@ function detailHtml(s) {
   const notes = [];
   if (s.level === "partial") notes.push("The skyline cuts in during totality, so you would lose part of it.");
   if (tight) notes.push("This margin is tight. The elevation data can be about 0.6° out near a ridge, so check the spot in person.");
-  if (s.totality < 60) notes.push(`Near the edge of the path, with only ${minutes(s.totality)} of totality.`);
+  if (s.totality < 60) notes.push(Catalogue.nearEdgeNote(s.totality));
   if (s.publicAccess === false) notes.push("No verified public land or road here. You may need the landowner’s permission.");
 
   let fix = "";

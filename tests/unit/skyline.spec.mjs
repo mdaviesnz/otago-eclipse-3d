@@ -5,6 +5,7 @@ import {
   horizonAt, chartCeiling, skylineScales, skylinePath, splitByVisibility, secondsAtX,
   snapToContact, adjacentContact, verdictPredicate, verdictReason,
 } from "../../skyline.js";
+import { nearEdgeNote } from "../../catalogue.js";
 
 const profile = [{ az: 300, angle: 10 }, { az: 310, angle: 20 }, { az: 320, angle: 10 }];
 
@@ -126,9 +127,13 @@ test.describe("the reason", () => {
     expect(r).toContain("93% of the sun is covered at 4:16 pm");
     expect(r).toContain("glasses");
   });
-  test("near the edge it says how short totality is", () => {
+  test("near the edge it says totality is uncertain and where to go", () => {
     const r = verdictReason({ ...base, nearEdge: true, totalitySeconds: 48, focus });
-    expect(r).toContain("only 48 seconds");
+    expect(r).toContain(nearEdgeNote(48));
+    expect(r).toContain("about 48 seconds");
+  });
+  test("away from the edge it says nothing about it", () => {
+    expect(verdictReason({ ...base, focus })).not.toContain("edge of the path");
   });
   test("a grazing sun says so", () => {
     expect(verdictReason({ ...base, focus: { ...focus, grazing: true } })).toContain("touches the skyline");

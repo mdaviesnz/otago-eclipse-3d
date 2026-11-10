@@ -226,7 +226,7 @@ hz = Horizon(t, observer, eq.ra, eq.dec, Refraction.Normal)</div>
       <h3>5.2 Continuous Magnitude, Obscuration, and Totality Criterion (<code>eclipseAt</code>)</h3>
       <p>From topocentric distances <var>d</var><sub>&#9737;</sub>, <var>d</var><sub>&#9790;</sub> (converted from AU via 1 AU = 149,597,870.7 km):</p>
       <div class="math-block">s_sun  = asin(R_sun / d_sun),    R_sun  = 695 700 km   (IAU nominal photospheric radius)
-s_moon = asin(R_moon / d_moon),  R_moon =   1 737.4 km (IAU mean lunar radius, k0 = 0.2725076)
+s_moon = asin(R_moon / d_moon),  R_moon =   1 737.4 km (IAU mean lunar radius, k = 0.27240)
 sep    = acos(clamp(u_sun · u_moon, -1, 1))
 mag    = max(0, (s_sun + s_moon - sep) / (2 · s_sun))
 obsc   = A_overlap(s_sun, s_moon, sep) / (π · s_sun²)
@@ -242,9 +242,13 @@ isTotal = (s_moon &gt;= s_sun) and (sep &lt;= s_moon - s_sun)</div>
       <p>
         <b>Smooth-sphere approximation:</b> No Kaguya/LRO lunar limb profile is applied (&plusmn;1&ndash;3 s
         effect on C2/C3). Standard Besselian predictions (Espenak &amp; Meeus 2006) also adopt a smaller
-        lunar valley radius (<var>k</var> = 0.272281 <var>R</var><sub>&oplus;</sub> &approx; 1,735.95 km, ~0.8&Prime; smaller than
-        the IAU mean radius) for umbral contacts, making <code>astronomy-engine</code>'s smooth-sphere
-        totality duration ~2&ndash;3 s longer.
+        lunar valley radius (<var>k</var> = 0.272281, &approx; 1,736.65 km, ~0.75 km or ~0.4&Prime; smaller than
+        the mean radius used here) for umbral contacts; their larger penumbral value,
+        <var>k</var> = 0.2725076, corresponds to 1,738.09 km. Keeping the mean radius makes totality
+        ~2 s longer in mid-path (Queenstown, Dunedin) and ~8 s longer near the edge (Te Anau), and
+        puts each limit of the path ~1.1 km further out. The app is honest about the edge instead:
+        a near-edge verdict says totality there may be shorter or may not happen, and the overview
+        map draws each limit as a band about 2 km wide.
       </p>
     </section>
 
@@ -342,7 +346,7 @@ horizon  = max_d angle(d),    clearance = alt_sun - horizon</div>
           <tbody>
             <tr><td>Ephemeris (VSOP87 + ELP/MPP02 in 2028)</td><td>~1&ndash;3&Prime;</td><td>&plusmn;1&ndash;3 s on contact times; &lt;0.001&deg; on altitude</td></tr>
             <tr><td>&Delta;<var>T</var>, fixed at 69.2 s (library default 76.65 s overridden)</td><td>~&plusmn;1 s in the adopted value</td><td>~1.2 s on contact times and ~0.25 km on the path limits, per second</td></tr>
-            <tr><td>Smooth spherical Moon (no Kaguya/LRO limb)</td><td>~0.8&Prime; radius + &plusmn;1.5&Prime; limb</td><td>&plusmn;1&ndash;3 s on C2/C3; larger in grazing edge zone</td></tr>
+            <tr><td>Smooth spherical Moon (no Kaguya/LRO limb)</td><td>~0.4&Prime; radius + &plusmn;1.5&Prime; limb</td><td>&plusmn;1&ndash;3 s on C2/C3; ~8 s and ~1.1 km at each limit</td></tr>
             <tr><td>Solar refraction (S&aelig;mundsson 1986, 1010 hPa, 10&deg;C)</td><td>+6.4&prime; (+0.107&deg;) at 8.3&deg;</td><td>Unified across both paths; weather scatter ~&plusmn;0.5&prime;</td></tr>
             <tr><td>Terrestrial refraction (<var>k</var> = 0.13, <var>R</var><sub>eff</sub> = 7323 km)</td><td>+0.35&prime; at 10 km, +1.6&prime; at 45 km</td><td>Unified across both paths; basin inversion cancels with solar ray</td></tr>
             <tr><td>Solar semi-diameter (<var>s</var><sub>&#9737;</sub> &approx; 0.26&deg;)</td><td>0.26&deg; limb (0.5&deg; inner corona)</td><td>Clearances in (0&deg;, 0.26&deg;) flagged as lower-limb grazing</td></tr>

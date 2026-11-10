@@ -224,6 +224,28 @@ test("the path limits drawn on the map are where totality stops", async ({ page 
       insideNorth: true, outsideNorth: false, insideSouth: true, outsideSouth: false,
     });
   }
+
+  // Where totality stops is only known to a kilometre or two, so each limit is drawn as a band
+  // about 2 km wide, not a crisp line.
+  const bands = await page.evaluate(() => {
+    const { north } = window.EclipsePath.ECLIPSE_PATH;
+    return pathLayer.getLayers()
+      .filter((l) => l instanceof L.Polygon && l.options.fillOpacity > 0.1)
+      .map((l) => {
+        const ring = l.getLatLngs()[0];
+        const i = north.findIndex(([, lon]) => lon === 169);
+        const top = ring[i], bottom = ring[ring.length - 1 - i];
+        return { sameMeridian: top.lng === bottom.lng, km: Math.abs(top.lat - bottom.lat) * 111.2 * Math.cos(37 * Math.PI / 180) };
+      });
+  });
+  expect(bands).toHaveLength(2);
+  for (const band of bands) {
+    expect(band.sameMeridian).toBe(true);
+    expect(band.km).toBeGreaterThan(1.5);
+    expect(band.km).toBeLessThan(2.5);
+  }
+  expect(await page.evaluate(() => pathLayer.getLayers().some((l) => !(l instanceof L.Polygon) && l.options.weight >= 2)),
+    "no crisp limit line").toBe(false);
 });
 
 // A catalogue spot must be answered from viewpoints.json, not by re-probing terrain: the live

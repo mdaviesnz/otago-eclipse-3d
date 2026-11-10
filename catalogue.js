@@ -136,6 +136,17 @@ export function declutter(list, project, cellPx) {
   });
 }
 
+// What to say about a near-edge place, the same wherever a place is shown and whether its
+// verdict was stored or checked live.
+//
+// The edge of the path is not known to the second. The moon is treated as a smooth sphere of
+// mean radius; its real limb has valleys, and the smaller radius eclipse predictions often use
+// for totality pulls each limit in by about a kilometre and shortens totality near it by
+// several seconds (ASTRONOMY.md, 5.3). So a short totality here may be none.
+export const nearEdgeNote = (totalitySeconds) =>
+  `This is near the edge of the path, where totality (about ${Math.round(totalitySeconds)} seconds here) ` +
+  "may be shorter or may not happen at all. Move towards the centre of the path to be sure.";
+
 // The headline for a totality-scope verdict, the same wherever a place is shown.
 export const TOTALITY_TEXT = {
   clear: "Clear through totality",

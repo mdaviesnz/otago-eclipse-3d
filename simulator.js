@@ -2194,7 +2194,7 @@ function renderSightlineResults(v, profile, missingFraction = 0, cat = null, pre
     notes.push(note("The sun clears the skyline at maximum, but terrain cuts in at the start or end of totality.", true));
   }
   if (v.nearEdge) {
-    notes.push(note(`Totality lasts under a minute here (${Math.round(totDur)} s), near the edge of the path. A few kilometres towards the centre line buys a lot more.`, true));
+    notes.push(note(Catalogue.nearEdgeNote(totDur), true));
   }
   // The verdict only judges totality, so a place can be clear and still lose the far ends of
   // the partial eclipse, when the sun is much lower.
@@ -2522,7 +2522,7 @@ function renderCatalogueVerdict(s) {
   const notes = [];
   if (v.grazing) notes.push(note("During totality the sun clears the skyline by less than its own radius (0.26&deg;), so the lower edge of the disc grazes the ridge. Standing a little higher would clear it.", true));
   if (v.level === "partial") notes.push(note("The skyline cuts in during totality, so you would lose part of it.", true));
-  if (v.nearEdge) notes.push(note("Totality lasts under a minute here, near the edge of the path. A few kilometres towards the centre line buys a lot more.", true));
+  if (v.nearEdge) notes.push(note(Catalogue.nearEdgeNote(s.totality), true));
   if (s.publicAccess === false) notes.push(note("No verified public land or road here. You may need the landowner’s permission.", true));
 
   const rows = v.phases.map((p) => {

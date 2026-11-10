@@ -3,7 +3,7 @@
 import { test, expect } from "@playwright/test";
 import {
   haversineM, bearingDeg, matchesAccess, thinNearby, nearestClearSpot, betterSpotNearby, compareSpots,
-  rankSpots, declutter,
+  rankSpots, declutter, nearEdgeNote,
 } from "../../catalogue.js";
 
 const spot = (over) => ({
@@ -200,5 +200,21 @@ test.describe("ranking", () => {
     const first = list[0];
     rankSpots(list);
     expect(list[0]).toBe(first);
+  });
+});
+
+// The edge of the path is only known to a kilometre or two: the moon is treated as a smooth
+// sphere, and its real limb has valleys. So a short totality near the edge may be none at all,
+// and every page must say so in the same words.
+test.describe("the near-edge note", () => {
+  test("says totality is uncertain and to move towards the centre", () => {
+    const note = nearEdgeNote(48.4);
+    expect(note).toContain("about 48 seconds");
+    expect(note).toMatch(/may be shorter or may not happen at all/);
+    expect(note).toMatch(/towards the centre of the path/);
+  });
+
+  test("depends only on the whole seconds, so stored and live verdicts read the same", () => {
+    expect(nearEdgeNote(12)).toBe(nearEdgeNote(12.3));
   });
 });
