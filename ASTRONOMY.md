@@ -49,8 +49,8 @@ is executed identically in both code paths:
 
 | Environment | Library | Role |
 |---|---|---|
-| Browser (`index.html`) | `astronomy.browser.min.js` (v2) | Real-time topocentric coordinates, continuous magnitude/obscuration, and per-location contact times |
-| Offline pipeline (`precompute/build_viewpoints.py`) | `astronomy-engine` (Python) | Regional circumstance grid (`EclipseField`), POI/grid horizon clearances, and town-centre preset profiles |
+| Browser (`index.html`) | `astronomy.browser.min.js` (2.1.19) | Real-time topocentric coordinates, continuous magnitude/obscuration, and per-location contact times |
+| Offline pipeline (`precompute/build_viewpoints.py`) | `astronomy-engine` (Python, 2.1.19) | Regional circumstance grid (`EclipseField`), POI/grid horizon clearances, and town-centre preset profiles |
 
 `astronomy-engine` implements:
 - **Solar position:** VSOP87 theory (Bretagnon & Francou 1988) truncated to retain sub-arcsecond

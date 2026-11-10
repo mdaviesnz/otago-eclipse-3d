@@ -41,7 +41,7 @@ const PRECACHE_SHELL = [
 ];
 
 const PRECACHE_CDN = [
-  "https://cdn.jsdelivr.net/npm/astronomy-engine@2/astronomy.browser.min.js",
+  "https://cdn.jsdelivr.net/npm/astronomy-engine@2.1.19/astronomy.browser.min.js",
   "https://unpkg.com/lucide@latest",
   "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css",
   "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js",

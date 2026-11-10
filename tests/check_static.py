@@ -395,6 +395,43 @@ def check_verdict_cases() -> None:
         ok(f"precompute/verdict.py passes all {len(run)} shared totality-scope verdict cases")
 
 
+def check_astronomy_version() -> None:
+    """The stored catalogue and the live calculation come from two builds of astronomy-engine,
+    one for Python and one for the browser. They must be the same release, named exactly, or
+    a new release could move one side's figures without the other."""
+    req = ROOT / "precompute" / "requirements.txt"
+    m = re.search(r"^astronomy-engine==([0-9.]+)\s*$", req.read_text(encoding="utf-8"), re.M) if req.exists() else None
+    if not m:
+        fail("precompute/requirements.txt: astronomy-engine must be pinned with ==")
+        return
+    want = m.group(1)
+    wrong = []
+    for name in ("index.html", "map.html", "sw.js"):
+        found = re.findall(r"astronomy-engine@([^/\"']+)/", (ROOT / name).read_text(encoding="utf-8"))
+        if not found:
+            wrong.append(f"{name} does not load astronomy-engine")
+        wrong += [f"{name} loads {v}" for v in found if v != want]
+    for name in ("simulator.js", "map.js", "tests/smoke.spec.mjs"):
+        if "astronomy-engine@" in (ROOT / name).read_text(encoding="utf-8"):
+            wrong.append(f"{name} loads its own copy of astronomy-engine")
+    if wrong:
+        fail(f"astronomy-engine: the precompute uses {want}, but {'; '.join(wrong)}")
+    else:
+        ok(f"browser and precompute use the same astronomy-engine ({want})")
+
+
+def check_dead_constants() -> None:
+    """Contacts are computed per place. Hardcoded Dunedin contact times were left behind once,
+    unused and holding values from an older ΔT."""
+    text = (ROOT / "simulator.js").read_text(encoding="utf-8")
+    left = [n for n in ("TOTALITY_BEG_UTC", "TOTALITY_END_UTC", "PARTIAL_BEG_UTC", "PARTIAL_END_UTC",
+                        "totalBegJ", "totalEndJ", "partBegJ", "partEndJ") if re.search(rf"\b{n}\b", text)]
+    if left:
+        fail(f"simulator.js still has hardcoded Dunedin contact times: {left}")
+    else:
+        ok("simulator.js has no hardcoded contact times")
+
+
 def check_delta_t() -> None:
     """The browser and the precompute each fix ΔT (TT - UT) for the eclipse. A second of
     disagreement moves every contact by a second, so the stored catalogue and the live
@@ -506,6 +543,8 @@ def main() -> int:
     check_local_references()
     check_verdict_cases()
     check_delta_t()
+    check_astronomy_version()
+    check_dead_constants()
     check_catalogue()
     check_pwa_and_headers()
 

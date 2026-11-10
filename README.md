@@ -217,7 +217,7 @@ to spots near wherever you are standing, and each entry shows its distance and b
 ### Building it
 
 ```bash
-python -m pip install --user numpy pillow requests astronomy-engine
+python -m pip install --user -r precompute/requirements.txt
 cd precompute && python build_viewpoints.py
 ```
 

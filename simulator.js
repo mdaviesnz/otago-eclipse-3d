@@ -29,10 +29,6 @@ const CREDITS = {
 const CLOCK_START_UTC   = "2028-07-22T03:00:00Z"; // 15:00 NZST
 const CLOCK_STOP_UTC    = "2028-07-22T05:30:00Z"; // 17:30 NZST
 const TOTALITY_MAX_UTC  = "2028-07-22T04:17:20Z"; // 16:17:20 NZST, maximum at Dunedin (ΔT 69.2 s)
-const TOTALITY_BEG_UTC  = "2028-07-22T04:15:45Z"; // 16:15:45 NZST
-const TOTALITY_END_UTC  = "2028-07-22T04:18:36Z"; // 16:18:36 NZST
-const PARTIAL_BEG_UTC   = "2028-07-22T03:08:58Z"; // 15:08:58 NZST
-const PARTIAL_END_UTC   = "2028-07-22T05:17:00Z"; // 17:17:00 NZST
 
 // `goTo` is each town's own "Go to..." suggestion, chosen by hand and fixed, so the most-visited
 // places never depend on a rule or a catalogue rebuild; every other place is matched by the rule
@@ -94,10 +90,6 @@ let activeCatEntry = null;            // catalogue record the observer is standi
 let pinMode = false;                  // when true, clicking the map sets the location
 const startJulian = Cesium.JulianDate.fromIso8601(CLOCK_START_UTC);
 const stopJulian  = Cesium.JulianDate.fromIso8601(CLOCK_STOP_UTC);
-const totalBegJ   = Cesium.JulianDate.fromIso8601(TOTALITY_BEG_UTC);
-const totalEndJ   = Cesium.JulianDate.fromIso8601(TOTALITY_END_UTC);
-const partBegJ    = Cesium.JulianDate.fromIso8601(PARTIAL_BEG_UTC);
-const partEndJ    = Cesium.JulianDate.fromIso8601(PARTIAL_END_UTC);
 const maxJ        = Cesium.JulianDate.fromIso8601(TOTALITY_MAX_UTC);
 const windowSecs  = Cesium.JulianDate.secondsDifference(stopJulian, startJulian);
 
