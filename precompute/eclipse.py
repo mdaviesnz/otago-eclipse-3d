@@ -37,3 +37,11 @@ SEARCH_FROM = A.Time.Make(2028, 7, 21, 0, 0, 0)
 def local_eclipse(lat: float, lon: float, height: float = 0.0):
     """Contacts of the eclipse for an observer at this position and height in metres."""
     return A.SearchLocalSolarEclipse(SEARCH_FROM, A.Observer(float(lat), float(lon), float(height)))
+
+
+def totality_seconds(lat: float, lon: float, height: float = 0.0) -> float:
+    """Seconds between second and third contact for this observer, or 0 outside the path."""
+    e = local_eclipse(lat, lon, height)
+    if e.total_begin is None or e.total_end is None:
+        return 0.0
+    return (e.total_end.time.ut - e.total_begin.time.ut) * 86400.0

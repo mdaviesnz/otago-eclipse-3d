@@ -326,7 +326,9 @@ class EclipseField:
 
     Circumstances vary smoothly over tens of kilometres, so a ~0.1 deg grid interpolated
     bilinearly is far cheaper than one ephemeris search per candidate -- and indistinguishable
-    at the precision that matters here.
+    at the precision that matters here. The exception is totality duration near the edge of
+    the path, so the duration here only ranks candidates; with_direct_totality works out the
+    figure that is stored.
     """
 
     def __init__(self, step: float = 0.1):
@@ -410,6 +412,28 @@ class EclipseField:
         tot = (self.total[i0, j0] & self.total[i0, j0 + 1]
                & self.total[i0 + 1, j0] & self.total[i0 + 1, j0 + 1])
         return dict(alt=alt, az=az, altB=altB, azB=azB, altE=altE, azE=azE, dur=dur, tot=tot)
+
+
+def with_direct_totality(rows: list) -> list:
+    """The rows that will be written, each with totality worked out for its own position.
+
+    EclipseField is fine for the sun's altitude and bearing, which change slowly, and for
+    deciding which candidates are inside the path. Totality length is different: it falls to
+    zero at the edge of the path along a curve, so interpolating it across a 0.1 degree cell
+    ran up to 20 s short there. One ephemeris search per written row costs a few seconds in
+    all, at the observer's eye, as the browser does for the same place.
+
+    A row with no totality of its own is dropped: it would say "inside the path" about a place
+    that is not.
+    """
+    kept = []
+    for r in rows:
+        seconds = int(round(eclipse.totality_seconds(r["lat"], r["lon"], r["elev"] + EYE_HEIGHT)))
+        if seconds > 0:
+            kept.append({**r, "totality": seconds})
+    if len(kept) < len(rows):
+        print(f"  dropped {len(rows) - len(kept)} row(s) with no totality at their own position")
+    return kept
 
 
 # ----------------------------------------------------------------------------------------
@@ -1640,6 +1664,10 @@ def main():
         "totality": int(round(float(dur[i]))),
         "access": rank_name[int(access[i])] if access.size else "unknown",
     } for i in chosen]
+
+    print("  computing totality at each spot's own position")
+    spots = with_direct_totality(spots)
+    poi_out = with_direct_totality(poi_out)
 
     print("  computing the app's fixed presets (full horizon profiles)")
     presets = preset_rows(dem, args.allow_missing_tiles)

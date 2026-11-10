@@ -54,5 +54,22 @@ class MissingTerrain(unittest.TestCase):
         build.MISSING_TILES.clear()
 
 
+class StoredTotality(unittest.TestCase):
+    """Totality length falls away steeply near the edge of the path, so reading it off the
+    0.1 degree field by interpolation ran up to 20 s short there."""
+
+    def test_each_kept_row_stores_its_own_totality(self):
+        beach = {"name": "All Day Beach", "lat": -45.2123543, "lon": 170.8848314, "elev": 3,
+                 "totality": 20}                      # what interpolation gave
+        rows = build.with_direct_totality([beach])
+        self.assertEqual(len(rows), 1)
+        self.assertAlmostEqual(rows[0]["totality"], 41, delta=2)
+        self.assertIsInstance(rows[0]["totality"], int)
+
+    def test_a_row_with_no_totality_of_its_own_is_dropped_not_added(self):
+        christchurch = {"lat": -43.53095, "lon": 172.63643, "elev": 8, "totality": 5}
+        self.assertEqual(build.with_direct_totality([christchurch]), [])
+
+
 if __name__ == "__main__":
     unittest.main()

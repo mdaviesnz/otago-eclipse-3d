@@ -36,5 +36,16 @@ class DeltaT(unittest.TestCase):
         self.assertLess(seconds_from(e.total_end, 4, 18, 47.5), 1.0)
 
 
+class TotalityLength(unittest.TestCase):
+    def test_a_place_near_the_northern_limit(self):
+        # All Day Beach, 1.7 m above its 3 m ground. Interpolating the 0.1 degree field reads
+        # 20 s here; the browser's copy of the library gives 41.2 s for the same observer.
+        self.assertAlmostEqual(
+            eclipse.totality_seconds(-45.2123543, 170.8848314, 4.7), 41.2, delta=2.0)
+
+    def test_a_place_outside_the_path_has_none(self):
+        self.assertEqual(eclipse.totality_seconds(-43.53095, 172.63643, 10.0), 0.0)   # Christchurch
+
+
 if __name__ == "__main__":
     unittest.main()
