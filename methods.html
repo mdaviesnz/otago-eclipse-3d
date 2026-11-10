@@ -214,7 +214,11 @@ hz = Horizon(t, observer, eq.ra, eq.dec, Refraction.Normal)</div>
         Per-observer contact times (C1, C2, maximum, C3, C4) come from
         <code>SearchLocalSolarEclipse(startTime, observer)</code>. In the offline catalogue pipeline,
         <code>EclipseField</code> evaluates a 0.1&deg; &times; 0.1&deg; grid (~2,000 searches) and
-        interpolates solar altitude, azimuth, and duration bilinearly. Totality is enforced as a strict
+        interpolates solar altitude, azimuth, and duration bilinearly. The interpolated duration only
+        ranks candidates: duration falls to zero along a curve at the edge of the path, where
+        interpolation ran up to 20 s short, so each entry that is written gets its own
+        <code>SearchLocalSolarEclipse</code> at its position and eye height, and that figure is
+        stored. Totality is enforced as a strict
         4-corner boundary: all four surrounding grid nodes must lie inside totality so edge candidates
         are never optimistically included.
       </p>

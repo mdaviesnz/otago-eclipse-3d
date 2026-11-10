@@ -208,9 +208,11 @@ build step — `dist/` is a plain copy.
 
 ```bash
 cd precompute && python build_viewpoints.py     # ~4 min warm, ~3½ h cold
-python verify_output.py                          # sanity-check the output
+python build_path.py                            # only after a ΔT or library change, ~1 min
+python -m unittest discover -p "test_*.py"      # stored figures against a fresh calculation
+python verify_output.py                          # summary of the output
 cd .. && python tests/check_static.py            # the CI gate, run locally
-git add viewpoints.json && git commit -m "Rebuild viewpoint catalogue"
+git add viewpoints.json eclipse-path.js && git commit -m "Rebuild viewpoint catalogue"
 git push
 ```
 

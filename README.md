@@ -222,7 +222,18 @@ minor by comparison. Everything downloaded is cached under `precompute/cache/` (
 re-runs and interrupted runs are cheap. Flags: `--zoom`, `--spacing`, `--radius`, `--top`,
 `--min-clearance`, `--no-osm`, `--no-poi`.
 
-`verify_output.py` re-checks the emitted catalogue.
+The build stops without writing anything if a terrain tile cannot be fetched, because a missing
+tile reads as sea level and lowers every horizon that crosses it. Run it again to retry.
+`--allow-missing-tiles` builds anyway and lists the gaps in the output, which the static checks
+then refuse to deploy.
+
+`build_path.py` generates `eclipse-path.js`, the path of totality the overview map draws. Run
+it after changing ΔT (`DELTA_T_SECONDS`) or the astronomy-engine version; it takes about a
+minute and needs no network.
+
+`python -m unittest discover -s precompute -p "test_*.py"` checks the build's astronomy and
+compares every stored totality length in the catalogue with a fresh calculation.
+`verify_output.py` prints a summary of the emitted catalogue.
 
 ### How it works
 

@@ -199,7 +199,10 @@ In the offline catalogue builder (`build_viewpoints.py`), `EclipseField` evaluat
 `SearchLocalSolarEclipse` on a $0.1^\circ \times 0.1^\circ$ latitude/longitude grid ($\approx 2\,000$
 nodes across $[-46.6^\circ, -43.3^\circ] \times [166.0^\circ, 171.6^\circ]$) and interpolates
 solar altitude, azimuth, and totality duration bilinearly for the $\sim 650\,000$ land
-candidates. To prevent false-positive totality verdicts along the northern and southern umbral
+candidates. The interpolated duration only ranks candidates. Duration falls to zero along a
+curve at the edge of the path, where interpolation ran up to $20\text{ s}$ short, so each of the
+$\sim 800$ entries that is written gets its own `SearchLocalSolarEclipse` at its position and
+eye height (`with_direct_totality`), and that figure is the one stored. To prevent false-positive totality verdicts along the northern and southern umbral
 limits, totality membership is treated as a strict logical conjunction: **all four surrounding
 $0.1^\circ$ grid corners must be inside the path of totality** (`tot = c00 & c01 & c10 & c11`).
 

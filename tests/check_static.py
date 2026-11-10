@@ -32,7 +32,7 @@ import verdict  # noqa: E402  (precompute/verdict.py: standard library only)
 
 SITE_FILES = ["index.html", "map.html", "astronomy.html", "methods.html", "app.css",
               "viewpoints.json", "verdict.js", "catalogue.js", "places.js", "contours.js", "skyline.js",
-              "eclipse-time.js",
+              "eclipse-time.js", "eclipse-path.js",
               "simulator.js", "map.js",
               "social-card.svg", "icon.svg", "manifest.webmanifest", "sw.js", "_headers",
               "font-piazzolla-latin.woff2", "font-piazzolla-latin-ext.woff2",
@@ -413,6 +413,17 @@ def check_delta_t() -> None:
         fail(f"ΔT differs: eclipse-time.js uses {js} s, precompute/eclipse.py uses {py} s")
     else:
         ok(f"browser and precompute use the same ΔT ({js} s)")
+
+    # The path limits on the map are generated, and are only right for the ΔT they were made with.
+    p = ROOT / "eclipse-path.js"
+    m = re.search(r'"deltaT":([0-9.]+)', p.read_text(encoding="utf-8")) if p.exists() else None
+    if not m:
+        fail("eclipse-path.js: could not find the ΔT it was generated with")
+    elif float(m.group(1)) != py:
+        fail(f"eclipse-path.js was generated with ΔT {m.group(1)} s, but the precompute now uses "
+             f"{py} s. Run precompute/build_path.py.")
+    else:
+        ok("the map's path limits were generated with the current ΔT")
 
 
 def check_pwa_and_headers() -> None:

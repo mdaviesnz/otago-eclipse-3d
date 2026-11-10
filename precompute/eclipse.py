@@ -6,6 +6,8 @@ before computing anything.
 
 from __future__ import annotations
 
+from typing import NamedTuple
+
 import astronomy as A
 import astronomy.astronomy as _engine
 
@@ -45,3 +47,70 @@ def totality_seconds(lat: float, lon: float, height: float = 0.0) -> float:
     if e.total_begin is None or e.total_end is None:
         return 0.0
     return (e.total_end.time.ut - e.total_begin.time.ut) * 86400.0
+
+
+class PathCut(NamedTuple):
+    """Where one meridian crosses the path of totality: latitudes in degrees, at sea level.
+
+    `centre` is None where the centre line itself has run into sunset.
+    """
+    north: float
+    centre: float | None
+    south: float
+
+
+SCAN_FROM, SCAN_TO, SCAN_STEP = -25.0, -56.0, 0.5   # the path is over 1 degree wide over land
+LIMIT_TOLERANCE = 1e-4                               # degrees of latitude, about 11 m
+
+
+def totality_is_seen(lat: float, lon: float) -> bool:
+    """Totality happens here at sea level, with the sun above the horizon at maximum.
+
+    The library reports a totality wherever the moon's shadow reaches the ground, sun up or
+    not. East of New Zealand the path runs into sunset, and there the edge of what anyone can
+    see is the sunset line, not the edge of the shadow.
+    """
+    e = local_eclipse(lat, lon)
+    return e.total_begin is not None and e.total_end is not None and e.peak.altitude > 0
+
+
+def _edge(inside: float, outside: float, lon: float) -> float:
+    """The latitude between an inside and an outside point where totality stops being seen."""
+    while abs(inside - outside) > LIMIT_TOLERANCE:
+        mid = (inside + outside) / 2.0
+        if totality_is_seen(mid, lon):
+            inside = mid
+        else:
+            outside = mid
+    return (inside + outside) / 2.0
+
+
+def _longest(south: float, north: float, lon: float) -> float:
+    """The latitude between the limits where totality lasts longest."""
+    lo, hi = south, north
+    while hi - lo > 1e-3:
+        a, b = lo + (hi - lo) / 3.0, hi - (hi - lo) / 3.0
+        if totality_seconds(a, lon) < totality_seconds(b, lon):
+            lo = a
+        else:
+            hi = b
+    return (lo + hi) / 2.0
+
+
+def path_at(lon: float) -> PathCut | None:
+    """The northern limit, centre line and southern limit on this meridian, or None where the
+    meridian misses the part of the path that sees totality."""
+    lat = SCAN_FROM
+    while lat >= SCAN_TO and not totality_is_seen(lat, lon):
+        lat -= SCAN_STEP
+    if lat < SCAN_TO:
+        return None
+    north = _edge(lat, lat + SCAN_STEP, lon)
+    while totality_is_seen(lat, lon):
+        lat -= SCAN_STEP
+    south = _edge(lat + SCAN_STEP, lat, lon)
+    centre = _longest(south, north, lon)
+    # Longest at the very edge means the true centre line lies beyond it, in the dark.
+    if min(centre - south, north - centre) < 0.01:
+        centre = None
+    return PathCut(north, centre, south)
