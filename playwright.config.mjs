@@ -7,6 +7,9 @@ export default defineConfig({
   timeout: 60_000,
   expect: { timeout: 15_000 },
   fullyParallel: true,
+  // Locally Playwright would start one worker per two cores (6 on the dev machine). CI keeps
+  // Playwright's default, which is already lower on its runners.
+  workers: process.env.CI ? undefined : 4,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI
     ? [["github"], ["list"], ["html", { open: "never" }]]
@@ -17,7 +20,9 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: `python -m http.server 8788 --bind 127.0.0.1 -d ${process.env.SERVE_DIR || "."}`,
+    // Not plain `python -m http.server`: it queues only 5 connections, and parallel tests were
+    // refused at random. See tests/serve.py.
+    command: `python tests/serve.py ${process.env.SERVE_DIR || "."}`,
     url: "http://127.0.0.1:8788/map.html",
     reuseExistingServer: !process.env.CI,
     stdout: "ignore",

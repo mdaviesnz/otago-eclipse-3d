@@ -1,0 +1,10 @@
+# The catalogue build. Install with: python -m pip install -r precompute/requirements.txt
+#
+# astronomy-engine is pinned exactly, and index.html, map.html and sw.js load the same release
+# for the browser. Stored and live figures come from the two builds, so change them together;
+# tests/check_static.py fails if they differ. After changing it, run build_path.py and rebuild
+# the catalogue.
+astronomy-engine==2.1.19
+numpy
+pillow
+requests

@@ -52,7 +52,7 @@ foreach ($orderId in $OrderIds) {
 }
 
 $ncFiles = Get-ChildItem -Path $OutputDir -Filter "*.nc"
-$julyFiles = Get-ChildItem -Path $OutputDir -Filter "*0701*.nc"
+$julyFiles = Get-ChildItem -Path $OutputDir -Filter "CFCmm????0701*.nc"
 
 Write-Host "`n===============================================" -ForegroundColor Yellow
 Write-Host "All downloads complete!" -ForegroundColor Green

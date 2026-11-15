@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Otago Eclipse 2028 — best viewing spots map</title>
+  <title>Find where to stand — Otago Eclipse 2028</title>
   <meta name="description" content="Map of the best places to watch the 22 July 2028 total solar eclipse in Otago, New Zealand — ranked by how far the sun clears the skyline, filtered by whether you can drive, 4WD or walk there." />
-  <meta name="theme-color" content="#0f172a" />
+  <meta name="theme-color" content="#0A1016" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Eclipse 2028" />
@@ -19,187 +19,272 @@
   <link rel="apple-touch-icon" href="icon.svg" />
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <link rel="stylesheet" href="app.css" />
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <script defer src="https://unpkg.com/lucide@latest"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/astronomy-engine@2.1.19/astronomy.browser.min.js"></script>
 
   <style>
-    html, body, #map { width: 100%; height: 100%; margin: 0; padding: 0; }
-    body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: #0f172a; }
-    .panel { backdrop-filter: blur(10px); background: rgba(15, 23, 42, 0.88); border: 1px solid rgba(148, 163, 184, 0.25); }
-    .leaflet-container { background: #0b1220; }
-    /* Dark popup to match the rest of the app */
-    .leaflet-popup-content-wrapper, .leaflet-popup-tip {
-      background: #0f172a; color: #e2e8f0; border: 1px solid rgba(148,163,184,0.3);
+    :root {
+      --p-bg: var(--ridge);
+      --p-fg: var(--corona);
+      --p-dim: #AAB7BC;
+      --p-line: rgba(239, 243, 241, 0.16);
+      --no: #FF9AA6;
+      --sheet-h: 48vh;
     }
-    .leaflet-popup-content { margin: 10px 12px; font-size: 12px; line-height: 1.45; }
-    .leaflet-popup-close-button { color: #94a3b8 !important; width: 28px !important; height: 28px !important; line-height: 26px !important; font-size: 18px !important; }
-    .leaflet-bar a { background: #1e293b; color: #e2e8f0; border-color: #334155; }
-    .leaflet-bar a:hover { background: #334155; }
-    .leaflet-control-attribution { background: rgba(15,23,42,0.85) !important; color: #94a3b8 !important; font-size: 10px; }
-    .leaflet-control-attribution a { color: #fbbf24 !important; }
-    .town-tooltip {
-      background: rgba(15, 23, 42, 0.92);
-      border: 1px solid rgba(251, 191, 36, 0.55);
-      color: #f8fafc;
-      font-size: 11px;
-      font-weight: 600;
-      padding: 2px 6px;
-      border-radius: 6px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
-      pointer-events: none;
+    html, body { height: 100%; margin: 0; }
+    body { font-family: Overpass, "Segoe UI", system-ui, sans-serif; background: var(--p-bg); color: var(--p-fg);
+           font-size: 15px; line-height: 1.42; font-variant-numeric: tabular-nums lining-nums; }
+    #app { display: grid; grid-template-columns: 388px minmax(0, 1fr); height: 100dvh; }
+    #mapWrap { position: relative; min-width: 0; }
+    #map { position: absolute; inset: 0; background: var(--ridge); }
+
+    #panel { display: flex; flex-direction: column; min-height: 0; background: var(--p-bg); z-index: 1000; }
+    #sheetHandle { display: none; }
+    #panelScroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+      padding: 22px 20px 28px; scrollbar-width: thin; scrollbar-color: rgba(170,183,188,.4) transparent; }
+
+    h1, #detailTitle { font-family: Piazzolla, Georgia, serif; font-weight: 620; letter-spacing: -0.012em;
+      line-height: 1.04; margin: 0; text-wrap: balance; }
+    h1 { font-size: 2.15rem; }
+    .lede { margin: 8px 0 0; color: var(--p-dim); }
+    .links { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 12px 0 0; font-weight: 600; font-size: 0.93rem; }
+    .links a, .links button { color: var(--p-fg); background: none; border: 0; padding: 0; font: inherit;
+      cursor: pointer; text-decoration: underline; text-decoration-color: rgba(239,243,241,.4); text-underline-offset: 3px; }
+
+    #searchForm { position: relative; display: flex; gap: 6px; margin-top: 20px; }
+    #placeSearch { flex: 1; min-width: 0; font: inherit; font-size: 16px; color: var(--p-fg); background: transparent;
+      border: 1px solid rgba(239,243,241,.45); border-radius: 3px; padding: 9px 10px 7px; }
+    #placeSearch::placeholder { color: var(--p-dim); }
+    #nearMe { font: inherit; font-weight: 600; white-space: nowrap; color: var(--p-fg); background: transparent;
+      border: 1px solid rgba(239,243,241,.45); border-radius: 3px; padding: 8px 11px 6px; cursor: pointer; }
+    #suggestions { position: absolute; left: 0; right: 0; top: 100%; margin-top: 4px; background: #151C24;
+      border: 1px solid var(--p-line); border-radius: 3px; z-index: 5; overflow: hidden; }
+    .suggestion { display: block; width: 100%; text-align: left; font: inherit; color: var(--p-fg); background: none;
+      border: 0; border-bottom: 1px solid var(--p-line); padding: 9px 10px 7px; cursor: pointer; }
+    .suggestion:last-child { border-bottom: 0; }
+    .suggestion:hover, .suggestion.active { background: rgba(239,243,241,.1); }
+    #searchStatus { margin: 8px 0 0; color: var(--p-dim); font-size: 0.93rem; }
+    #hereLine { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-top: 14px; }
+    #hereLine[hidden] { display: none; }
+    #hereName { font-family: Piazzolla, Georgia, serif; font-weight: 600; font-size: 1.3rem; line-height: 1.1; }
+    #clearHere { font: inherit; font-size: 0.93rem; color: var(--p-dim); background: none; border: 0; padding: 0;
+      cursor: pointer; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+
+    .filters { margin-top: 18px; }
+    .filter-label { font-size: 0.93rem; color: var(--p-dim); margin: 0 0 6px; }
+    .chips { display: flex; gap: 6px; }
+    .chip { flex: 1; font: inherit; font-weight: 700; color: var(--p-fg); background: transparent; cursor: pointer;
+      border: 1px solid rgba(239,243,241,.45); border-radius: 3px; padding: 8px 6px 6px; }
+    .chip[aria-pressed="true"] { background: var(--p-fg); color: var(--p-bg); border-color: var(--p-fg); }
+    .check { display: flex; align-items: center; gap: 9px; margin-top: 11px; cursor: pointer; }
+    .check input { width: 17px; height: 17px; accent-color: var(--corona); margin: 0 0 2px; flex: none; }
+    #moreFilters { margin-top: 10px; }
+    #moreFilters summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
+    .range { display: block; margin-top: 12px; }
+    .range span { display: flex; justify-content: space-between; gap: 8px; }
+    .range b { font-weight: 600; }
+    .range input { width: 100%; accent-color: var(--corona); margin: 6px 0 0; }
+
+    #count { margin: 20px 0 4px; color: var(--p-dim); font-size: 0.93rem; }
+    #spotList { list-style: none; margin: 0; padding: 0; }
+    .row { display: flex; gap: 11px; width: 100%; text-align: left; font: inherit; color: inherit; background: none; border: 0;
+      border-top: 1px solid var(--p-line); padding: 11px 2px 9px; cursor: pointer; }
+    .row:hover { background: rgba(239,243,241,.06); }
+    .row-body { min-width: 0; }
+    .row-name { display: block; font-weight: 700; }
+    .row-sub { display: block; color: var(--p-dim); font-size: 0.93rem; }
+    #showMore { width: 100%; font: inherit; font-weight: 600; color: var(--p-fg); background: none; cursor: pointer;
+      border: 1px solid var(--p-line); border-radius: 3px; padding: 9px 6px 7px; margin-top: 10px; }
+    #status, .credit { margin: 16px 0 0; color: var(--p-dim); font-size: 0.86rem; }
+
+    /* One family of marks across the map, its legend and the list. */
+    .mark, .glyph { border-radius: 50%; box-sizing: border-box; }
+    .mark--clear { background: var(--corona); box-shadow: 0 0 0 1.5px var(--ridge); }
+    .mark--tight { background: rgba(10,16,22,.55); border: 2.5px solid var(--corona); box-shadow: 0 0 0 1px var(--ridge); }
+    .mark--blocked { position: relative; background: var(--prominence); box-shadow: 0 0 0 1.5px var(--ridge); }
+    .mark--blocked::before { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 2.5px;
+      margin-left: -1.25px; background: var(--ridge); transform: rotate(45deg); }
+    .glyph { flex: none; width: 13px; height: 13px; margin-top: 4px; }
+    .mark { cursor: pointer; }
+    .mark::after { content: ""; position: absolute; inset: -9px; border-radius: 50%; }
+    .mark--selected { outline: 2.5px solid var(--corona); outline-offset: 3px; }
+    .here { border-radius: 50%; border: 3px solid var(--corona); background: rgba(44,74,82,.75);
+      box-shadow: 0 0 0 1.5px var(--ridge); box-sizing: border-box; }
+
+    .town::before { content: ""; position: absolute; inset: 0; background: var(--corona);
+      box-shadow: 0 0 0 1.5px var(--ridge); transform: rotate(45deg); }
+    .town--blocked::before, .town--partial::before { background: var(--prominence); }
+    .town-label { position: absolute; white-space: nowrap; font: 700 13px/1 Overpass, "Segoe UI", sans-serif;
+      background: var(--ridge); color: var(--corona); padding: 5px 7px 3px; border-radius: 2px; }
+    .town--blocked .town-label, .town--partial .town-label { color: var(--no); }
+    .town--right .town-label { left: 22px; top: -4px; }
+    .town--left .town-label { right: 22px; top: -4px; }
+    .town--top .town-label { bottom: 22px; left: 50%; transform: translateX(-50%); }
+
+    #legend { position: absolute; left: 10px; bottom: 10px; z-index: 900; max-width: min(620px, calc(100% - 180px));
+      background: rgba(10,16,22,.88); padding: 8px 11px 6px; font-size: 0.86rem; border-radius: 2px; }
+    .legend-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; }
+    .legend-item { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+    .legend-item .glyph { margin: -2px 0 0; width: 11px; height: 11px; }
+    .legend-path { display: inline-block; width: 20px; height: 0; border-top: 2px solid var(--sun); margin-top: -2px; }
+    .legend-note { margin: 4px 0 0; color: var(--p-dim); }
+
+    .leaflet-container { background: var(--ridge); font-family: inherit; }
+    .leaflet-bar a { background: var(--ridge); color: var(--corona); border-color: var(--p-line); }
+    .leaflet-bar a:hover, .leaflet-bar a:focus { background: #1B242D; color: var(--corona); }
+    .leaflet-control-attribution { background: rgba(10,16,22,.8) !important; color: var(--p-dim) !important; font-size: 10.5px; }
+    .leaflet-control-attribution a { color: var(--corona) !important; }
+
+    /* The About dialog keeps the shared markup, in this page's colours. */
+    #aboutOverlay .panel { background: var(--ridge); border: 1px solid var(--p-line); }
+    #aboutOverlay svg, #aboutOverlay .text-amber-300, #aboutOverlay .text-amber-400 { color: var(--corona); }
+    #aboutOverlay .text-amber-200\/90 { color: var(--corona); }
+    #aboutOverlay .bg-amber-900\/25 { background: rgba(239,243,241,.08); border-color: var(--p-line); }
+    #aboutOverlay a.bg-amber-500 { background: var(--corona); color: var(--ridge); }
+    #aboutOverlay a.bg-amber-500 svg { color: var(--ridge); }
+
+    #backToList { font: inherit; font-weight: 600; color: var(--p-fg); background: none; border: 0; padding: 0; cursor: pointer;
+      text-decoration: underline; text-underline-offset: 3px; }
+    #detailTitle { font-size: 2rem; margin-top: 16px; outline: none; }
+    .detail-kind { margin: 6px 0 0; color: var(--p-dim); }
+    .detail-verdict { margin: 16px 0 0; font-weight: 700; font-size: 1.14rem; }
+    .detail-verdict--no { color: var(--no); }
+    .detail-look { margin: 5px 0 0; }
+    .detail-note { margin: 10px 0 0; color: var(--no); }
+    .contacts { width: 100%; border-collapse: collapse; margin-top: 18px; }
+    .contacts td { padding: 5px 0 3px; border-top: 1px solid var(--p-line); }
+    .contacts td:last-child { text-align: right; }
+    .contacts .strong td { font-weight: 700; }
+    .facts { margin: 16px 0 0; }
+    .facts div { display: flex; justify-content: space-between; gap: 18px; padding: 5px 0 3px; border-top: 1px solid var(--p-line); }
+    .facts dt { color: var(--p-dim); white-space: nowrap; }
+    .facts dd { margin: 0; text-align: right; min-width: 0; }
+    .action { display: block; box-sizing: border-box; width: 100%; text-align: center; font: inherit; font-weight: 700;
+      color: var(--p-fg); background: none; border: 1px solid rgba(239,243,241,.45); border-radius: 3px; padding: 10px 8px 8px;
+      cursor: pointer; text-decoration: none; }
+    .action small { display: block; font-size: 0.86rem; font-weight: 500; }
+    .action--primary { background: var(--p-fg); color: var(--p-bg); border-color: var(--p-fg); }
+    .action:disabled { opacity: .6; cursor: default; }
+    #goNearest { margin-top: 14px; }
+    .actions { display: grid; gap: 7px; margin-top: 18px; }
+    #contourFigure { margin: 16px 0 0; }
+    #contourCanvas { display: block; width: 100%; height: auto; background: #fff; }
+    #contourFigure figcaption { margin-top: 6px; color: var(--p-dim); font-size: 0.86rem; }
+    .fine { margin: 18px 0 0; color: var(--p-dim); font-size: 0.86rem; }
+
+    a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible, .leaflet-marker-icon:focus-visible {
+      outline: 2px solid var(--corona); outline-offset: 2px; }
+    [hidden] { display: none !important; }
+
+    @media (max-width: 767px) {
+      #app { display: block; height: 100dvh; }
+      #mapWrap { position: fixed; inset: 0; }
+      #panel { position: fixed; left: 0; right: 0; bottom: 0; height: var(--sheet-h);
+        border-radius: 12px 12px 0 0; box-shadow: 0 -6px 24px rgba(0,0,0,.45); transition: height .22s ease; }
+      #panel.dragging { transition: none; }
+      #sheetHandle { display: block; flex: none; width: 100%; height: 26px; background: none; border: 0; padding: 0;
+        cursor: grab; touch-action: none; }
+      #sheetHandle::before { content: ""; display: block; width: 44px; height: 4px; margin: 0 auto; border-radius: 2px; background: var(--p-dim); }
+      #panelScroll { padding: 0 16px calc(24px + env(safe-area-inset-bottom, 0px)); }
+      h1 { font-size: 1.7rem; }
+      .lede { display: none; }
+      /* At this size the name and the mark's colour carry it; the words would run off the edge. */
+      .town-word { display: none; }
+      .town--top .town-label { left: auto; right: -8px; transform: none; }
+      .links { margin-top: 8px; }
+      #searchForm { margin-top: 12px; }
+      #legend { left: 8px; top: calc(8px + env(safe-area-inset-top, 0px)); bottom: auto; max-width: calc(100% - 64px); padding: 6px 8px 4px; font-size: 0.8rem; }
+      .legend-note { display: none; }
+      .leaflet-top { top: env(safe-area-inset-top, 0px); }
     }
-    .town-tooltip::before { display: none; }
-    .map-top-left {
-      top: calc(0.75rem + env(safe-area-inset-top, 0px));
-      left: calc(0.75rem + env(safe-area-inset-left, 0px));
-    }
-    .map-nav-bar {
-      bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
-      left: calc(0.75rem + env(safe-area-inset-left, 0px));
-    }
-    @media (min-width: 640px) {
-      .map-nav-bar {
-        bottom: auto;
-        left: auto;
-        top: calc(0.75rem + env(safe-area-inset-top, 0px));
-        right: calc(0.75rem + env(safe-area-inset-right, 0px));
-      }
+
+    /* The field card: one page of what you need on the day. */
+    @media print {
+      :root { --p-bg: #fff; --p-fg: #000; --p-dim: #333; --p-line: #999; --no: #A30F27; }
+      body { background: #fff; font-size: 12pt; }
+      #app { display: block; height: auto; }
+      #mapWrap, #sheetHandle, #backToList, .no-print, #goNearest, #aboutOverlay, #listView { display: none !important; }
+      #panel { position: static; height: auto; box-shadow: none; }
+      #panelScroll { overflow: visible; padding: 0; }
+      #contourCanvas { max-width: 13cm; }
+      .contacts tr, .facts div { break-inside: avoid; }
     }
   </style>
 </head>
-<body class="text-slate-100">
+<body>
 
-  <div id="map"></div>
+  <div id="app">
+    <aside id="panel" aria-label="Viewing spots">
+      <button id="sheetHandle" type="button" aria-label="Enlarge this panel"></button>
+      <div id="panelScroll">
 
-  <!-- ============================= CONTROLS ============================= -->
-  <div class="fixed map-top-left z-[1000] w-72 sm:w-64 max-w-[calc(100vw-1.5rem)]">
-    <div class="panel rounded-xl p-3 shadow-2xl">
-      <div class="flex items-center gap-2 mb-1">
-        <i data-lucide="eclipse" class="w-5 h-5 text-amber-400 shrink-0"></i>
-        <h1 class="text-sm font-bold truncate">Eclipse viewing spots</h1>
-        <button id="toggleMapFilters" aria-label="Toggle filters" aria-expanded="true"
-          class="ml-auto sm:hidden inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 transition">
-          <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5 text-amber-400"></i>
-          <span id="toggleMapFiltersLabel">Filters</span>
-        </button>
+        <section id="listView">
+          <h1>Find where to stand</h1>
+          <p class="lede">At totality on 22 July 2028 the sun is one fist above the horizon, so a single hill can hide it.</p>
+          <p class="links">
+            <a href="index.html">3D simulator</a>
+            <a href="astronomy.html">How it works</a>
+            <button id="aboutBtn" type="button">About</button>
+          </p>
+
+          <form id="searchForm" role="search">
+            <input id="placeSearch" type="search" autocomplete="off" placeholder="Search a town or address"
+              aria-label="Search for a town, address or coordinates" />
+            <button id="nearMe" type="button">Near me</button>
+            <div id="suggestions" hidden></div>
+          </form>
+          <p id="searchStatus" role="status" hidden></p>
+          <p id="hereLine" hidden><span id="hereName"></span><button id="clearHere" type="button">Show all spots</button></p>
+
+          <div class="filters">
+            <p class="filter-label">How will you get there?</p>
+            <div class="chips">
+              <button id="chipRoad" class="chip" type="button" data-access="road" aria-pressed="true">Drive</button>
+              <button id="chip4wd" class="chip" type="button" data-access="4wd_track" aria-pressed="false">4WD</button>
+              <button id="chipFoot" class="chip" type="button" data-access="foot" aria-pressed="false">Walk</button>
+            </div>
+            <label class="check"><input id="publicOnly" type="checkbox" checked /> Public land only</label>
+            <details id="moreFilters">
+              <summary>More filters</summary>
+              <label class="range"><span>Clears the skyline by at least <b id="minClearVal">Any</b></span>
+                <input id="minClear" type="range" min="0" max="120" value="0" /></label>
+              <label class="range"><span>Chance of clear sky at least <b id="minSkyVal">Any</b></span>
+                <input id="minSky" type="range" min="30" max="55" value="30" /></label>
+              <label class="check"><input id="includeOffTrack" type="checkbox" /> Include off-track and alpine spots</label>
+              <label class="check"><input id="includeUnnamed" type="checkbox" /> Include unnamed spots from the terrain scan</label>
+              <label class="check"><input id="showCloud" type="checkbox" /> Show typical July cloud on the map</label>
+            </details>
+          </div>
+
+          <p id="count" role="status">Loading viewing spots…</p>
+          <ol id="spotList"></ol>
+          <button id="showMore" type="button" hidden>Show more spots</button>
+          <p class="credit">Independent planning tool, not yet validated. Check any spot in person before the day.</p>
+          <p id="status"></p>
+        </section>
+
+        <section id="detailView" hidden>
+          <button id="backToList" type="button">All spots</button>
+          <div id="detailBody"></div>
+        </section>
       </div>
-      <div class="flex items-center justify-between gap-2 mb-1.5">
-        <p class="text-[11px]"><span class="text-amber-300 font-medium">22 July 2028</span><span class="text-slate-400"> · Otago</span></p>
-        <p id="mobileCountBadge" class="sm:hidden text-[11px] text-slate-400 font-mono"></p>
-      </div>
+    </aside>
 
-      <div id="mapFiltersBody" class="mt-2">
-        <div class="flex gap-1 mb-2">
-          <button id="srcPoi" class="flex-1 text-xs sm:text-[11px] font-medium rounded-lg px-2 py-1.5 sm:py-1 transition bg-amber-500 text-slate-900">Viewpoints</button>
-          <button id="srcGrid" class="flex-1 text-xs sm:text-[11px] font-medium rounded-lg px-2 py-1.5 sm:py-1 transition bg-slate-800/70 hover:bg-slate-700 text-slate-300">Anywhere</button>
-          <button id="srcBoth" class="flex-1 text-xs sm:text-[11px] font-medium rounded-lg px-2 py-1.5 sm:py-1 transition bg-slate-800/70 hover:bg-slate-700 text-slate-300">Both</button>
+    <div id="mapWrap">
+      <div id="map"></div>
+      <div id="legend">
+        <div class="legend-row">
+          <span class="legend-item"><span class="glyph mark--clear"></span>Clear</span>
+          <span class="legend-item"><span class="glyph mark--tight"></span>Tight, check in person</span>
+          <span class="legend-item"><span class="glyph mark--blocked"></span>Blocked</span>
+          <span class="legend-item"><span class="legend-path"></span>Path of totality</span>
         </div>
-
-        <select id="accessFilter"
-          class="w-full text-base sm:text-xs bg-slate-800/80 border border-slate-600 rounded-lg px-2 py-1.5 mb-2 focus:outline-none focus:ring-2 focus:ring-amber-400 cursor-pointer">
-          <option value="any" selected>Any access</option>
-          <option value="drive">Drivable (road or track)</option>
-          <option value="sealed">Sealed road only</option>
-          <option value="gravel_road">Gravel road only</option>
-          <option value="track">Unsealed / 4WD track</option>
-          <option value="4wd_track">4WD track only</option>
-          <option value="foot">Walking or cycle track</option>
-          <option value="cycle_trail">Cycle trail only</option>
-          <option value="none">Off-track / alpine</option>
-        </select>
-
-        <label class="block text-[11px] text-slate-400 mb-1">
-          Minimum clearance: <span id="clearVal" class="text-amber-300 font-mono">0.0&deg;</span>
-        </label>
-        <input id="clearFilter" type="range" min="0" max="120" value="0"
-          class="w-full accent-amber-400 cursor-pointer mb-2" />
-
-        <label class="block text-[11px] text-slate-400 mb-1">
-          Maximum July cloud: <span id="cloudVal" class="text-sky-300 font-mono">Any</span>
-        </label>
-        <input id="cloudFilter" type="range" min="45" max="70" value="70"
-          class="w-full accent-sky-400 cursor-pointer mb-2" />
-
-        <label class="flex items-center gap-2 text-xs sm:text-[11px] text-slate-300 sm:text-slate-400 mb-1.5 py-0.5 cursor-pointer">
-          <input id="publicOnly" type="checkbox" checked class="accent-amber-400 w-4 h-4 sm:w-3.5 sm:h-3.5" />
-          Verified public access only
-        </label>
-
-        <label class="flex items-center gap-2 text-xs sm:text-[11px] text-slate-300 sm:text-slate-400 mb-1.5 py-0.5 cursor-pointer">
-          <input id="wholeOnly" type="checkbox" class="accent-amber-400 w-4 h-4 sm:w-3.5 sm:h-3.5" />
-          Only spots clear for all of totality
-        </label>
-
-        <label class="flex items-center gap-2 text-xs sm:text-[11px] text-slate-300 sm:text-slate-400 mb-1.5 py-0.5 cursor-pointer">
-          <input id="showPath" type="checkbox" checked class="accent-amber-400 w-4 h-4 sm:w-3.5 sm:h-3.5" />
-          Show eclipse path &amp; bands
-        </label>
-
-        <label class="flex items-center gap-2 text-xs sm:text-[11px] text-slate-300 sm:text-slate-400 mb-2 py-0.5 cursor-pointer">
-          <input id="showCloud" type="checkbox" class="accent-sky-400 w-4 h-4 sm:w-3.5 sm:h-3.5" />
-          Show historic July cloud cover
-        </label>
-
-        <p id="count" class="text-[11px] text-slate-400"></p>
-        <p id="status" class="text-[11px] text-slate-500 mt-1"></p>
+        <p id="bandLegend" class="legend-note" hidden>Outer lines show where 90%, 75% and 50% of the sun is covered.</p>
+        <p id="cloudLegend" class="legend-note" hidden>Whiter means cloudier in past Julys (EUMETSAT CM SAF, 1979–2026).</p>
       </div>
     </div>
-
-    <!-- Legend -->
-    <div id="mapLegendCard" class="panel rounded-xl p-3 shadow-2xl mt-2">
-      <p class="text-[10px] uppercase tracking-wide text-slate-400 mb-1.5">Access &amp; towns</p>
-      <div class="flex flex-col gap-1 text-[11px]">
-        <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full" style="background:#34d399"></span> Sealed road</span>
-        <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full" style="background:#a3e635"></span> Gravel road</span>
-        <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full" style="background:#fbbf24"></span> 4WD track</span>
-        <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full" style="background:#60a5fa"></span> Walking / cycle track</span>
-        <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full" style="background:#94a3b8"></span> Off-track / alpine</span>
-        <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full border-2 border-amber-400" style="background:#0f172a"></span> Reference town centre</span>
-      </div>
-      <div id="pathLegendSection" class="mt-2.5 pt-2 border-t border-slate-700/60">
-        <p class="text-[10px] uppercase tracking-wide text-slate-400 mb-1.5">Eclipse path &amp; obscuration</p>
-        <div class="flex rounded overflow-hidden text-[10px] font-semibold text-center leading-tight mb-1.5 border border-slate-700/80">
-          <span class="flex-1 py-0.5 text-amber-100" style="background:rgba(245,158,11,0.38)">Total</span>
-          <span class="flex-1 py-0.5 text-slate-100" style="background:rgba(251,146,60,0.26)">&gt;90%</span>
-          <span class="flex-1 py-0.5 text-slate-100" style="background:rgba(251,191,36,0.18)">&gt;75%</span>
-          <span class="flex-1 py-0.5 text-slate-200" style="background:rgba(254,240,138,0.12)">&gt;50%</span>
-        </div>
-        <div class="flex items-center gap-2 text-[10px] text-slate-400">
-          <span class="inline-block w-4 border-t-2 border-dashed" style="border-color:#fde68a"></span> Centreline of totality
-        </div>
-      </div>
-      <div id="cloudLegendSection" class="hidden mt-2.5 pt-2 border-t border-slate-700/60">
-        <div class="flex items-center justify-between text-[10px] text-slate-400 mb-1">
-          <span class="uppercase tracking-wide font-medium">July daytime cloud</span>
-          <span class="text-[9px] text-slate-400">CM SAF 1979&ndash;2026</span>
-        </div>
-        <div class="h-2 rounded overflow-hidden mb-1 border border-slate-700/80" style="background:linear-gradient(to right, #0284c7, #38bdf8, #818cf8, #cbd5e1, #f8fafc)"></div>
-        <div class="flex justify-between text-[9px] text-slate-400">
-          <span class="text-sky-300">&le;45% (clearer)</span>
-          <span>60%</span>
-          <span class="text-slate-300">&ge;85% (cloudier)</span>
-        </div>
-      </div>
-      <p class="text-[10px] text-slate-500 mt-2 leading-snug">
-        Marker size shows how far the sun clears the skyline. Ringed markers are named viewpoints &amp; sites. Independent, unvalidated planning tool.
-      </p>
-    </div>
-  </div>
-
-  <div class="fixed map-nav-bar z-[1000] flex items-center gap-1.5 sm:gap-2">
-    <a href="astronomy.html" title="How the astronomy and sightline checks work"
-       class="panel rounded-xl px-3 py-2 shadow-2xl inline-flex items-center gap-1.5 text-xs font-medium hover:bg-slate-800 transition">
-      <i data-lucide="compass" class="w-4 h-4 text-amber-400"></i> <span class="hidden sm:inline">Astronomy</span>
-    </a>
-    <button id="aboutBtn" title="About this tool"
-       class="panel rounded-xl px-3 py-2 shadow-2xl inline-flex items-center gap-1.5 text-xs font-medium hover:bg-slate-800 transition">
-      <i data-lucide="info" class="w-4 h-4 text-amber-400"></i> <span class="hidden sm:inline">About</span>
-    </button>
-    <a href="index.html"
-       class="panel rounded-xl px-3 py-2 shadow-2xl inline-flex items-center gap-1.5 text-xs font-semibold text-amber-300 hover:bg-slate-800 transition">
-      <i data-lucide="box" class="w-4 h-4 text-amber-400"></i> 3D simulator
-    </a>
   </div>
 
   <!-- ============================= ABOUT DIALOG ============================= -->
@@ -288,526 +373,20 @@
     </div>
   </div>
 
-  <script>
-  // ====================================================================================
-  //  Overview map of the precomputed viewing-spot catalogue.
-  //  Reads the same viewpoints.json as index.html and applies the same access tiers, plus
-  //  granular surface/trail sub-types and Herenga a Nuku public access metadata.
-  // ====================================================================================
-  const ACCESS_COLOUR = { sealed: "#34d399", track: "#fbbf24", foot: "#60a5fa", none: "#94a3b8" };
-  const ACCESS_SUB_COLOUR = {
-    sealed_road: "#34d399",
-    gravel_road: "#a3e635",
-    "4wd_track": "#fbbf24",
-    walking_track: "#60a5fa",
-    cycle_trail: "#38bdf8",
-    paper_road: "#60a5fa",
-    off_track: "#94a3b8",
-  };
-  const ACCESS_LABEL = { sealed: "sealed road", track: "4WD track", foot: "walking track", none: "off-track" };
-  const ACCESS_SUB_LABEL = {
-    sealed_road: "sealed road",
-    gravel_road: "gravel road",
-    "4wd_track": "4WD track",
-    walking_track: "walking track",
-    cycle_trail: "cycle trail",
-    paper_road: "unformed legal road (paper road)",
-    off_track: "off-track — alpine",
-  };
-  const POI_LABEL = { viewpoint: "viewpoint", peak: "summit", picnic: "picnic area",
-    campsite: "campsite", rest_area: "rest area", tower: "lookout tower" };
-
-  // Place zoom control at bottomright so the top-left filter panel never covers it.
-  const map = L.map("map", { zoomControl: false, preferCanvas: true })
-    .setView([-45.2, 169.2], 8);
-  L.control.zoom({ position: "bottomright" }).addTo(map);
-
-  // Same imagery as the 3D view, so the two look like one product.
-  L.tileLayer(
-    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    { maxZoom: 17, attribution: "Imagery: Esri, Maxar, Earthstar Geographics" }
-  ).addTo(map);
-  L.tileLayer(
-    "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
-    { maxZoom: 17, opacity: 0.9 }
-  ).addTo(map);
-
-  const cloudLayer = L.layerGroup().addTo(map);
-  const pathLayer = L.layerGroup().addTo(map);
-  const layer = L.layerGroup().addTo(map);
-  const townLayer = L.layerGroup().addTo(map);
-  let catalogue = null;
-  let source = "poi";
-  let cloudOverlay = null;
-
-  function renderCloudOverlay() {
-    cloudLayer.clearLayers();
-    const show = document.getElementById("showCloud");
-    const legendSec = document.getElementById("cloudLegendSection");
-    if (!show || !show.checked || !catalogue || !catalogue.cloudGrid) {
-      if (legendSec) legendSec.classList.add("hidden");
-      return;
-    }
-    if (legendSec) legendSec.classList.remove("hidden");
-
-    const cg = catalogue.cloudGrid;
-    const lats = cg.lats;
-    const lons = cg.lons;
-    const cfc = cg.cfcDay;
-    const nLat = lats.length;
-    const nLon = lons.length;
-
-    const dlat = cg.dlat || 0.25;
-    const dlon = cg.dlon || 0.25;
-    const south = lats[0] - dlat / 2;
-    const north = lats[nLat - 1] + dlat / 2;
-    const west = lons[0] - dlon / 2;
-    const east = lons[nLon - 1] + dlon / 2;
-
-    const canvas = document.createElement("canvas");
-    const width = 180;
-    const height = Math.round(width * ((north - south) / (east - west)));
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext("2d");
-    const imgData = ctx.createImageData(width, height);
-    const data = imgData.data;
-
-    function getColor(val) {
-      const t = Math.max(0, Math.min(1, (val - 42) / 46));
-      let r, g, b, a;
-      if (t < 0.25) {
-        const f = t / 0.25;
-        r = 2 + f * (56 - 2);
-        g = 132 + f * (189 - 132);
-        b = 199 + f * (248 - 199);
-        a = 0.50 + f * 0.05;
-      } else if (t < 0.55) {
-        const f = (t - 0.25) / 0.30;
-        r = 56 + f * (129 - 56);
-        g = 189 + f * (140 - 189);
-        b = 248 + f * (248 - 248);
-        a = 0.55 + f * 0.05;
-      } else if (t < 0.80) {
-        const f = (t - 0.55) / 0.25;
-        r = 129 + f * (203 - 129);
-        g = 140 + f * (213 - 140);
-        b = 248 + f * (225 - 248);
-        a = 0.60 + f * 0.08;
-      } else {
-        const f = (t - 0.80) / 0.20;
-        r = 203 + f * (248 - 203);
-        g = 213 + f * (250 - 213);
-        b = 225 + f * (252 - 225);
-        a = 0.68 + f * 0.12;
-      }
-      return [Math.round(r), Math.round(g), Math.round(b), Math.round(a * 255)];
-    }
-
-    for (let py = 0; py < height; py++) {
-      const lat = north - (py / (height - 1)) * (north - south);
-      const gy = (lat - lats[0]) / dlat;
-      const yClamped = Math.max(0, Math.min(nLat - 1, gy));
-      const y0 = Math.floor(yClamped);
-      const y1 = Math.min(nLat - 1, y0 + 1);
-      const fy = yClamped - y0;
-
-      for (let px = 0; px < width; px++) {
-        const lon = west + (px / (width - 1)) * (east - west);
-        const gx = (lon - lons[0]) / dlon;
-        const xClamped = Math.max(0, Math.min(nLon - 1, gx));
-        const x0 = Math.floor(xClamped);
-        const x1 = Math.min(nLon - 1, x0 + 1);
-        const fx = xClamped - x0;
-
-        const v00 = cfc[y0][x0];
-        const v01 = cfc[y0][x1];
-        const v10 = cfc[y1][x0];
-        const v11 = cfc[y1][x1];
-        const val = (1 - fy) * ((1 - fx) * v00 + fx * v01) + fy * ((1 - fx) * v10 + fx * v11);
-
-        const [r, g, b, alpha] = getColor(val);
-        const idx = (py * width + px) * 4;
-        data[idx] = r;
-        data[idx + 1] = g;
-        data[idx + 2] = b;
-        data[idx + 3] = alpha;
-      }
-    }
-
-    ctx.putImageData(imgData, 0, 0);
-    const dataUrl = canvas.toDataURL("image/png");
-    cloudOverlay = L.imageOverlay(dataUrl, [[south, west], [north, east]], {
-      opacity: 0.65,
-      interactive: false,
-    }).addTo(cloudLayer);
-  }
-
-  // Precomputed 22 July 2028 eclipse path & partial obscuration bands across the Tasman / NZ
-  // (astronomy-engine local solar eclipse circumference + sunset terminus).
-  const ECLIPSE_PATH = {"totalityPoly":[[-28.732,146],[-29.526,147],[-30.312,148],[-31.089,149],[-31.856,150],[-32.612,151],[-33.358,152],[-34.092,153],[-34.815,154],[-35.525,155],[-36.223,156],[-36.909,157],[-37.582,158],[-38.243,159],[-38.891,160],[-39.527,161],[-40.15,162],[-40.762,163],[-41.361,164],[-41.948,165],[-42.524,166],[-43.087,167],[-43.639,168],[-44.18,169],[-44.709,170],[-45.228,171],[-45.736,172],[-46.233,173],[-46.719,174],[-47.196,175],[-47.662,176],[-48.118,177],[-48.565,178],[-49.002,179],[-49.43,180],[-49.848,181],[-50.071,181.542],[-50.294,181.647],[-50.517,181.488],[-50.74,181.327],[-50.963,181.164],[-51.186,181],[-51.199,180],[-50.785,179],[-50.362,178],[-49.93,177],[-49.489,176],[-49.038,175],[-48.577,174],[-48.106,173],[-47.625,172],[-47.134,171],[-46.633,170],[-46.12,169],[-45.597,168],[-45.063,167],[-44.518,166],[-43.961,165],[-43.393,164],[-42.813,163],[-42.222,162],[-41.618,161],[-41.003,160],[-40.376,159],[-39.736,158],[-39.085,157],[-38.421,156],[-37.745,155],[-37.057,154],[-36.357,153],[-35.646,152],[-34.923,151],[-34.189,150],[-33.444,149],[-32.689,148],[-31.925,147],[-31.152,146]],"totalityNorth":[[-28.732,146],[-29.526,147],[-30.312,148],[-31.089,149],[-31.856,150],[-32.612,151],[-33.358,152],[-34.092,153],[-34.815,154],[-35.525,155],[-36.223,156],[-36.909,157],[-37.582,158],[-38.243,159],[-38.891,160],[-39.527,161],[-40.15,162],[-40.762,163],[-41.361,164],[-41.948,165],[-42.524,166],[-43.087,167],[-43.639,168],[-44.18,169],[-44.709,170],[-45.228,171],[-45.736,172],[-46.233,173],[-46.719,174],[-47.196,175],[-47.662,176],[-48.118,177],[-48.565,178],[-49.002,179],[-49.43,180],[-49.848,181]],"totalitySouth":[[-31.152,146],[-31.925,147],[-32.689,148],[-33.444,149],[-34.189,150],[-34.923,151],[-35.646,152],[-36.357,153],[-37.057,154],[-37.745,155],[-38.421,156],[-39.085,157],[-39.736,158],[-40.376,159],[-41.003,160],[-41.618,161],[-42.222,162],[-42.813,163],[-43.393,164],[-43.961,165],[-44.518,166],[-45.063,167],[-45.597,168],[-46.12,169],[-46.633,170],[-47.134,171],[-47.625,172],[-48.106,173],[-48.577,174],[-49.038,175],[-49.489,176],[-49.93,177],[-50.362,178],[-50.785,179],[-51.199,180],[-51.186,181]],"totalityCenter":[[-29.963,146],[-30.702,147],[-31.48,148],[-32.245,149],[-33.004,150],[-33.748,151],[-34.482,152],[-35.207,153],[-35.913,154],[-36.615,155],[-37.299,156],[-37.976,157],[-38.638,158],[-39.328,159],[-39.964,160],[-40.554,161],[-41.164,162],[-41.767,163],[-42.358,164],[-42.934,165],[-43.5,166],[-44.056,167],[-44.598,168],[-45.163,169],[-45.65,170],[-46.198,171],[-46.66,172],[-47.15,173],[-47.661,174],[-48.097,175],[-48.554,176],[-49.004,177],[-49.444,178],[-49.91,179],[-50.293,180],[-50.745,181],[-50.517,181.488]],"bands":{"p90":[[-24.82,146],[-26.43,148],[-28,150],[-29.53,152],[-31.02,154],[-32.46,156],[-33.85,158],[-35.19,160],[-36.48,162],[-37.72,164],[-38.92,166],[-40.06,168],[-41.15,170],[-42.2,172],[-43.21,174],[-44.17,176],[-45.1,178],[-45.98,180],[-46.83,182],[-47.25,183.04],[-47.68,183.4],[-48.1,183.12],[-48.52,182.85],[-48.94,182.57],[-49.37,182.29],[-49.79,182],[-52.49,180],[-54.1,178],[-53.24,176],[-52.35,174],[-51.42,172],[-50.45,170],[-49.43,168],[-48.38,166],[-47.28,164],[-46.13,162],[-44.94,160],[-43.7,158],[-42.41,156],[-41.08,154],[-39.69,152],[-38.27,150],[-36.79,148],[-35.28,146]],"p75":[[-19.78,146],[-21.4,148],[-23.01,150],[-24.58,152],[-26.11,154],[-27.59,156],[-29.02,158],[-30.4,160],[-31.73,162],[-33,164],[-34.24,166],[-35.41,168],[-36.53,170],[-37.61,172],[-38.65,174],[-39.64,176],[-40.58,178],[-41.5,180],[-42.36,182],[-43.19,184],[-43.69,185.25],[-44.2,185.45],[-44.7,185.17],[-45.2,184.88],[-45.7,184.59],[-46.21,184.3],[-46.71,184],[-49.79,182],[-52.49,180],[-54.82,178],[-56.85,176],[-57.98,174],[-57.06,172],[-56.11,170],[-55.12,168],[-54.09,166],[-53.02,164],[-51.89,162],[-50.72,160],[-49.5,158],[-48.23,156],[-46.93,154],[-45.57,152],[-44.17,150],[-42.72,148],[-41.23,146]],"p50":[[-11.46,146],[-13.1,148],[-14.75,150],[-16.37,152],[-17.96,154],[-19.52,156],[-21.02,158],[-22.47,160],[-23.86,162],[-25.21,164],[-26.5,166],[-27.74,168],[-28.92,170],[-30.06,172],[-31.15,174],[-32.19,176],[-33.19,178],[-34.14,180],[-35.05,182],[-35.91,184],[-37.45,187.78],[-39,188],[-40.54,187.39],[-42.08,186.6],[-43.62,185.77],[-45.17,184.9],[-46.71,184],[-49.79,182],[-52.49,180],[-54.82,178],[-56.85,176],[-58.6,174],[-60.13,172],[-61.46,170],[-62.63,168],[-63.67,166],[-64.57,164],[-64.52,162],[-63.35,160],[-62.11,158],[-60.84,156],[-59.5,154],[-58.14,152],[-56.71,150],[-55.23,148],[-53.73,146]]}};
-
-  function renderEclipsePath() {
-    pathLayer.clearLayers();
-    const show = document.getElementById("showPath");
-    const legendSec = document.getElementById("pathLegendSection");
-    if (show && !show.checked) {
-      if (legendSec) legendSec.classList.add("hidden");
-      return;
-    }
-    if (legendSec) legendSec.classList.remove("hidden");
-
-    // Partial obscuration bands (outer to inner; low fillOpacity since nested bands stack)
-    const bandSpecs = [
-      { key: "p50", fill: "#fef08a", fillOpacity: 0.03, stroke: "#fde047", weight: 1, opacity: 0.32 },
-      { key: "p75", fill: "#fbbf24", fillOpacity: 0.04, stroke: "#fbbf24", weight: 1, opacity: 0.42 },
-      { key: "p90", fill: "#fb923c", fillOpacity: 0.05, stroke: "#fb923c", weight: 1.2, opacity: 0.52 },
-    ];
-    for (const b of bandSpecs) {
-      const coords = ECLIPSE_PATH.bands && ECLIPSE_PATH.bands[b.key];
-      if (!coords) continue;
-      L.polygon(coords, {
-        color: b.stroke,
-        weight: b.weight,
-        opacity: b.opacity,
-        fillColor: b.fill,
-        fillOpacity: b.fillOpacity,
-        interactive: false,
-      }).addTo(pathLayer);
-    }
-
-    // Path of totality polygon
-    L.polygon(ECLIPSE_PATH.totalityPoly, {
-      color: "#f59e0b",
-      weight: 1.6,
-      opacity: 0.8,
-      fillColor: "#f59e0b",
-      fillOpacity: 0.10,
-      interactive: false,
-    }).addTo(pathLayer);
-
-    // Northern and southern totality limits
-    for (const lim of [ECLIPSE_PATH.totalityNorth, ECLIPSE_PATH.totalitySouth]) {
-      L.polyline(lim, {
-        color: "#fbbf24",
-        weight: 2,
-        opacity: 0.9,
-        interactive: false,
-      }).addTo(pathLayer);
-    }
-
-    // Centreline (maximum duration)
-    L.polyline(ECLIPSE_PATH.totalityCenter, {
-      color: "#fde68a",
-      weight: 1.6,
-      opacity: 0.85,
-      dashArray: "6 5",
-      interactive: false,
-    }).addTo(pathLayer);
-  }
-
-  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g,
-    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const dur = (s) => `${Math.floor(s / 60)}m${String(s % 60).padStart(2, "0")}s`;
-
-  function entries() {
-    if (!catalogue) return [];
-    const pois = (catalogue.pois || []).map((p) => ({ ...p, isPoi: true }));
-    const grid = (catalogue.spots || []).map((s) => ({ ...s, isPoi: false }));
-    return source === "poi" ? pois : source === "grid" ? grid : pois.concat(grid);
-  }
-
-  function renderTowns() {
-    townLayer.clearLayers();
-    if (!catalogue || !Array.isArray(catalogue.presets)) return;
-    for (const t of catalogue.presets) {
-      // Verdicts are precomputed (docs/adr/0001-precomputed-verdicts.md): read, never judged here.
-      const clear = t.level === "clear";
-      const url = `index.html?lat=${t.lat}&lon=${t.lon}&name=${encodeURIComponent(t.name)}`;
-      const gmapsUrl = `https://www.google.com/maps/search/?api=1&query=${t.lat},${t.lon}`;
-      const verdictHtml = t.level === "blocked"
-        ? `<span style="color:#f87171">Blocked by ${Math.abs(t.clearance).toFixed(1)}&deg;</span>`
-        : t.level === "partial"
-        ? `<span style="color:#fbbf24">Part of totality blocked</span>`
-        : `<span style="color:#6ee7b7">+${t.clearance.toFixed(1)}&deg; clear</span>`;
-      const popup = `
-        <div style="min-width:190px">
-          <div style="font-weight:700;color:#fbbf24">${esc(t.name)} (town centre)</div>
-          <div style="color:#94a3b8;font-size:11px;margin-bottom:6px">Reference preset &middot; ${t.elev} m</div>
-          <table style="font-size:11px;width:100%">
-            <tr><td style="color:#94a3b8">Town centre view</td><td style="text-align:right">${verdictHtml}</td></tr>
-            <tr><td style="color:#94a3b8">Sun at maximum</td><td style="text-align:right">${t.sunAlt.toFixed(1)}&deg;</td></tr>
-            <tr><td style="color:#94a3b8">Totality</td><td style="text-align:right">${dur(t.totality)}</td></tr>
-            ${t.cloud != null ? `<tr><td style="color:#94a3b8">July cloud cover</td><td style="text-align:right;color:#e2e8f0">${t.cloud.toFixed(0)}% <span style="color:#38bdf8">(${t.clearProb != null ? t.clearProb.toFixed(0) + "% clear" : ""})</span></td></tr>` : ""}
-          </table>
-          <a href="${url}" style="display:block;margin-top:8px;text-align:center;background:#f59e0b;color:#0f172a;font-weight:600;border-radius:6px;padding:5px 8px;text-decoration:none">
-            Open in 3D &rarr;
-          </a>
-          <a href="${gmapsUrl}" target="_blank" rel="noopener" style="display:block;margin-top:6px;text-align:center;background:#1e293b;border:1px solid #475569;color:#e2e8f0;font-weight:500;font-size:11px;border-radius:6px;padding:5px 8px;text-decoration:none">
-            Open in Google Maps &nearr;
-          </a>
-        </div>`;
-      L.circleMarker([t.lat, t.lon], {
-        radius: 6.5,
-        color: clear ? "#fbbf24" : "#f87171",
-        weight: 2.2,
-        fillColor: "#0f172a",
-        fillOpacity: 0.92,
-      })
-        .bindTooltip(t.name, { permanent: true, direction: "right", offset: [8, 0], className: "town-tooltip" })
-        .bindPopup(popup)
-        .addTo(townLayer);
-    }
-  }
-
-  function matchesAccess(s, want) {
-    if (!want || want === "any") return true;
-    const acc = s.access || "none";
-    const sub = s.accessSub || "";
-    if (want === "drive") return acc === "sealed" || acc === "track";
-    if (want === "sealed") return acc === "sealed";
-    if (want === "gravel_road") return sub === "gravel_road";
-    if (want === "track") return acc === "track";
-    if (want === "4wd_track") return sub === "4wd_track" || (!sub && acc === "track");
-    if (want === "foot") return acc === "foot";
-    if (want === "cycle_trail") return sub === "cycle_trail";
-    if (want === "none") return acc === "none";
-    return true;
-  }
-
-  function formatTrackName(raw) {
-    if (!raw) return "";
-    if (raw === raw.toUpperCase() && raw !== raw.toLowerCase()) {
-      return raw.toLowerCase().replace(/\b([a-z])/g, (m) => m.toUpperCase()).replace(/\b(4wd|Doc|Sh)\b/g, (m) => m.toUpperCase());
-    }
-    return raw;
-  }
-
-  function render() {
-    const want = document.getElementById("accessFilter").value;
-    const minClear = document.getElementById("clearFilter").value / 10;
-    const cloudFilterEl = document.getElementById("cloudFilter");
-    const maxCloud = cloudFilterEl ? parseFloat(cloudFilterEl.value) : 70;
-    const wholeOnly = document.getElementById("wholeOnly").checked;
-    const publicOnlyEl = document.getElementById("publicOnly");
-    const publicOnly = publicOnlyEl ? publicOnlyEl.checked : false;
-    document.getElementById("clearVal").textContent = minClear.toFixed(1) + "°";
-    const cloudEl = document.getElementById("cloudVal");
-    if (cloudEl) {
-      cloudEl.innerHTML = maxCloud >= 70 ? "Any" : `&le;&nbsp;${maxCloud}% <span class="text-[10px] text-slate-400 font-normal">(${100 - maxCloud}% clear)</span>`;
-    }
-
-    const list = entries().filter((s) =>
-      matchesAccess(s, want) &&
-      (!publicOnly || s.publicAccess !== false) &&
-      s.clearance >= minClear &&
-      (!wholeOnly || s.level === "clear") &&
-      (maxCloud >= 70 || s.cloud == null || s.cloud <= maxCloud));
-
-    const isCoarsePointer = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
-    const baseRadius = isCoarsePointer ? 4.5 : 3;
-    layer.clearLayers();
-    for (const s of list) {
-      const colour = (s.accessSub && ACCESS_SUB_COLOUR[s.accessSub]) || ACCESS_COLOUR[s.access || "none"];
-      const isPrivate = s.publicAccess === false;
-      // Kept deliberately small and semi-transparent: lookouts cluster tightly along ridges,
-      // and larger opaque markers merge into unreadable blobs once you zoom in.
-      const radius = baseRadius + Math.min(4, Math.max(0, s.clearance) * 0.4);
-      L.circleMarker([s.lat, s.lon], {
-        radius,
-        color: isPrivate ? "#f87171" : (s.isPoi ? "#f8fafc" : colour),
-        weight: s.isPoi ? 1.3 : 0.8,
-        fillColor: colour,
-        fillOpacity: isPrivate ? 0.45 : 0.72,
-        opacity: isPrivate ? 0.75 : 0.9,
-      }).bindPopup(popupHtml(s)).addTo(layer);
-    }
-
-    const total = entries().length;
-    const summaryText = `${list.length} of ${total} shown`;
-    document.getElementById("count").textContent = summaryText;
-    const badge = document.getElementById("mobileCountBadge");
-    if (badge) badge.textContent = `${list.length} spots`;
-  }
-
-  function popupHtml(s) {
-    const title = s.isPoi
-      ? (s.name || `Unnamed ${POI_LABEL[s.kind] || "spot"}`)
-      : `${s.lat.toFixed(4)}, ${s.lon.toFixed(4)}`;
-    const sub = s.isPoi ? (POI_LABEL[s.kind] || s.kind) : "scanned spot";
-    const url = `index.html?lat=${s.lat}&lon=${s.lon}&name=${encodeURIComponent(title)}`;
-    const gmapsUrl = `https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lon}`;
-    const accessLabel = (s.accessSub && ACCESS_SUB_LABEL[s.accessSub]) || ACCESS_LABEL[s.access || "none"];
-    const landRow = s.land
-      ? `<tr><td style="color:#94a3b8;padding-right:8px">Public land</td><td style="text-align:right;color:#e2e8f0">${esc(s.land)}</td></tr>`
-      : "";
-    const trailRow = s.trackName
-      ? `<tr><td style="color:#94a3b8;padding-right:8px">Trail</td><td style="text-align:right;color:#e2e8f0">${esc(formatTrackName(s.trackName))}</td></tr>`
-      : "";
-    const publicRow = s.isPoi
-      ? (s.publicAccess === false
-          ? `<tr><td style="color:#94a3b8;padding-right:8px">Tenure</td><td style="text-align:right;color:#f87171">Private / unverified</td></tr>`
-          : `<tr><td style="color:#94a3b8;padding-right:8px">Tenure</td><td style="text-align:right;color:#6ee7b7">Public access</td></tr>`)
-      : "";
-    // Near the edge of the path totality collapses to seconds — worth calling out, since a
-    // great horizon there still buys you far less than the ~3 minutes on the centreline.
-    const warn = (s.publicAccess === false
-        ? `<div style="color:#f87171;margin-top:4px;font-size:11px">&#9888; No verified public land or road parcel &mdash; landowner permission may be required</div>` : "")
-      + (s.level !== "clear"
-        ? `<div style="color:#fbbf24;margin-top:4px">&#9888; blocked for part of totality</div>` : "")
-      + (s.totality < 60
-        ? `<div style="color:#fbbf24;margin-top:4px">&#9888; near the path edge &mdash; only ${dur(s.totality)} of totality</div>` : "");
-    return `
-      <div style="min-width:205px">
-        <div style="font-weight:600;color:#f8fafc">${esc(title)}</div>
-        <div style="color:#94a3b8;font-size:11px;margin-bottom:6px">${esc(sub)} &middot; ${s.elev} m</div>
-        <table style="font-size:11px;width:100%">
-          <tr><td style="color:#94a3b8">Clears skyline</td><td style="text-align:right;color:#6ee7b7">+${s.clearance.toFixed(1)}&deg;</td></tr>
-          <tr><td style="color:#94a3b8">Sun at maximum</td><td style="text-align:right">${s.sunAlt.toFixed(1)}&deg;</td></tr>
-          <tr><td style="color:#94a3b8">Totality</td><td style="text-align:right">${dur(s.totality)}</td></tr>
-          <tr><td style="color:#94a3b8">Access</td><td style="text-align:right">${esc(accessLabel)}</td></tr>
-          ${s.cloud != null ? `<tr><td style="color:#94a3b8">July cloud cover</td><td style="text-align:right;color:#e2e8f0">${s.cloud.toFixed(0)}% <span style="color:#38bdf8">(${s.clearProb != null ? s.clearProb.toFixed(0) + "% clear" : ""})</span></td></tr>` : ""}
-          ${s.cloudLow > 18 ? `<tr><td style="color:#94a3b8">Low cloud / fog</td><td style="text-align:right;color:#fbbf24">${s.cloudLow.toFixed(0)}%</td></tr>` : ""}
-          ${publicRow}
-          ${landRow}
-          ${trailRow}
-        </table>
-        ${warn}
-        <a href="${url}" style="display:block;margin-top:8px;text-align:center;background:#f59e0b;color:#0f172a;font-weight:600;border-radius:6px;padding:6px 8px;text-decoration:none">
-          Open in 3D &rarr;
-        </a>
-        <a href="${gmapsUrl}" target="_blank" rel="noopener" style="display:block;margin-top:6px;text-align:center;background:#1e293b;border:1px solid #475569;color:#e2e8f0;font-weight:500;font-size:11px;border-radius:6px;padding:5px 8px;text-decoration:none">
-          Open in Google Maps &nearr;
-        </a>
-        <div style="color:#64748b;font-size:10px;margin-top:6px">${s.lat.toFixed(5)}, ${s.lon.toFixed(5)}</div>
-      </div>`;
-  }
-
-  function setSource(src) {
-    source = src;
-    const on = "flex-1 text-xs sm:text-[11px] font-medium rounded-lg px-2 py-1.5 sm:py-1 transition bg-amber-500 text-slate-900";
-    const off = "flex-1 text-xs sm:text-[11px] font-medium rounded-lg px-2 py-1.5 sm:py-1 transition bg-slate-800/70 hover:bg-slate-700 text-slate-300";
-    document.getElementById("srcPoi").className = src === "poi" ? on : off;
-    document.getElementById("srcGrid").className = src === "grid" ? on : off;
-    document.getElementById("srcBoth").className = src === "both" ? on : off;
-    render();
-  }
-
-  async function load() {
-    const status = document.getElementById("status");
-    try {
-      const res = await fetch("viewpoints.json", { cache: "no-cache" });
-      if (!res.ok) throw new Error("viewpoints.json not found");
-      catalogue = await res.json();
-      if (!catalogue.spots || !catalogue.spots.length) throw new Error("catalogue is empty");
-      setSource("poi");
-      renderTowns();
-      renderCloudOverlay();
-      const all = entries().concat((catalogue.spots || []).map((s) => ({ ...s })));
-      map.fitBounds(L.latLngBounds(all.map((s) => [s.lat, s.lon])).pad(0.05));
-      status.textContent = `Catalogue generated ${(catalogue.generated || "").slice(0, 10)}`;
-      if ((catalogue.osmGaps || []).length) {
-        status.textContent += ` · ${catalogue.osmGaps.length} OSM gap(s)`;
-      }
-    } catch (e) {
-      status.innerHTML = `<span class="text-red-400">${esc(e.message)}</span> — run
-        <span class="font-mono">precompute/build_viewpoints.py</span> first.`;
-    }
-  }
-
-  function getMetricSessionId() {
-    try {
-      let sid = sessionStorage.getItem("eclipseMetricSid");
-      if (!sid || !/^[0-9a-f]{8}$/.test(sid)) {
-        const arr = new Uint32Array(1);
-        crypto.getRandomValues(arr);
-        sid = arr[0].toString(16).padStart(8, "0");
-        sessionStorage.setItem("eclipseMetricSid", sid);
-      }
-      return sid;
-    } catch (e) {
-      return "";
-    }
-  }
-
-  function trackMetric(event, detail = "", spot = "") {
-    try {
-      if ((location.hostname === "localhost" || location.hostname === "127.0.0.1") && !window.__TEST_METRICS) return;
-      if (navigator.sendBeacon) {
-        const sid = getMetricSessionId();
-        navigator.sendBeacon("/api/metric", JSON.stringify({ event, detail, spot, sid }));
-      }
-    } catch (e) {}
-  }
-
-  ["accessFilter", "clearFilter", "cloudFilter", "wholeOnly", "publicOnly"].forEach((id) =>
-    document.getElementById(id).addEventListener("input", render));
-  document.getElementById("showPath").addEventListener("change", renderEclipsePath);
-  document.getElementById("showCloud").addEventListener("change", renderCloudOverlay);
-  document.getElementById("srcPoi").addEventListener("click", () => { trackMetric("map_filter", "poi"); setSource("poi"); });
-  document.getElementById("srcGrid").addEventListener("click", () => { trackMetric("map_filter", "grid"); setSource("grid"); });
-  document.getElementById("srcBoth").addEventListener("click", () => { trackMetric("map_filter", "both"); setSource("both"); });
-  document.getElementById("map").addEventListener("click", (e) => {
-    const a = e.target.closest && e.target.closest('a[href^="index.html"]');
-    if (a) {
-      let spotName = "";
-      try {
-        spotName = new URL(a.getAttribute("href"), location.origin).searchParams.get("name") || "";
-      } catch (err) {}
-      trackMetric("map_filter", "open_3d", spotName);
-    }
-  });
-
-  const setMapFiltersOpen = (open) => {
-    const body = document.getElementById("mapFiltersBody");
-    const legend = document.getElementById("mapLegendCard");
-    const btn = document.getElementById("toggleMapFilters");
-    const lbl = document.getElementById("toggleMapFiltersLabel");
-    body.classList.toggle("hidden", !open);
-    legend.classList.toggle("hidden", !open);
-    btn.setAttribute("aria-expanded", open ? "true" : "false");
-    if (lbl) lbl.textContent = open ? "Hide" : "Filters";
-  };
-
-  if (window.innerWidth < 640) {
-    setMapFiltersOpen(false);
-  }
-
-  document.getElementById("toggleMapFilters").addEventListener("click", () => {
-    const isHidden = document.getElementById("mapFiltersBody").classList.contains("hidden");
-    setMapFiltersOpen(isHidden);
-  });
-
-  // Build the contact address at runtime rather than shipping it in the markup. Stops naive
-  // harvesters that regex the served HTML; not a defence against a scraper that runs JS.
-  (() => {
-    const addr = ["michael", "davies.net.nz"].join("@");
-    const link = document.getElementById("contactLink");
-    link.href = `mailto:${addr}?subject=${encodeURIComponent("Otago Eclipse 3D")}`;
-    document.getElementById("contactAddr").textContent = addr;
-  })();
-
-  // About dialog: closes on the X, on the backdrop, and on Escape.
-  const aboutOverlay = document.getElementById("aboutOverlay");
-  const showAbout = (on) => {
-    aboutOverlay.classList.toggle("hidden", !on);
-    if (on) document.getElementById("aboutClose").focus();
-  };
-  document.getElementById("aboutBtn").addEventListener("click", () => showAbout(true));
-  document.getElementById("aboutClose").addEventListener("click", () => showAbout(false));
-  aboutOverlay.addEventListener("click", (e) => { if (e.target === aboutOverlay) showAbout(false); });
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !aboutOverlay.classList.contains("hidden")) showAbout(false);
-  });
-
-  lucide.createIcons();
-  trackMetric("page_view", "map");
-  renderEclipsePath();
-  load();
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("sw.js").catch(() => {});
-  }
+  <!-- The shared rules; handed to the classic script below on window. -->
+  <script type="module">
+    import { useEclipseDeltaT } from "./eclipse-time.js";
+    import * as Catalogue from "./catalogue.js";
+    import * as Places from "./places.js";
+    import * as Contours from "./contours.js";
+    import * as EclipsePath from "./eclipse-path.js";
+    useEclipseDeltaT(window.Astronomy);
+    window.Catalogue = Catalogue;
+    window.Places = Places;
+    window.Contours = Contours;
+    window.EclipsePath = EclipsePath;
   </script>
+  <script defer src="map.js"></script>
 
   <!-- Cloudflare Web Analytics — see the note in index.html. Both pages must carry the same
        site token, which check_static.py verifies. -->
